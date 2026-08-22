@@ -1,0 +1,7 @@
+# Stage 1 — Database only
+# Add nothing beyond this until Stage 2+ is reached per the roadmap.
+sqlalchemy>=2.0
+alembic
+psycopg[binary]
+python-dotenv
+pydantic>=2.0
