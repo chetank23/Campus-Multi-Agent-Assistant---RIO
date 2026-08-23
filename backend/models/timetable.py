@@ -2,7 +2,7 @@
 backend/models/timetable.py
 ---------------------------
 Timetable domain:
-  TimetableVersion, Timetable
+  TimetableVersion, TimetableEntry
 
 The composite indexes on (faculty_id, slot_id), (room_id, slot_id),
 (section_id, slot_id) are defined here via __table_args__ so that Alembic
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
 
 class TimetableVersion(Base):
-    __tablename__ = "timetable_version"
+    __tablename__ = "timetable_versions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     academic_year_id: Mapped[Optional[int]] = mapped_column(
@@ -56,9 +56,7 @@ class TimetableVersion(Base):
     status: Mapped[Optional[str]] = mapped_column(
         String(20),
         CheckConstraint(
-            "status IN ('DRAFT','GENERATED','HOD_REVIEW','HOD_APPROVED',"
-            "'COORDINATOR_REVIEW','ADMIN_REVIEW','APPROVED','PUBLISHED',"
-            "'REJECTED','ARCHIVED')",
+            "status IN ('DRAFT','GENERATED','REVIEWED','VALIDATED','FINALIZED','PUBLISHED','REJECTED','ARCHIVED')",
             name="ck_tv_status",
         ),
         nullable=True,
@@ -84,25 +82,25 @@ class TimetableVersion(Base):
     approver: Mapped[Optional["User"]] = relationship(
         "User", foreign_keys=[approved_by], back_populates="timetable_versions_approved"
     )
-    timetable_entries: Mapped[list["Timetable"]] = relationship(
-        "Timetable", back_populates="version"
+    timetable_entries: Mapped[list["TimetableEntry"]] = relationship(
+        "TimetableEntry", back_populates="version"
     )
 
 
-class Timetable(Base):
-    __tablename__ = "timetable"
+class TimetableEntry(Base):
+    __tablename__ = "timetable_entries"
 
     # Composite indexes — the exact lookups the validator and solver hit hardest (§5.2)
     __table_args__ = (
-        Index("ix_timetable_faculty_slot", "faculty_id", "slot_id"),
-        Index("ix_timetable_room_slot", "room_id", "slot_id"),
-        Index("ix_timetable_section_slot", "section_id", "slot_id"),
+        Index("ix_timetable_entries_faculty_slot", "faculty_id", "slot_id"),
+        Index("ix_timetable_entries_room_slot", "room_id", "slot_id"),
+        Index("ix_timetable_entries_section_slot", "section_id", "slot_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     version_id: Mapped[Optional[int]] = mapped_column(
         Integer,
-        ForeignKey("timetable_version.id", name="fk_tt_version_id"),
+        ForeignKey("timetable_versions.id", name="fk_tt_version_id"),
         nullable=True,
     )
     department_id: Mapped[Optional[int]] = mapped_column(
@@ -135,7 +133,13 @@ class Timetable(Base):
         Integer, ForeignKey("time_slots.id", name="fk_tt_slot_id"), nullable=True
     )
     status: Mapped[str] = mapped_column(
-        String(20), default="DRAFT", server_default="'DRAFT'"
+        String(20),
+        CheckConstraint(
+            "status IN ('DRAFT','ACTIVE','CANCELLED','RESCHEDULED')",
+            name="ck_te_status",
+        ),
+        default="DRAFT",
+        server_default="'DRAFT'",
     )
 
     version: Mapped[Optional["TimetableVersion"]] = relationship(

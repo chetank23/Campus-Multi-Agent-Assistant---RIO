@@ -114,7 +114,7 @@ try:
         Section, Batch, Student, Faculty, Course, CourseAssignment,
         ElectiveGroup, ElectiveGroupCourse, Building, Room, Lab,
         TimeSlot, FacultyAvailability, AcademicCalendar,
-        TimetableVersion, Timetable, Resource, ResourceBooking,
+        TimetableVersion, TimetableEntry, Resource, ResourceBooking,
         ChangeRequest, Notification, AuditLog,
     )
     registered = list(metadata.tables.keys())
@@ -123,7 +123,7 @@ try:
         "sections", "batches", "students", "faculty", "courses",
         "course_assignments", "elective_groups", "elective_group_courses",
         "buildings", "rooms", "labs", "time_slots", "faculty_availability",
-        "academic_calendar", "timetable_version", "timetable",
+        "academic_calendar", "timetable_versions", "timetable_entries",
         "resources", "resource_bookings", "change_requests",
         "notifications", "audit_logs",
     ]
@@ -177,7 +177,7 @@ with engine.connect() as conn:
         "sections", "batches", "students", "faculty", "courses",
         "course_assignments", "elective_groups", "elective_group_courses",
         "buildings", "rooms", "labs", "time_slots", "faculty_availability",
-        "academic_calendar", "timetable_version", "timetable",
+        "academic_calendar", "timetable_versions", "timetable_entries",
         "resources", "resource_bookings", "change_requests",
         "notifications", "audit_logs", "alembic_version",
     ]
@@ -192,19 +192,18 @@ with engine.connect() as conn:
         "SELECT COUNT(*) FROM information_schema.table_constraints "
         "WHERE constraint_type='FOREIGN KEY' AND table_schema='public'"
     )).scalar()
-    check(f"foreign key count = 52", fk_count == 52, f"found {fk_count}")
+    check(f"foreign key count = 51", fk_count == 51, f"found {fk_count}")
 
     # Verify specific critical FKs
     critical_fks = [
         ("users", "department_id", "departments"),
-        ("departments", "hod_id", "users"),          # circular FK
         ("faculty", "user_id", "users"),
         ("students", "section_id", "sections"),
-        ("timetable", "faculty_id", "faculty"),
-        ("timetable", "room_id", "rooms"),
-        ("timetable", "slot_id", "time_slots"),
-        ("timetable", "section_id", "sections"),
-        ("timetable", "version_id", "timetable_version"),
+        ("timetable_entries", "faculty_id", "faculty"),
+        ("timetable_entries", "room_id", "rooms"),
+        ("timetable_entries", "slot_id", "time_slots"),
+        ("timetable_entries", "section_id", "sections"),
+        ("timetable_entries", "version_id", "timetable_versions"),
         ("audit_logs", "user_id", "users"),
     ]
     fk_rows = conn.execute(text("""
@@ -243,6 +242,7 @@ with engine.connect() as conn:
         "ck_time_slots_slot_type",
         "ck_fa_availability",
         "ck_tv_status",
+        "ck_te_status",
         "ck_rb_status",
         "ck_cr_request_type",
         "ck_resources_resource_type",
@@ -252,28 +252,28 @@ with engine.connect() as conn:
         check(f"CHECK constraint: {ck}", ck in ck_names)
 
 # ── 10. COMPOSITE INDEXES ─────────────────────────────────────────
-print("\n[10] COMPOSITE INDEXES ON timetable")
+print("\n[10] COMPOSITE INDEXES ON timetable_entries")
 with engine.connect() as conn:
     idx_rows = conn.execute(text(
         "SELECT indexname, indexdef FROM pg_indexes "
-        "WHERE tablename='timetable' AND schemaname='public'"
+        "WHERE tablename='timetable_entries' AND schemaname='public'"
     )).fetchall()
     idx_map = {r[0]: r[1] for r in idx_rows}
 
-    check("ix_timetable_faculty_slot exists",
-          "ix_timetable_faculty_slot" in idx_map)
+    check("ix_timetable_entries_faculty_slot exists",
+          "ix_timetable_entries_faculty_slot" in idx_map)
     check("  -> btree(faculty_id, slot_id)",
-          "faculty_id, slot_id" in idx_map.get("ix_timetable_faculty_slot",""))
+          "faculty_id, slot_id" in idx_map.get("ix_timetable_entries_faculty_slot",""))
 
-    check("ix_timetable_room_slot exists",
-          "ix_timetable_room_slot" in idx_map)
+    check("ix_timetable_entries_room_slot exists",
+          "ix_timetable_entries_room_slot" in idx_map)
     check("  -> btree(room_id, slot_id)",
-          "room_id, slot_id" in idx_map.get("ix_timetable_room_slot",""))
+          "room_id, slot_id" in idx_map.get("ix_timetable_entries_room_slot",""))
 
-    check("ix_timetable_section_slot exists",
-          "ix_timetable_section_slot" in idx_map)
+    check("ix_timetable_entries_section_slot exists",
+          "ix_timetable_entries_section_slot" in idx_map)
     check("  -> btree(section_id, slot_id)",
-          "section_id, slot_id" in idx_map.get("ix_timetable_section_slot",""))
+          "section_id, slot_id" in idx_map.get("ix_timetable_entries_section_slot",""))
 
 # ── 11. ALEMBIC MIGRATION TRACKING ───────────────────────────────
 print("\n[11] ALEMBIC MIGRATION")
@@ -298,9 +298,9 @@ print("\n[12] database/schema.sql")
 schema_sql = (ROOT / "database/schema.sql").read_text()
 for keyword in [
     "CREATE TABLE users", "CREATE TABLE departments",
-    "CREATE TABLE timetable", "CREATE TABLE audit_logs",
-    "ix_timetable_faculty_slot", "ix_timetable_room_slot",
-    "ix_timetable_section_slot", "REFERENCES", "CHECK",
+    "CREATE TABLE timetable_entries", "CREATE TABLE audit_logs",
+    "ix_timetable_entries_faculty_slot", "ix_timetable_entries_room_slot",
+    "ix_timetable_entries_section_slot", "REFERENCES", "CHECK",
 ]:
     check(f"schema.sql contains: {keyword}", keyword in schema_sql)
 

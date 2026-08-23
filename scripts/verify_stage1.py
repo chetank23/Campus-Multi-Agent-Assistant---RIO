@@ -34,17 +34,17 @@ with engine.connect() as conn:
     indexes = conn.execute(
         text(
             "SELECT indexname, indexdef FROM pg_indexes "
-            "WHERE tablename='timetable' AND schemaname='public' ORDER BY indexname"
+            "WHERE tablename='timetable_entries' AND schemaname='public' ORDER BY indexname"
         )
     ).fetchall()
     print(f"\n{'='*55}")
-    print(f"  INDEXES ON timetable  ({len(indexes)} found)")
+    print(f"  INDEXES ON timetable_entries  ({len(indexes)} found)")
     print(f"{'='*55}")
     for idx in indexes:
         print(f"  {PASS}  {idx[0]}")
         print(f"         {idx[1]}")
 
-    expected_idx = {"ix_timetable_faculty_slot", "ix_timetable_room_slot", "ix_timetable_section_slot"}
+    expected_idx = {"ix_timetable_entries_faculty_slot", "ix_timetable_entries_room_slot", "ix_timetable_entries_section_slot"}
     found_idx = {i[0] for i in indexes}
     missing = expected_idx - found_idx
     if missing:

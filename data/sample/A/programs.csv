@@ -1,0 +1,4 @@
+id,department_id,program_name,degree,duration
+1,1,B.Tech Computer Science,B.Tech,4
+2,2,B.Tech Mechanical Engineering,B.Tech,4
+3,3,B.Tech Electrical Engineering,B.Tech,4

@@ -16,7 +16,7 @@ from .base import Base
 
 if TYPE_CHECKING:
     from .academic import Department, Faculty, Section, Batch, Semester
-    from .timetable import Timetable
+    from .timetable import TimetableEntry
 
 
 class Course(Base):
@@ -55,8 +55,8 @@ class Course(Base):
     elective_group_courses: Mapped[list["ElectiveGroupCourse"]] = relationship(
         "ElectiveGroupCourse", back_populates="course"
     )
-    timetable_entries: Mapped[list["Timetable"]] = relationship(
-        "Timetable", back_populates="course"
+    timetable_entries: Mapped[list["TimetableEntry"]] = relationship(
+        "TimetableEntry", back_populates="course"
     )
 
 

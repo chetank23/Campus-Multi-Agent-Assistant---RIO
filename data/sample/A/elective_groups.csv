@@ -1,0 +1,4 @@
+id,name,semester_id,department_id
+1,Dept CS Electives,1,1
+2,Dept ME Electives,2,2
+3,Dept EE Electives,2,3

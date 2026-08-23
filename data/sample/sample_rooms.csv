@@ -1,0 +1,10 @@
+building_id,room_number,floor_number,capacity,room_type,has_projector,has_smart_board,status
+1,MB-101,1,60,CLASSROOM,true,false,ACTIVE
+1,MB-102,1,60,CLASSROOM,true,false,ACTIVE
+1,MB-103,1,120,SEMINAR_HALL,true,true,ACTIVE
+2,SB-201,2,40,LAB,false,false,ACTIVE
+2,SB-202,2,40,LAB,false,false,ACTIVE
+2,SB-203,2,60,CLASSROOM,true,false,ACTIVE
+999,INVALID-1,1,40,CLASSROOM,false,false,ACTIVE
+2,SB-BADCAP,2,-10,CLASSROOM,false,false,ACTIVE
+2,SB-BADTYPE,2,40,INVALID_TYPE,false,false,ACTIVE

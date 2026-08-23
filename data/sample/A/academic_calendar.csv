@@ -1,0 +1,9 @@
+id,academic_year_id,date,event_type,description
+1,1,2026-08-01,EVENT,Semester Start
+2,1,2026-08-31,HOLIDAY,Mid-Term Break
+3,1,2026-09-30,HOLIDAY,Public Holiday
+4,1,2026-11-09,EXAM,Final Exams Start
+5,1,2027-01-10,EVENT,Semester Start
+6,1,2027-02-09,HOLIDAY,Mid-Term Break
+7,1,2027-03-11,HOLIDAY,Public Holiday
+8,1,2027-04-20,EXAM,Final Exams Start

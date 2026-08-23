@@ -26,7 +26,7 @@ from .base import Base
 
 if TYPE_CHECKING:
     from .academic import Department, Faculty, AcademicYear
-    from .timetable import Timetable
+    from .timetable import TimetableEntry
 
 
 class Building(Base):
@@ -49,6 +49,7 @@ class Room(Base):
         Integer, ForeignKey("buildings.id", name="fk_rooms_building_id"), nullable=True
     )
     room_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    floor_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     capacity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     room_type: Mapped[Optional[str]] = mapped_column(
         String(20),
@@ -82,8 +83,8 @@ class Room(Base):
     lab: Mapped[Optional["Lab"]] = relationship(
         "Lab", back_populates="room", uselist=False
     )
-    timetable_entries: Mapped[list["Timetable"]] = relationship(
-        "Timetable", back_populates="room"
+    timetable_entries: Mapped[list["TimetableEntry"]] = relationship(
+        "TimetableEntry", back_populates="room"
     )
 
 
@@ -129,8 +130,8 @@ class TimeSlot(Base):
     faculty_availability: Mapped[list["FacultyAvailability"]] = relationship(
         "FacultyAvailability", back_populates="slot"
     )
-    timetable_entries: Mapped[list["Timetable"]] = relationship(
-        "Timetable", back_populates="slot"
+    timetable_entries: Mapped[list["TimetableEntry"]] = relationship(
+        "TimetableEntry", back_populates="slot"
     )
 
 

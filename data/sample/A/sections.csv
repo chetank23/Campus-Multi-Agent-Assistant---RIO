@@ -1,0 +1,6 @@
+id,department_id,program_id,semester_id,section_name,student_count
+1,3,3,1,A,48
+2,1,1,1,A,43
+3,3,3,1,C,53
+4,1,1,1,A,46
+5,1,1,1,C,46

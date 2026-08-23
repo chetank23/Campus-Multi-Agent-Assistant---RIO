@@ -1,0 +1,11 @@
+id,user_id,faculty_id,department_id,designation,max_weekly_load
+1,2,FAC9928,3,Associate Professor,16
+2,3,FAC8359,1,Assistant Professor,16
+3,4,FAC1106,2,Professor,16
+4,5,FAC7924,3,Associate Professor,16
+5,6,FAC3547,2,Professor,16
+6,7,FAC2674,2,Professor,16
+7,8,FAC2584,2,Associate Professor,16
+8,9,FAC5333,2,Professor,16
+9,10,FAC8527,3,Assistant Professor,16
+10,11,FAC7201,1,Professor,16

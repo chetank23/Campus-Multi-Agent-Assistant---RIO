@@ -2,15 +2,6 @@
 backend/models/identity.py
 --------------------------
 Users table.
-
-NOTE: There is a circular FK between users and departments:
-  users.department_id  → departments.id
-  departments.hod_id   → users.id
-
-The users model is defined first and references departments via a forward
-string reference. The departments model (in academic.py) references users
-back with use_alter=True so Alembic can emit the FK in a second ALTER TABLE
-pass, avoiding a chicken-and-egg DDL error.
 """
 
 from __future__ import annotations
@@ -40,7 +31,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(
         String(30),
         CheckConstraint(
-            "role IN ('STUDENT','FACULTY','HOD','TIMETABLE_COORDINATOR','ADMIN')",
+            "role IN ('STUDENT','FACULTY','ADMIN')",
             name="ck_users_role",
         ),
         nullable=False,

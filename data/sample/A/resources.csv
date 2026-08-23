@@ -1,0 +1,3 @@
+id,name,resource_type,location,capacity,status
+1,Main Auditorium,AUDITORIUM,MB-Ground,500,ACTIVE
+2,Portable Projector 1,PROJECTOR,Admin Office,0,ACTIVE

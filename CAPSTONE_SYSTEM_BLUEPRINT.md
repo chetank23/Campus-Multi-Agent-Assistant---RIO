@@ -62,7 +62,7 @@ The LLM never invents or directly writes a timetable slot. It calls tools; tools
 
 ```
                               USERS
-        Student   Faculty   HOD   Coordinator   Admin
+                 Student   Faculty    Admin
                               │
                     React Web Application
                               │

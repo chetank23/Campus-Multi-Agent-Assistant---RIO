@@ -1,0 +1,11 @@
+id,building_id,room_number,capacity,room_type,department_id,has_projector,has_smart_board,status
+1,1,MB-100,60,SEMINAR_HALL,1,True,False,ACTIVE
+2,2,SB-101,60,CLASSROOM,2,False,True,ACTIVE
+3,1,MB-102,40,LAB,2,False,True,ACTIVE
+4,2,SB-103,100,CLASSROOM,2,True,True,ACTIVE
+5,1,MB-104,100,CLASSROOM,2,False,True,ACTIVE
+6,2,SB-105,120,SEMINAR_HALL,2,False,True,ACTIVE
+7,2,SB-106,100,CLASSROOM,1,True,True,ACTIVE
+8,2,SB-107,100,CLASSROOM,3,False,True,ACTIVE
+9,1,MB-108,40,CLASSROOM,2,False,True,ACTIVE
+10,1,MB-109,120,CLASSROOM,2,True,False,ACTIVE

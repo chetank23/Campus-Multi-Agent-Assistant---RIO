@@ -3,10 +3,6 @@ backend/models/academic.py
 --------------------------
 Academic structure domain:
   Department, Program, AcademicYear, Semester, Section, Batch, Student, Faculty
-
-Circular FK note:
-  departments.hod_id → users.id is emitted with use_alter=True so Alembic can
-  create the departments table first, then ADD the FK in a subsequent ALTER TABLE.
 """
 
 from __future__ import annotations
@@ -32,7 +28,7 @@ if TYPE_CHECKING:
     from .identity import User
     from .courses import Course, CourseAssignment, ElectiveGroup
     from .space_time import FacultyAvailability, Room
-    from .timetable import Timetable, TimetableVersion
+    from .timetable import TimetableEntry, TimetableVersion
 
 
 class Department(Base):
@@ -41,17 +37,8 @@ class Department(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     department_code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
-    # Circular FK: hod_id → users.id — emitted as ALTER TABLE to break the DDL cycle
-    hod_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("users.id", name="fk_departments_hod_id", use_alter=True),
-        nullable=True,
-    )
 
     # Relationships
-    hod: Mapped[Optional["User"]] = relationship(
-        "User", foreign_keys=[hod_id], post_update=True
-    )
     members: Mapped[list["User"]] = relationship(
         "User", foreign_keys="User.department_id", back_populates="department"
     )
@@ -65,13 +52,10 @@ class Department(Base):
     elective_groups: Mapped[list["ElectiveGroup"]] = relationship(
         "ElectiveGroup", back_populates="department"
     )
-    timetable_entries: Mapped[list["Timetable"]] = relationship(
-        "Timetable", back_populates="department"
+    timetable_entries: Mapped[list["TimetableEntry"]] = relationship(
+        "TimetableEntry", back_populates="department"
     )
-    timetable_versions: Mapped[list["TimetableVersion"]] = relationship(
-        "TimetableVersion", back_populates="academic_year_ref", primaryjoin=False,
-        viewonly=True, overlaps="timetable_versions"
-    )
+
 
 
 class Program(Base):
@@ -90,8 +74,8 @@ class Program(Base):
     )
     sections: Mapped[list["Section"]] = relationship("Section", back_populates="program")
     students: Mapped[list["Student"]] = relationship("Student", back_populates="program")
-    timetable_entries: Mapped[list["Timetable"]] = relationship(
-        "Timetable", back_populates="program"
+    timetable_entries: Mapped[list["TimetableEntry"]] = relationship(
+        "TimetableEntry", back_populates="program"
     )
 
 
@@ -132,8 +116,8 @@ class Semester(Base):
     elective_groups: Mapped[list["ElectiveGroup"]] = relationship(
         "ElectiveGroup", back_populates="semester"
     )
-    timetable_entries: Mapped[list["Timetable"]] = relationship(
-        "Timetable", back_populates="semester"
+    timetable_entries: Mapped[list["TimetableEntry"]] = relationship(
+        "TimetableEntry", back_populates="semester"
     )
 
 
@@ -165,8 +149,8 @@ class Section(Base):
     course_assignments: Mapped[list["CourseAssignment"]] = relationship(
         "CourseAssignment", back_populates="section"
     )
-    timetable_entries: Mapped[list["Timetable"]] = relationship(
-        "Timetable", back_populates="section"
+    timetable_entries: Mapped[list["TimetableEntry"]] = relationship(
+        "TimetableEntry", back_populates="section"
     )
 
 
@@ -185,8 +169,8 @@ class Batch(Base):
     course_assignments: Mapped[list["CourseAssignment"]] = relationship(
         "CourseAssignment", back_populates="batch"
     )
-    timetable_entries: Mapped[list["Timetable"]] = relationship(
-        "Timetable", back_populates="batch"
+    timetable_entries: Mapped[list["TimetableEntry"]] = relationship(
+        "TimetableEntry", back_populates="batch"
     )
 
 
@@ -256,6 +240,6 @@ class Faculty(Base):
     course_assignments: Mapped[list["CourseAssignment"]] = relationship(
         "CourseAssignment", back_populates="faculty"
     )
-    timetable_entries: Mapped[list["Timetable"]] = relationship(
-        "Timetable", back_populates="faculty"
+    timetable_entries: Mapped[list["TimetableEntry"]] = relationship(
+        "TimetableEntry", back_populates="faculty"
     )

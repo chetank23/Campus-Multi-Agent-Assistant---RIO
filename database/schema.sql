@@ -14,8 +14,8 @@
 -- =============================================================================
 
 -- ── USERS & IDENTITY ─────────────────────────────────────────────────────────
--- Note: circular FK departments.hod_id → users.id is added AFTER departments
---       is created, via ALTER TABLE (see the deferred FK section below).
+-- Note: departments is just a standard table. Circular FKs were removed in the
+--       3-role model.
 
 CREATE TABLE users (
     id              SERIAL PRIMARY KEY,
@@ -24,8 +24,7 @@ CREATE TABLE users (
     password_hash   TEXT            NOT NULL,
     role            VARCHAR(30)     NOT NULL
                         CHECK (role IN (
-                            'STUDENT','FACULTY','HOD',
-                            'TIMETABLE_COORDINATOR','ADMIN'
+                            'STUDENT','FACULTY','ADMIN'
                         )),
     department_id   INTEGER         REFERENCES departments(id),   -- FK added below
     is_active       BOOLEAN         DEFAULT TRUE,
@@ -37,14 +36,8 @@ CREATE TABLE users (
 CREATE TABLE departments (
     id                  SERIAL PRIMARY KEY,
     department_code     VARCHAR(20)     UNIQUE NOT NULL,
-    name                VARCHAR(150)    NOT NULL,
-    hod_id              INTEGER         -- FK to users added after users exists
+    name                VARCHAR(150)    NOT NULL
 );
-
--- Deferred circular FK: departments.hod_id → users.id
-ALTER TABLE departments
-    ADD CONSTRAINT fk_departments_hod_id
-    FOREIGN KEY (hod_id) REFERENCES users(id);
 
 -- FK users.department_id → departments.id (added now that departments exists)
 ALTER TABLE users
@@ -162,6 +155,7 @@ CREATE TABLE rooms (
     id              SERIAL PRIMARY KEY,
     building_id     INTEGER     REFERENCES buildings(id),
     room_number     VARCHAR(20),
+    floor_number    INTEGER,
     capacity        INTEGER,
     room_type       VARCHAR(20) CHECK (room_type IN (
                         'CLASSROOM','LAB','SEMINAR_HALL','AUDITORIUM','MEETING_ROOM'
@@ -212,14 +206,13 @@ CREATE TABLE academic_calendar (
 
 -- ── TIMETABLE ────────────────────────────────────────────────────────────────
 
-CREATE TABLE timetable_version (
+CREATE TABLE timetable_versions (
     id                  SERIAL PRIMARY KEY,
     academic_year_id    INTEGER     REFERENCES academic_years(id),
     version_number      VARCHAR(10),
     status              VARCHAR(20) CHECK (status IN (
-                            'DRAFT','GENERATED','HOD_REVIEW','HOD_APPROVED',
-                            'COORDINATOR_REVIEW','ADMIN_REVIEW','APPROVED',
-                            'PUBLISHED','REJECTED','ARCHIVED'
+                            'DRAFT','GENERATED','REVIEWED','VALIDATED',
+                            'FINALIZED','PUBLISHED','REJECTED','ARCHIVED'
                         )),
     created_by          INTEGER     REFERENCES users(id),
     approved_by         INTEGER     REFERENCES users(id),
@@ -228,9 +221,9 @@ CREATE TABLE timetable_version (
     reason              TEXT
 );
 
-CREATE TABLE timetable (
+CREATE TABLE timetable_entries (
     id              SERIAL PRIMARY KEY,
-    version_id      INTEGER     REFERENCES timetable_version(id),
+    version_id      INTEGER     REFERENCES timetable_versions(id),
     department_id   INTEGER     REFERENCES departments(id),
     program_id      INTEGER     REFERENCES programs(id),
     semester_id     INTEGER     REFERENCES semesters(id),
@@ -240,13 +233,15 @@ CREATE TABLE timetable (
     faculty_id      INTEGER     REFERENCES faculty(id),
     room_id         INTEGER     REFERENCES rooms(id),
     slot_id         INTEGER     REFERENCES time_slots(id),
-    status          VARCHAR(20) DEFAULT 'DRAFT'
+    status          VARCHAR(20) DEFAULT 'DRAFT' CHECK (status IN (
+                            'DRAFT','ACTIVE','CANCELLED','RESCHEDULED'
+                        ))
 );
 
 -- Composite indexes for validator and solver performance (see blueprint §5.2)
-CREATE INDEX ix_timetable_faculty_slot  ON timetable (faculty_id,  slot_id);
-CREATE INDEX ix_timetable_room_slot     ON timetable (room_id,     slot_id);
-CREATE INDEX ix_timetable_section_slot  ON timetable (section_id,  slot_id);
+CREATE INDEX ix_timetable_entries_faculty_slot  ON timetable_entries (faculty_id,  slot_id);
+CREATE INDEX ix_timetable_entries_room_slot     ON timetable_entries (room_id,     slot_id);
+CREATE INDEX ix_timetable_entries_section_slot  ON timetable_entries (section_id,  slot_id);
 
 -- ── RESOURCES ────────────────────────────────────────────────────────────────
 
