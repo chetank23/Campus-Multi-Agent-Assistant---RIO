@@ -17,6 +17,10 @@ _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_ENV_PATH)
 
 DATABASE_URL: str = os.environ["DATABASE_URL"]
+SECRET_KEY: str = os.environ.get("SECRET_KEY", "super-secret-key-for-dev-change-to-a-long-random-secret-at-least-32-bytes")
+ALGORITHM: str = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES: int = 20
+REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
 # SQLAlchemy 2.0 engine
 # pool_pre_ping=True keeps the connection alive on Windows where idle

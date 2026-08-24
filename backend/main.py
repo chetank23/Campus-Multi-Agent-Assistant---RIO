@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import IntegrityError
 
-from backend.routes import buildings, rooms, labs
+from backend.routes import buildings, rooms, labs, auth, department, program, academic_year, semester
 
 app = FastAPI(title="Campus AI System")
 
@@ -25,6 +25,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(buildings.router)
 app.include_router(rooms.router)
 app.include_router(labs.router)
+app.include_router(department.router)
+app.include_router(program.router)
+app.include_router(academic_year.router)
+app.include_router(semester.router)
