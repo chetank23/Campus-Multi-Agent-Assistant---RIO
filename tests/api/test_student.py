@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from backend.main import app
 from backend.database import get_db
 from backend.models.identity import User
-from backend.models.academic import Student, Department, Program, Semester, Section, Batch
+from backend.models.academic import Student, Department, Program, Semester, Section, Batch, AcademicYear
 from dotenv import load_dotenv
 load_dotenv(".env")
 
@@ -46,6 +46,11 @@ def auth_headers(admin_token):
 @pytest.fixture
 def test_student():
     db = TestingSessionLocal()
+    # Pre-cleanup
+    db.query(Student).filter(Student.student_id.in_(["TESTSTU001", "TESTSTU002", "UPDTESTSTU"])).delete(synchronize_session=False)
+    db.query(User).filter(User.email.in_(["teststudent@test.edu", "newteststudent@test.edu"])).delete(synchronize_session=False)
+    db.commit()
+
     # ensure dependencies
     dept = db.query(Department).first()
     if not dept:
@@ -59,9 +64,15 @@ def test_student():
         db.add(prog)
         db.commit()
         db.refresh(prog)
+    ay = db.query(AcademicYear).first()
+    if not ay:
+        ay = AcademicYear(name="2025-2026", start_date="2025-08-01", end_date="2026-05-31")
+        db.add(ay)
+        db.commit()
+        db.refresh(ay)
     sem = db.query(Semester).first()
     if not sem:
-        sem = Semester(academic_year_id=dept.id, semester_number=1, start_date="2025-08-01", end_date="2025-12-15")
+        sem = Semester(academic_year_id=ay.id, semester_number=1, start_date="2025-08-01", end_date="2025-12-15")
         db.add(sem)
         db.commit()
         db.refresh(sem)
@@ -81,49 +92,48 @@ def test_student():
     from passlib.context import CryptContext
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     hashed = pwd_context.hash("Test@1234")
-    user = User(name="Test Student", email="student@test.edu", password_hash=hashed, role="STUDENT", department_id=dept.id, is_active=True)
+    user = User(name="Test Student", email="teststudent@test.edu", password_hash=hashed, role="STUDENT", department_id=dept.id, is_active=True)
     db.add(user)
     db.commit()
     db.refresh(user)
-    stu = Student(user_id=user.id, student_id="STU001", department_id=dept.id, program_id=prog.id, semester_id=sem.id, section_id=sec.id, batch_id=batch.id)
+    stu = Student(user_id=user.id, student_id="TESTSTU001", department_id=dept.id, program_id=prog.id, semester_id=sem.id, section_id=sec.id, batch_id=batch.id)
     db.add(stu)
     db.commit()
     db.refresh(stu)
     yield stu
     # cleanup
-    db.query(Student).filter(Student.id == stu.id).delete()
-    db.query(User).filter(User.id == user.id).delete()
-    db.query(Batch).filter(Batch.id == batch.id).delete()
-    db.query(Section).filter(Section.id == sec.id).delete()
-    db.query(Semester).filter(Semester.id == sem.id).delete()
-    db.query(Program).filter(Program.id == prog.id).delete()
-    db.query(Department).filter(Department.id == dept.id).delete()
+    db.query(Student).filter(Student.batch_id == batch.id).delete(synchronize_session=False)
+    db.query(User).filter(User.email.in_(["teststudent@test.edu", "newteststudent@test.edu"])).delete(synchronize_session=False)
     db.commit()
     db.close()
 
 def test_create_student(test_student, auth_headers):
     client_raise = TestClient(app, raise_server_exceptions=True)
-    # need to create a user first
     db = TestingSessionLocal()
     dept = db.query(Department).first()
+    prog = db.query(Program).first()
+    sem = db.query(Semester).first()
+    sec = db.query(Section).first()
+    batch = db.query(Batch).first()
+    
     from passlib.context import CryptContext
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     hashed = pwd_context.hash("Test@1234")
-    user = User(name="New Student", email="newstudent@test.edu", password_hash=hashed, role="STUDENT", department_id=dept.id, is_active=True)
+    user = User(name="New Student", email="newteststudent@test.edu", password_hash=hashed, role="STUDENT", department_id=dept.id, is_active=True)
     db.add(user)
     db.commit()
     db.refresh(user)
-    db.close()
+    
     response = client_raise.post(
         "/students/",
         json={
             "user_id": user.id,
-            "student_id": "STU002",
+            "student_id": "TESTSTU002",
             "department_id": dept.id,
-            "program_id": dept.id,  # simplify
-            "semester_id": dept.id,
-            "section_id": dept.id,
-            "batch_id": dept.id
+            "program_id": prog.id,
+            "semester_id": sem.id,
+            "section_id": sec.id,
+            "batch_id": batch.id
         },
         headers=auth_headers
     )
@@ -131,8 +141,13 @@ def test_create_student(test_student, auth_headers):
         print(response.text)
     assert response.status_code == 200
     data = response.json()
-    assert data["student_id"] == "STU002"
+    assert data["student_id"] == "TESTSTU002"
     assert "id" in data
+    
+    # Post-cleanup
+    db.query(Student).filter(Student.id == data["id"]).delete()
+    db.commit()
+    db.close()
 
 def test_get_student(test_student, auth_headers):
     response = client.get(
@@ -155,7 +170,7 @@ def test_update_student(test_student, auth_headers):
         f"/students/{test_student.id}",
         json={
             "user_id": test_student.user_id,
-            "student_id": "UPDSTU",
+            "student_id": "UPDTESTSTU",
             "department_id": test_student.department_id,
             "program_id": test_student.program_id,
             "semester_id": test_student.semester_id,
@@ -166,7 +181,7 @@ def test_update_student(test_student, auth_headers):
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["student_id"] == "UPDSTU"
+    assert data["student_id"] == "UPDTESTSTU"
 
 def test_delete_student(test_student, auth_headers):
     client_raise = TestClient(app, raise_server_exceptions=True)

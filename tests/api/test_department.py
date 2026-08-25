@@ -51,6 +51,8 @@ def auth_headers(admin_token):
 @pytest.fixture
 def test_department():
     db = TestingSessionLocal()
+    db.query(Department).filter(Department.department_code.in_(["TEST", "TEST2"])).delete(synchronize_session=False)
+    db.commit()
     d = Department(department_code="TEST", name="Test Department")
     db.add(d)
     db.commit()
@@ -74,6 +76,12 @@ def test_create_department(test_department, auth_headers):
     assert data["department_code"] == "TEST2"
     assert data["name"] == "Test Department 2"
     assert "id" in data
+    
+    # Post-cleanup
+    db = TestingSessionLocal()
+    db.query(Department).filter(Department.id == data["id"]).delete()
+    db.commit()
+    db.close()
 
 def test_get_department(test_department, auth_headers):
     response = client.get(

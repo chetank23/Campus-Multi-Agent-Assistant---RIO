@@ -46,15 +46,34 @@ def auth_headers(admin_token):
 @pytest.fixture
 def test_academic_year():
     db = TestingSessionLocal()
-    # Clean up any existing academic years to avoid id conflicts
-    db.query(AcademicYear).delete()
+    # Clean up specific academic years to avoid foreign key violations
+    from backend.models.space_time import AcademicCalendar
+    from backend.models.academic import Semester
+    from backend.models.courses import ElectiveGroup, ElectiveGroupCourse
+
+    # Delete child objects referencing the years we are about to delete
+    years_to_delete = db.query(AcademicYear.id).filter(AcademicYear.name.in_(["9998-9999", "9999-9999", "Updated Test Year"]))
+    semesters_to_delete = db.query(Semester.id).filter(Semester.academic_year_id.in_(years_to_delete))
+    groups_to_delete = db.query(ElectiveGroup.id).filter(ElectiveGroup.semester_id.in_(semesters_to_delete))
+
+    db.query(AcademicCalendar).filter(AcademicCalendar.academic_year_id.in_(years_to_delete)).delete(synchronize_session=False)
+    db.query(ElectiveGroupCourse).filter(ElectiveGroupCourse.group_id.in_(groups_to_delete)).delete(synchronize_session=False)
+    db.query(ElectiveGroup).filter(ElectiveGroup.semester_id.in_(semesters_to_delete)).delete(synchronize_session=False)
+    db.query(Semester).filter(Semester.academic_year_id.in_(years_to_delete)).delete(synchronize_session=False)
+    db.query(AcademicYear).filter(AcademicYear.name.in_(["9998-9999", "9999-9999", "Updated Test Year"])).delete(synchronize_session=False)
     db.commit()
-    yr = AcademicYear(name="2025-2026", start_date="2025-08-01", end_date="2026-05-31")
+    yr = AcademicYear(name="9998-9999", start_date="9998-08-01", end_date="9999-05-31")
     db.add(yr)
     db.commit()
     db.refresh(yr)
     yield yr
-    db.query(AcademicYear).filter(AcademicYear.id == yr.id).delete()
+    from backend.models.courses import ElectiveGroup, ElectiveGroupCourse
+    semesters_to_delete = db.query(Semester.id).filter(Semester.academic_year_id == yr.id)
+    groups_to_delete = db.query(ElectiveGroup.id).filter(ElectiveGroup.semester_id.in_(semesters_to_delete))
+    db.query(ElectiveGroupCourse).filter(ElectiveGroupCourse.group_id.in_(groups_to_delete)).delete(synchronize_session=False)
+    db.query(ElectiveGroup).filter(ElectiveGroup.semester_id.in_(semesters_to_delete)).delete(synchronize_session=False)
+    db.query(Semester).filter(Semester.academic_year_id == yr.id).delete(synchronize_session=False)
+    db.query(AcademicYear).filter(AcademicYear.id == yr.id).delete(synchronize_session=False)
     db.commit()
     db.close()
 
@@ -63,9 +82,9 @@ def test_create_academic_year(test_academic_year, auth_headers):
     response = client_raise.post(
         "/academic-years/",
         json={
-            "name": "2026-2027",
-            "start_date": "2026-08-01",
-            "end_date": "2027-05-31"
+            "name": "9999-9999",
+            "start_date": "9999-08-01",
+            "end_date": "9999-05-31"
         },
         headers=auth_headers
     )
@@ -73,10 +92,16 @@ def test_create_academic_year(test_academic_year, auth_headers):
         print(response.text)
     assert response.status_code == 200
     data = response.json()
-    assert data["name"] == "2026-2027"
-    assert data["start_date"] == "2026-08-01"
-    assert data["end_date"] == "2027-05-31"
+    assert data["name"] == "9999-9999"
+    assert data["start_date"] == "9999-08-01"
+    assert data["end_date"] == "9999-05-31"
     assert "id" in data
+    
+    # Post-cleanup
+    db = TestingSessionLocal()
+    db.query(AcademicYear).filter(AcademicYear.id == data["id"]).delete()
+    db.commit()
+    db.close()
 
 def test_get_academic_year(test_academic_year, auth_headers):
     response = client.get(
@@ -95,17 +120,17 @@ def test_update_academic_year(test_academic_year, auth_headers):
     response = client_raise.put(
         f"/academic-years/{test_academic_year.id}",
         json={
-            "name": "Updated Year",
-            "start_date": "2026-08-01",
-            "end_date": "2027-05-31"
+            "name": "Updated Test Year",
+            "start_date": "9998-08-01",
+            "end_date": "9999-05-31"
         },
         headers=auth_headers
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["name"] == "Updated Year"
-    assert data["start_date"] == "2026-08-01"
-    assert data["end_date"] == "2027-05-31"
+    assert data["name"] == "Updated Test Year"
+    assert data["start_date"] == "9998-08-01"
+    assert data["end_date"] == "9999-05-31"
 
 def test_delete_academic_year(test_academic_year, auth_headers):
     client_raise = TestClient(app, raise_server_exceptions=True)

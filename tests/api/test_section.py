@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.main import app
 from backend.database import get_db
-from backend.models.academic import Section, Department, Program, Semester
+from backend.models.academic import Section, Department, Program, Semester, AcademicYear
 from backend.models.identity import User
 from dotenv import load_dotenv
 load_dotenv(".env")
@@ -59,9 +59,15 @@ def test_section():
         db.add(prog)
         db.commit()
         db.refresh(prog)
+    ay = db.query(AcademicYear).first()
+    if not ay:
+        ay = AcademicYear(name="2025-2026", start_date="2025-08-01", end_date="2026-05-31")
+        db.add(ay)
+        db.commit()
+        db.refresh(ay)
     sem = db.query(Semester).first()
     if not sem:
-        sem = Semester(academic_year_id=dept.id if hasattr(dept, 'id') else 1, semester_number=1, start_date="2025-08-01", end_date="2025-12-15")
+        sem = Semester(academic_year_id=ay.id, semester_number=1, start_date="2025-08-01", end_date="2025-12-15")
         db.add(sem)
         db.commit()
         db.refresh(sem)
