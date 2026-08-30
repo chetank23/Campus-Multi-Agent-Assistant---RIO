@@ -113,3 +113,44 @@ def test_generate_timetable_invalid_sections(admin_token):
     )
     assert response.status_code == 400
     assert "Invalid section IDs" in response.text or "No valid sections found" in response.text
+
+from unittest.mock import patch
+
+def test_generate_timetable_infeasible(admin_token):
+    if not admin_token:
+        pytest.skip("No admin token")
+    
+    with Session(engine) as db:
+        ac_year = db.query(AcademicYear).first()
+        semester = db.query(Semester).first()
+        department = db.query(Department).first()
+        program = db.query(Program).first()
+        if not all([ac_year, semester, department, program]):
+            pytest.skip("Missing seed data")
+
+    with patch('backend.routes.timetable.TimetableSolver.solve') as mock_solve:
+        from backend.optimizer.timetable_solver import SolverResult
+        mock_solve.return_value = SolverResult(
+            feasible=False,
+            status="INFEASIBLE",
+            message="No feasible timetable exists.",
+            diagnostics=["Test diagnostic 1", "Test diagnostic 2"]
+        )
+
+        response = client.post(
+            "/timetable/generate",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={
+                "academic_year_id": ac_year.id,
+                "semester_id": semester.id,
+                "department_id": department.id,
+                "program_id": program.id
+            }
+        )
+        
+        assert response.status_code == 422
+        data = response.json()
+        assert "detail" in data
+        assert "message" in data["detail"]
+        assert "diagnostics" in data["detail"]
+        assert "Test diagnostic 1" in data["detail"]["diagnostics"]

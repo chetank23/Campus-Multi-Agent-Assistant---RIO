@@ -120,3 +120,4 @@ class GenerationSummary(BaseModel):
     loaded_time_slots: int
     solve_time_seconds: Optional[float] = None
     generated_entries: Optional[List[TimetableEntryResult]] = None
+    diagnostics: Optional[List[str]] = None

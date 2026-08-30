@@ -11,6 +11,7 @@ class SolverResult(BaseModel):
     message: str
     entries: List[TimetableEntryResult] = []
     solve_time_seconds: float = 0.0
+    diagnostics: List[str] = []
 
 class TimetableSolver:
     def __init__(self, opt_input: OptimizerInput, time_limit: int = 60):
@@ -114,9 +115,9 @@ class TimetableSolver:
                 
                 # Check for obvious infeasibility
                 if not eligible_rooms:
-                    return False, f"No eligible rooms for {h_type} of course {course.course_code}"
+                    return False, f"No eligible rooms for {h_type} of course {course.id}"
                 if len(eligible_slots) < req_hours:
-                    return False, f"Not enough available slots for faculty {f_id} teaching {course.course_code}"
+                    return False, f"Not enough available slots for faculty {f_id} teaching {course.id}"
                 
                 var_list = []
                 for r_id in eligible_rooms:
@@ -203,6 +204,56 @@ class TimetableSolver:
             
         return True, "Model built successfully"
 
+    def _diagnose_infeasibility(self) -> list[str]:
+        diagnostics = []
+        # 1. room supply vs. required room-hours per department
+        total_required_hours = 0
+        for a in self.assignments:
+            c = self.courses.get(a.course_id)
+            if c:
+                total_required_hours += c.lecture_hours + c.tutorial_hours + c.practical_hours
+                
+        total_room_slots = len(self.rooms) * len(self.slots)
+        if total_required_hours > total_room_slots:
+            diagnostics.append(f"Room capacity shortage: Need {total_required_hours} room-slots but only {total_room_slots} are available. Suggest adding {total_required_hours - total_room_slots} more slots or rooms.")
+            
+        # 2. faculty availability hours vs. required teaching hours
+        for f in self.faculty.values():
+            f_req = 0
+            for a in self.assignments:
+                if a.faculty_id == f.id:
+                    c = self.courses.get(a.course_id)
+                    if c:
+                        f_req += c.lecture_hours + c.tutorial_hours + c.practical_hours
+            
+            f_avail = sum(1 for slot_id, av in self.faculty_availability.get(f.id, {}).items() if av.availability in ('AVAILABLE', 'PREFERRED') and slot_id in self.slots)
+            if f_req > f_avail:
+                diagnostics.append(f"Faculty availability shortage: Faculty ID {f.id} needs {f_req} teaching hours but only provided {f_avail} available slots. Suggest adding {f_req - f_avail} more available slots for this faculty.")
+
+        # 3. lab room count vs. lab-course demand
+        lab_courses = [c for c in self.courses.values() if c.requires_lab or c.course_type == 'LAB']
+        total_lab_hours = 0
+        for a in self.assignments:
+            c = self.courses.get(a.course_id)
+            if c and c in lab_courses:
+                total_lab_hours += c.practical_hours if c.practical_hours > 0 else (c.lecture_hours + c.tutorial_hours)
+                
+        lab_rooms = [r for r in self.rooms.values() if r.room_type == 'LAB']
+        total_lab_slots = len(lab_rooms) * len(self.slots)
+        if total_lab_hours > total_lab_slots:
+            diagnostics.append(f"Lab capacity shortage: Need {total_lab_hours} lab room-slots but only {total_lab_slots} are available. Suggest adding {total_lab_hours - total_lab_slots} more slots or lab rooms.")
+            
+        # 4. elective group overlap count vs. available parallel slots
+        for eg in self.input.elective_groups:
+            eg_courses = [egc.course_id for egc in self.input.elective_group_courses if egc.group_id == eg.id]
+            if len(eg_courses) > len(self.slots):
+                 diagnostics.append(f"Elective group bottleneck: Elective Group ID {eg.id} has {len(eg_courses)} courses but only {len(self.slots)} valid slots exist. Parallel courses will unavoidably collide.")
+        
+        if not diagnostics:
+            diagnostics.append("No obvious aggregate shortages detected. The infeasibility is likely due to complex combinatorics (e.g. specific faculty + room + section constraints locking up).")
+            
+        return diagnostics
+
     def solve(self) -> SolverResult:
         start_time = time.time()
         
@@ -212,7 +263,8 @@ class TimetableSolver:
                 feasible=False,
                 status="INFEASIBLE_AT_BUILD",
                 message=msg,
-                solve_time_seconds=time.time() - start_time
+                solve_time_seconds=time.time() - start_time,
+                diagnostics=self._diagnose_infeasibility()
             )
             
         solver = cp_model.CpSolver()
@@ -245,7 +297,8 @@ class TimetableSolver:
                 feasible=False,
                 status="INFEASIBLE",
                 message="No feasible timetable exists with the current constraints.",
-                solve_time_seconds=solve_time
+                solve_time_seconds=solve_time,
+                diagnostics=self._diagnose_infeasibility()
             )
         else:
             return SolverResult(

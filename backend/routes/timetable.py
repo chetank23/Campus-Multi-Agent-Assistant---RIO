@@ -44,7 +44,13 @@ def generate_timetable(
     if not result.feasible:
         # We can either return 422 or a 200 with status=INFEASIBLE. 
         # Returning 422 for infeasible is a common API design.
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.message)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, 
+            detail={
+                "message": result.message,
+                "diagnostics": getattr(result, 'diagnostics', [])
+            }
+        )
 
     return GenerationSummary(
         status=result.status,
