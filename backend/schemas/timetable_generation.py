@@ -104,6 +104,12 @@ class OptimizerInput(BaseModel):
     elective_groups: List[OptElectiveGroup] = Field(default_factory=list)
     elective_group_courses: List[OptElectiveGroupCourse] = Field(default_factory=list)
 
+class TimetableEntryResult(BaseModel):
+    course_assignment_id: int
+    room_id: int
+    slot_id: int
+    hour_type: str
+
 class GenerationSummary(BaseModel):
     status: str
     message: str
@@ -112,3 +118,5 @@ class GenerationSummary(BaseModel):
     loaded_faculty: int
     loaded_rooms: int
     loaded_time_slots: int
+    solve_time_seconds: Optional[float] = None
+    generated_entries: Optional[List[TimetableEntryResult]] = None

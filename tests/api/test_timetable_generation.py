@@ -47,7 +47,7 @@ def test_generate_timetable_valid_scope(admin_token):
     )
     assert response.status_code == 200, response.text
     data = response.json()
-    assert data["status"] == "VALID"
+    assert data["status"] in ["OPTIMAL", "FEASIBLE"]
     assert data["loaded_sections"] > 0
     assert data["loaded_courses"] >= 0
 

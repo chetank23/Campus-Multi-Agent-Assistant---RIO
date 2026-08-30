@@ -5,6 +5,8 @@ from backend.models.identity import User
 from backend.dependencies import get_current_user, require_role
 from backend.schemas.timetable_generation import GenerationScope, GenerationSummary
 from backend.services.timetable_input_loader import validate_and_load_input
+from backend.optimizer.timetable_solver import TimetableSolver
+from backend.optimizer.validator import validate_timetable
 
 router = APIRouter(prefix="/timetable", tags=["timetable"])
 
@@ -15,21 +17,43 @@ def generate_timetable(
     current_user: User = Depends(require_role("HOD", "TIMETABLE_COORDINATOR", "ADMIN"))
 ):
     """
-    Stage 4 Part 1: Validates the generation scope and loads all required input data
-    from the database to build the OptimizerInput.
-    Does NOT invoke the CP-SAT solver yet.
+    Stage 4 Part 2: Validates the generation scope, loads input data,
+    and invokes the CP-SAT timetable solver.
     """
-    # Load and validate input
+    # 1. Load and validate input
     optimizer_input = validate_and_load_input(db, scope)
 
-    # In Stage 4 Part 2, this will be passed to the CP-SAT solver (e.g. via Celery).
-    # For now, we return a summary of the validated input.
+    # 2. Initialize Solver
+    solver = TimetableSolver(opt_input=optimizer_input, time_limit=60)
+    
+    # 3. Solve
+    result = solver.solve()
+    
+    # 4. Optional: Validate result independently if feasible
+    if result.feasible:
+        val_result = validate_timetable(result.entries, optimizer_input)
+        if not val_result.is_valid:
+            # We found a feasible solution in solver, but independent validation failed!
+            # This indicates a bug in the solver constraints.
+            violations = ", ".join([v.message for v in val_result.violations])
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Solver produced invalid timetable: {violations}"
+            )
+            
+    if not result.feasible:
+        # We can either return 422 or a 200 with status=INFEASIBLE. 
+        # Returning 422 for infeasible is a common API design.
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.message)
+
     return GenerationSummary(
-        status="VALID",
-        message="Generation scope validated and data loaded successfully. Ready for solver.",
+        status=result.status,
+        message=result.message,
         loaded_sections=len(optimizer_input.sections),
         loaded_courses=len(optimizer_input.courses),
         loaded_faculty=len(optimizer_input.faculty),
         loaded_rooms=len(optimizer_input.rooms),
-        loaded_time_slots=len(optimizer_input.time_slots)
+        loaded_time_slots=len(optimizer_input.time_slots),
+        solve_time_seconds=result.solve_time_seconds,
+        generated_entries=result.entries
     )
