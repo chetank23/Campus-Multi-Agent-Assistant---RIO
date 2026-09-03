@@ -7,6 +7,7 @@ from backend.schemas.timetable_generation import GenerationScope, GenerationSumm
 from backend.services.timetable_input_loader import validate_and_load_input
 from backend.optimizer.timetable_solver import TimetableSolver
 from backend.optimizer.validator import validate_timetable
+from backend.optimizer.scorer import compute_score
 
 router = APIRouter(prefix="/timetable", tags=["timetable"])
 
@@ -29,17 +30,20 @@ def generate_timetable(
     # 3. Solve
     result = solver.solve()
     
-    # 4. Optional: Validate result independently if feasible
+    score_data = None
     if result.feasible:
         val_result = validate_timetable(result.entries, optimizer_input)
-        if not val_result.is_valid:
+        if len([v for v in val_result.violations if v.severity == "HARD"]) > 0:
             # We found a feasible solution in solver, but independent validation failed!
             # This indicates a bug in the solver constraints.
-            violations = ", ".join([v.message for v in val_result.violations])
+            violations = ", ".join([v.message for v in val_result.violations if v.severity == "HARD"])
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Solver produced invalid timetable: {violations}"
             )
+        
+        # Calculate the soft scores deterministically
+        score_data = compute_score(val_result, result.entries, optimizer_input)
             
     if not result.feasible:
         # We can either return 422 or a 200 with status=INFEASIBLE. 
@@ -61,5 +65,7 @@ def generate_timetable(
         loaded_rooms=len(optimizer_input.rooms),
         loaded_time_slots=len(optimizer_input.time_slots),
         solve_time_seconds=result.solve_time_seconds,
-        generated_entries=result.entries
+        generated_entries=result.entries,
+        diagnostics=getattr(result, 'diagnostics', []),
+        score=score_data
     )

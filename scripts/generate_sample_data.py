@@ -13,7 +13,10 @@ faker = Faker()
 Faker.seed(SEED)
 
 # Fixed test password
-TEST_PASSWORD = "Test@1234"
+import os
+TEST_PASSWORD = os.environ.get("TEST_PASSWORD")
+if not TEST_PASSWORD:
+    raise ValueError("TEST_PASSWORD environment variable is missing. It is strictly required to generate seed data.")
 # Pre-hash to avoid hashing thousands of times
 HASHED_PASSWORD = bcrypt.hashpw(TEST_PASSWORD.encode(), bcrypt.gensalt()).decode("utf-8")
 

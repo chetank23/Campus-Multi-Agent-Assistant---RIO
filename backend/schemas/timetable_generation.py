@@ -110,6 +110,20 @@ class TimetableEntryResult(BaseModel):
     slot_id: int
     hour_type: str
 
+class TimetableScore(BaseModel):
+    total_score: float
+    hard_violations: int
+    soft_violations: int
+    room_utilization_pct: float
+    faculty_workload_balance: float
+    student_gap_minutes_avg: float
+    faculty_gap_quality: float
+    student_gap_quality: float
+    preferred_slot_quality: float
+    room_change_quality: float
+    late_lab_quality: float
+    workload_balance_quality: float
+
 class GenerationSummary(BaseModel):
     status: str
     message: str
@@ -121,3 +135,4 @@ class GenerationSummary(BaseModel):
     solve_time_seconds: Optional[float] = None
     generated_entries: Optional[List[TimetableEntryResult]] = None
     diagnostics: Optional[List[str]] = None
+    score: Optional[TimetableScore] = None

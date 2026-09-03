@@ -13,7 +13,10 @@ print("Connecting to DB...")
 with psycopg.connect(DATABASE_URL.replace("+psycopg", "")) as conn:
     with conn.cursor() as cur:
         cur.execute("SELECT email FROM users WHERE role = 'ADMIN' LIMIT 1")
-        admin_email = cur.fetchone()[0]
+        row = cur.fetchone()
+        if not row:
+            raise RuntimeError("No ADMIN user found in database. Please run generate_sample_data.py first.")
+        admin_email = row[0]
 
 print(f"Admin email: {admin_email}")
 
@@ -32,10 +35,15 @@ except urllib.error.HTTPError as e:
     print(f"Status: {e.code}")
     print(f"Response: {e.read().decode('utf-8')}")
 
+import os
+test_password = os.environ.get("TEST_PASSWORD")
+if not test_password:
+    raise ValueError("TEST_PASSWORD environment variable is missing. Please provide it to run this utility.")
+
 # 2. Successful login
 req2 = urllib.request.Request(
     f"{base_url}/auth/login",
-    data=json.dumps({"email": admin_email, "password": "Test@1234"}).encode('utf-8'),
+    data=json.dumps({"email": admin_email, "password": test_password}).encode('utf-8'),
     headers={"Content-Type": "application/json"},
     method="POST"
 )
