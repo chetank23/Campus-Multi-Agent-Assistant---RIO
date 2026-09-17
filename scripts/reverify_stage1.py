@@ -143,7 +143,7 @@ check("uses psycopg v3 driver (postgresql+psycopg://)",
       db_url.startswith("postgresql+psycopg://"))
 check("points to campus_ai", "campus_ai" in db_url)
 check("uses campus_user", "campus_user" in db_url)
-check("JWT_SECRET present", bool(os.environ.get("JWT_SECRET")))
+check("SECRET_KEY present", bool(os.environ.get("SECRET_KEY")))
 check("ENV=development", os.environ.get("ENV") == "development")
 
 # ── 6. DATABASE CONNECTION ────────────────────────────────────────

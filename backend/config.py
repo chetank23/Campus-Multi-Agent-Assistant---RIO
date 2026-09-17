@@ -17,7 +17,10 @@ _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_ENV_PATH)
 
 DATABASE_URL: str = os.environ["DATABASE_URL"]
-SECRET_KEY: str = os.environ.get("SECRET_KEY", "super-secret-key-for-dev-change-to-a-long-random-secret-at-least-32-bytes")
+_DEFAULT_DEV_SECRET = "super-secret-key-for-dev-change-to-a-long-random-secret-at-least-32-bytes"
+SECRET_KEY: str = os.environ["SECRET_KEY"]
+if not SECRET_KEY or SECRET_KEY == _DEFAULT_DEV_SECRET:
+    raise ValueError("SECRET_KEY must be set in environment and cannot use default placeholder key")
 ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = 20
 REFRESH_TOKEN_EXPIRE_DAYS: int = 7
