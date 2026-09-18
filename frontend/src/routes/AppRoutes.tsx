@@ -28,6 +28,19 @@ import { NotFound } from '@/pages/NotFound';
 import { AdminDashboard } from '@/pages/admin/AdminDashboard';
 import { FacultyDashboard } from '@/pages/faculty/FacultyDashboard';
 import { StudentDashboard } from '@/pages/student/StudentDashboard';
+
+import { DepartmentsPage } from '@/pages/admin/academic/DepartmentsPage';
+import { ProgramsPage } from '@/pages/admin/academic/ProgramsPage';
+import { AcademicYearsPage } from '@/pages/admin/academic/AcademicYearsPage';
+import { SemestersPage } from '@/pages/admin/academic/SemestersPage';
+import { BatchesPage } from '@/pages/admin/academic/BatchesPage';
+import { SectionsPage } from '@/pages/admin/academic/SectionsPage';
+import { StudentsPage } from '@/pages/admin/people/StudentsPage';
+import { FacultyPage } from '@/pages/admin/people/FacultyPage';
+import { CoursesPage } from '@/pages/admin/courses/CoursesPage';
+import { BuildingsPage } from '@/pages/admin/campus/BuildingsPage';
+import { RoomsPage } from '@/pages/admin/campus/RoomsPage';
+
 import type { UserRole } from '@/auth/auth.types';
 
 const roleHome: Record<UserRole, string> = {
@@ -79,12 +92,19 @@ export function AppRoutes() {
           }
         >
           <Route path="/admin" element={<AdminDashboard />} />
+          {/* Stage 6B Admin Pages */}
+          <Route path="/admin/academic/departments" element={<DepartmentsPage />} />
+          <Route path="/admin/academic/programs" element={<ProgramsPage />} />
+          <Route path="/admin/academic/years" element={<AcademicYearsPage />} />
+          <Route path="/admin/academic/semesters" element={<SemestersPage />} />
+          <Route path="/admin/academic/batches" element={<BatchesPage />} />
+          <Route path="/admin/academic/sections" element={<SectionsPage />} />
+          <Route path="/admin/people/students" element={<StudentsPage />} />
+          <Route path="/admin/people/faculty" element={<FacultyPage />} />
+          <Route path="/admin/courses" element={<CoursesPage />} />
+          <Route path="/admin/campus/buildings" element={<BuildingsPage />} />
+          <Route path="/admin/campus/rooms" element={<RoomsPage />} />
           {/* Placeholder routes for future Stage 6B+ modules */}
-          <Route path="/admin/academic" element={<PlaceholderPage label="Academic Management" />} />
-          <Route path="/admin/faculty" element={<PlaceholderPage label="Faculty Management" />} />
-          <Route path="/admin/students" element={<PlaceholderPage label="Student Management" />} />
-          <Route path="/admin/courses" element={<PlaceholderPage label="Course Management" />} />
-          <Route path="/admin/rooms" element={<PlaceholderPage label="Rooms & Labs" />} />
           <Route path="/admin/timetable" element={<PlaceholderPage label="Timetable" />} />
           <Route path="/admin/resources" element={<PlaceholderPage label="Resources" />} />
           <Route path="/admin/requests" element={<PlaceholderPage label="Change Requests" />} />
