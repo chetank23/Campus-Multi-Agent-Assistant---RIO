@@ -136,3 +136,4 @@ class GenerationSummary(BaseModel):
     generated_entries: Optional[List[TimetableEntryResult]] = None
     diagnostics: Optional[List[str]] = None
     score: Optional[TimetableScore] = None
+    version_id: Optional[int] = None
