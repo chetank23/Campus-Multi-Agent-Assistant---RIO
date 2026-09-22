@@ -1,19 +1,24 @@
-import React, { useMemo } from 'react';
-import type { TimetableEntryResult } from '@/api/timetable';
+import React, { useMemo, useState } from 'react';
+import type { TimetableEntryResult, TimetableEntryResponse } from '@/api/timetable';
 import type { TimeSlotResponse } from '@/api/timeSlots';
 import type { CourseAssignmentResponse } from '@/api/courseAssignments';
 import type { CourseResponse } from '@/api/courses';
 import type { FacultyResponse } from '@/api/faculty';
 import type { RoomResponse } from '@/api/rooms';
 import { TimetableCell } from './TimetableCell';
+import { EditEntryModal } from './EditEntryModal';
+
+type AnyTimetableEntry = TimetableEntryResult | TimetableEntryResponse;
 
 interface TimetableGridProps {
-  entries: TimetableEntryResult[];
+  entries: AnyTimetableEntry[];
   timeSlots: TimeSlotResponse[];
   assignments: CourseAssignmentResponse[];
   courses: CourseResponse[];
   facultyList: FacultyResponse[];
   rooms: RoomResponse[];
+  isEditable?: boolean;
+  onEntryUpdated?: () => void;
 }
 
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -25,7 +30,11 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
   courses,
   facultyList,
   rooms,
+  isEditable = false,
+  onEntryUpdated,
 }) => {
+  const [editingEntry, setEditingEntry] = useState<TimetableEntryResponse | null>(null);
+
   // Sort time slots by start_time
   const sortedSlots = useMemo(() => {
     // Unique times across all days
@@ -41,7 +50,7 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
 
   // Group entries by day and time signature
   const matrix = useMemo(() => {
-    const mat: Record<string, Record<string, TimetableEntryResult[]>> = {};
+    const mat: Record<string, Record<string, AnyTimetableEntry[]>> = {};
     DAYS.forEach(day => {
       mat[day] = {};
       sortedSlots.forEach(slot => {
@@ -63,17 +72,30 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
     return mat;
   }, [entries, timeSlots, sortedSlots]);
 
-  const getCellData = (entry: TimetableEntryResult) => {
-    const assignment = assignments.find(a => a.id === entry.course_assignment_id);
-    const course = courses.find(c => c.id === assignment?.course_id);
-    const faculty = facultyList.find(f => f.id === assignment?.faculty_id);
+  const getCellData = (entry: AnyTimetableEntry) => {
+    let courseId, facultyId, hourType;
+
+    if ('course_assignment_id' in entry) {
+      const assignment = assignments.find(a => a.id === entry.course_assignment_id);
+      courseId = assignment?.course_id;
+      facultyId = assignment?.faculty_id;
+      hourType = entry.hour_type;
+    } else {
+      courseId = entry.course_id;
+      facultyId = entry.faculty_id;
+      // Derived hour type logic (mocked visually for responses)
+      hourType = rooms.find(r => r.id === entry.room_id)?.room_type === 'LAB' ? 'PRACTICAL' : 'THEORY';
+    }
+
+    const course = courses.find(c => c.id === courseId);
+    const faculty = facultyList.find(f => f.id === facultyId);
     const room = rooms.find(r => r.id === entry.room_id);
 
     return {
-      courseName: course?.course_code || `Course ${assignment?.course_id}`,
-      facultyName: faculty ? `Faculty ${faculty.id}` : `Faculty ${assignment?.faculty_id}`,
+      courseName: course?.course_code || `Course ${courseId}`,
+      facultyName: faculty ? `Faculty ${faculty.id}` : `Faculty ${facultyId}`,
       roomName: room?.room_number || `Room ${entry.room_id}`,
-      hourType: entry.hour_type,
+      hourType: hourType,
     };
   };
 
@@ -116,14 +138,25 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
                   <div key={`${day}-${timeKey}`} className="flex-1 p-2 border-r last:border-r-0 border-gray-200 min-h-[100px] flex flex-col gap-2">
                     {cellEntries.map((entry, idx) => {
                       const data = getCellData(entry);
+                      const key = 'id' in entry ? entry.id : `${entry.course_assignment_id}-${idx}`;
+
                       return (
-                        <TimetableCell
-                          key={`${entry.course_assignment_id}-${idx}`}
-                          courseName={data.courseName}
-                          facultyName={data.facultyName}
-                          roomName={data.roomName}
-                          hourType={data.hourType}
-                        />
+                        <div
+                          key={key}
+                          onClick={() => {
+                            if (isEditable && 'id' in entry) {
+                              setEditingEntry(entry as TimetableEntryResponse);
+                            }
+                          }}
+                          className={isEditable && 'id' in entry ? 'cursor-pointer hover:ring-2 hover:ring-indigo-400 rounded-md transition-all' : ''}
+                        >
+                          <TimetableCell
+                            courseName={data.courseName}
+                            facultyName={data.facultyName}
+                            roomName={data.roomName}
+                            hourType={data.hourType}
+                          />
+                        </div>
                       );
                     })}
                   </div>
@@ -133,6 +166,20 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
           );
         })}
       </div>
+
+      {editingEntry && (
+        <EditEntryModal
+          entry={editingEntry}
+          timeSlots={timeSlots}
+          facultyList={facultyList}
+          rooms={rooms}
+          onClose={() => setEditingEntry(null)}
+          onSuccess={() => {
+            setEditingEntry(null);
+            if (onEntryUpdated) onEntryUpdated();
+          }}
+        />
+      )}
     </div>
   );
 };

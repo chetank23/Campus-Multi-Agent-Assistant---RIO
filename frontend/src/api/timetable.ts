@@ -19,6 +19,53 @@ export interface TimetableEntryResult {
   hour_type: string;
 }
 
+export interface TimetableEntryUpdate {
+  room_id?: number | null;
+  slot_id?: number | null;
+  faculty_id?: number | null;
+}
+
+export interface TimetableEntryResponse {
+  id: number;
+  version_id: number | null;
+  department_id: number | null;
+  program_id: number | null;
+  semester_id: number | null;
+  section_id: number | null;
+  batch_id: number | null;
+  course_id: number | null;
+  faculty_id: number | null;
+  room_id: number | null;
+  slot_id: number | null;
+  status: string;
+}
+
+export interface TimetableVersionResponse {
+  id: number;
+  academic_year_id: number | null;
+  version_number: string | null;
+  status: string | null;
+  created_by: number | null;
+  approved_by: number | null;
+  created_at: string;
+  published_at: string | null;
+  reason: string | null;
+}
+
+export interface TimetableVersionDetailResponse extends TimetableVersionResponse {
+  timetable_entries: TimetableEntryResponse[];
+}
+
+export interface ValidationViolation {
+  severity: string;
+  message: string;
+}
+
+export interface ValidationResult {
+  is_valid: boolean;
+  violations: ValidationViolation[];
+}
+
 export interface TimetableScore {
   total_score: number;
   hard_violations: number;
@@ -51,5 +98,36 @@ export interface GenerationSummary {
 export const generateTimetable = async (scope: GenerationScope): Promise<GenerationSummary> => {
   // We use a custom timeout because timetable generation can take up to 60 seconds (solver time limit).
   const response = await apiClient.post('/timetable/generate', scope, { timeout: 70000 });
+  return response.data;
+};
+
+export const getTimetableVersions = async (academicYearId?: number): Promise<TimetableVersionResponse[]> => {
+  const params = academicYearId ? { academic_year_id: academicYearId } : {};
+  const response = await apiClient.get('/timetable/versions', { params });
+  return response.data;
+};
+
+export const getTimetableVersion = async (versionId: number): Promise<TimetableVersionDetailResponse> => {
+  const response = await apiClient.get(`/timetable/versions/${versionId}`);
+  return response.data;
+};
+
+export const validateTimetableVersion = async (versionId: number): Promise<ValidationResult> => {
+  const response = await apiClient.post(`/timetable/versions/${versionId}/validate`);
+  return response.data;
+};
+
+export const updateTimetableEntry = async (entryId: number, updates: TimetableEntryUpdate): Promise<TimetableEntryResponse> => {
+  const response = await apiClient.patch(`/timetable/entries/${entryId}`, updates);
+  return response.data;
+};
+
+export const finalizeTimetableVersion = async (versionId: number): Promise<{ message: string; version_id: number; status: string }> => {
+  const response = await apiClient.post(`/timetable/versions/${versionId}/finalize`);
+  return response.data;
+};
+
+export const publishTimetableVersion = async (versionId: number): Promise<{ message: string; version_id: number; status: string }> => {
+  const response = await apiClient.post(`/timetable/versions/${versionId}/publish`);
   return response.data;
 };

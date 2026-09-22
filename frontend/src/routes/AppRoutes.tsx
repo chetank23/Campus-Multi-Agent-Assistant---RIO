@@ -41,6 +41,8 @@ import { CoursesPage } from '@/pages/admin/courses/CoursesPage';
 import { BuildingsPage } from '@/pages/admin/campus/BuildingsPage';
 import { RoomsPage } from '@/pages/admin/campus/RoomsPage';
 import { TimetableGenerationPage } from '@/pages/admin/timetable/TimetableGenerationPage';
+import { AdminTimetableVersionsPage } from '@/pages/admin/timetable/AdminTimetableVersionsPage';
+import { AdminTimetableReviewPage } from '@/pages/admin/timetable/AdminTimetableReviewPage';
 
 import type { UserRole } from '@/auth/auth.types';
 
@@ -105,8 +107,11 @@ export function AppRoutes() {
           <Route path="/admin/courses" element={<CoursesPage />} />
           <Route path="/admin/campus/buildings" element={<BuildingsPage />} />
           <Route path="/admin/campus/rooms" element={<RoomsPage />} />
-          {/* Stage 6C Timetable Route */}
-          <Route path="/admin/timetable" element={<TimetableGenerationPage />} />
+          {/* Stage 6C/6D Timetable Route */}
+          <Route path="/admin/timetable" element={<Navigate to="/admin/timetable/versions" replace />} />
+          <Route path="/admin/timetable/versions" element={<AdminTimetableVersionsPage />} />
+          <Route path="/admin/timetable/versions/:id" element={<AdminTimetableReviewPage />} />
+          <Route path="/admin/timetable/generate" element={<TimetableGenerationPage />} />
           {/* Placeholder routes for future Stage 6B+ modules */}
           <Route path="/admin/resources" element={<PlaceholderPage label="Resources" />} />
           <Route path="/admin/requests" element={<PlaceholderPage label="Change Requests" />} />
