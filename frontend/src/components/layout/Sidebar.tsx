@@ -47,7 +47,7 @@ function getNavItems(role: UserRole): NavItem[] {
         { label: 'Courses', icon: <BookOpen size={18} />, to: '/admin/courses', implemented: true },
         { label: 'Buildings', icon: <Building2 size={18} />, to: '/admin/campus/buildings', implemented: true },
         { label: 'Rooms', icon: <LayoutDashboard size={18} />, to: '/admin/campus/rooms', implemented: true },
-        { label: 'Timetable', icon: <Calendar size={18} />, to: '/admin/timetable', implemented: false },
+        { label: 'Timetable', icon: <Calendar size={18} />, to: '/admin/timetable', implemented: true },
         { label: 'Resources', icon: <Package size={18} />, to: '/admin/resources', implemented: false },
         { label: 'Requests', icon: <FileText size={18} />, to: '/admin/requests', implemented: false },
         { label: 'Notifications', icon: <Bell size={18} />, to: '/admin/notifications', implemented: false },

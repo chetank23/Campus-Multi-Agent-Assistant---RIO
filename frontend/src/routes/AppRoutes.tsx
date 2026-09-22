@@ -40,6 +40,7 @@ import { FacultyPage } from '@/pages/admin/people/FacultyPage';
 import { CoursesPage } from '@/pages/admin/courses/CoursesPage';
 import { BuildingsPage } from '@/pages/admin/campus/BuildingsPage';
 import { RoomsPage } from '@/pages/admin/campus/RoomsPage';
+import { TimetableGenerationPage } from '@/pages/admin/timetable/TimetableGenerationPage';
 
 import type { UserRole } from '@/auth/auth.types';
 
@@ -104,8 +105,9 @@ export function AppRoutes() {
           <Route path="/admin/courses" element={<CoursesPage />} />
           <Route path="/admin/campus/buildings" element={<BuildingsPage />} />
           <Route path="/admin/campus/rooms" element={<RoomsPage />} />
+          {/* Stage 6C Timetable Route */}
+          <Route path="/admin/timetable" element={<TimetableGenerationPage />} />
           {/* Placeholder routes for future Stage 6B+ modules */}
-          <Route path="/admin/timetable" element={<PlaceholderPage label="Timetable" />} />
           <Route path="/admin/resources" element={<PlaceholderPage label="Resources" />} />
           <Route path="/admin/requests" element={<PlaceholderPage label="Change Requests" />} />
           <Route path="/admin/notifications" element={<PlaceholderPage label="Notifications" />} />
