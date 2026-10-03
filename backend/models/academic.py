@@ -17,6 +17,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     func,
 )
@@ -138,12 +139,18 @@ class Section(Base):
     )
     section_name: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     student_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    class_teacher_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("faculty.id", name="fk_sections_class_teacher_id"), nullable=True
+    )
 
     department: Mapped[Optional["Department"]] = relationship(
         "Department", back_populates="sections"
     )
     program: Mapped[Optional["Program"]] = relationship("Program", back_populates="sections")
     semester: Mapped[Optional["Semester"]] = relationship("Semester", back_populates="sections")
+    class_teacher: Mapped[Optional["Faculty"]] = relationship(
+        "Faculty", foreign_keys=[class_teacher_id], back_populates="sections_as_class_teacher"
+    )
     batches: Mapped[list["Batch"]] = relationship("Batch", back_populates="section")
     students: Mapped[list["Student"]] = relationship("Student", back_populates="section")
     course_assignments: Mapped[list["CourseAssignment"]] = relationship(
@@ -227,12 +234,20 @@ class Faculty(Base):
         ForeignKey("departments.id", name="fk_faculty_department_id"),
         nullable=True,
     )
-    designation: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    designation: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    contact_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    specialization: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    areas_of_interest: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     max_weekly_load: Mapped[int] = mapped_column(Integer, default=16, server_default="16")
+
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="faculty_profile")
     department: Mapped[Optional["Department"]] = relationship(
         "Department", back_populates="faculty_members"
+    )
+    sections_as_class_teacher: Mapped[list["Section"]] = relationship(
+        "Section", foreign_keys="Section.class_teacher_id", back_populates="class_teacher"
     )
     availability: Mapped[list["FacultyAvailability"]] = relationship(
         "FacultyAvailability", back_populates="faculty"

@@ -6,6 +6,7 @@ class FacultyBase(BaseModel):
     faculty_id: Optional[str] = None
     department_id: Optional[int] = None
     designation: Optional[str] = None
+    contact_number: Optional[str] = None
     max_weekly_load: Optional[int] = 16
 
 class FacultyCreate(FacultyBase):
@@ -19,5 +20,6 @@ class FacultyUpdate(FacultyBase):
 
 class FacultyResponse(FacultyBase):
     id: int
+    name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

@@ -5,6 +5,8 @@ export interface FacultyResponse {
   user_id: number;
   department_id: number;
   designation: string;
+  name?: string | null;
+  contact_number?: string | null;
   max_hours_per_week: number;
   is_active: boolean;
 }

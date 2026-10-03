@@ -23,6 +23,21 @@ class TimetableEntryResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class TimetableEntryDetailResponse(TimetableEntryResponse):
+    course_code: Optional[str] = None
+    course_name: Optional[str] = None
+    course_type: Optional[str] = None
+    faculty_name: Optional[str] = None
+    faculty_designation: Optional[str] = None
+    faculty_contact: Optional[str] = None
+    room_number: Optional[str] = None
+    building_name: Optional[str] = None
+    day: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    slot_type: Optional[str] = None
+    section_name: Optional[str] = None
+
 class TimetableVersionResponse(BaseModel):
     id: int
     academic_year_id: Optional[int] = None
@@ -37,4 +52,12 @@ class TimetableVersionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class TimetableVersionDetailResponse(TimetableVersionResponse):
-    timetable_entries: List[TimetableEntryResponse] = []
+    department_name: Optional[str] = None
+    program_name: Optional[str] = None
+    academic_year_name: Optional[str] = None
+    semester_number: Optional[int] = None
+    section_name: Optional[str] = None
+    class_teacher_name: Optional[str] = None
+    class_teacher_designation: Optional[str] = None
+    class_teacher_contact: Optional[str] = None
+    timetable_entries: List[TimetableEntryDetailResponse] = []

@@ -52,9 +52,34 @@ export interface TimetableVersionResponse {
   reason: string | null;
 }
 
-export interface TimetableVersionDetailResponse extends TimetableVersionResponse {
-  timetable_entries: TimetableEntryResponse[];
+export interface TimetableEntryDetailResponse extends TimetableEntryResponse {
+  course_code?: string | null;
+  course_name?: string | null;
+  course_type?: string | null;
+  faculty_name?: string | null;
+  faculty_designation?: string | null;
+  faculty_contact?: string | null;
+  room_number?: string | null;
+  building_name?: string | null;
+  day?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  slot_type?: string | null;
+  section_name?: string | null;
 }
+
+export interface TimetableVersionDetailResponse extends TimetableVersionResponse {
+  department_name?: string | null;
+  program_name?: string | null;
+  academic_year_name?: string | null;
+  semester_number?: number | null;
+  section_name?: string | null;
+  class_teacher_name?: string | null;
+  class_teacher_designation?: string | null;
+  class_teacher_contact?: string | null;
+  timetable_entries: TimetableEntryDetailResponse[];
+}
+
 
 export interface ValidationViolation {
   severity: string;

@@ -220,12 +220,14 @@ export const AdminTimetableReviewPage: React.FC = () => {
           courses={courses}
           facultyList={facultyList}
           rooms={rooms}
+          versionDetail={version}
           isEditable={version.status === 'GENERATED' || version.status === 'REVIEWED' || version.status === 'VALIDATED'}
           onEntryUpdated={() => {
             queryClient.invalidateQueries({ queryKey: ['timetable', 'version', versionId] });
-            setValidationResult(null); // Clear validation output since state changed to REVIEWED
+            setValidationResult(null);
           }}
         />
+
       ) : (
         <div className="py-10 text-center text-gray-500 flex flex-col items-center">
           <Loader2 className="w-8 h-8 animate-spin mb-4 text-indigo-400" />

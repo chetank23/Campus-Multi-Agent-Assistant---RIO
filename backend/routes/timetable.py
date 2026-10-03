@@ -129,16 +129,106 @@ def get_versions(
         query = query.filter(TimetableVersion.academic_year_id == academic_year_id)
     return query.all()
 
+from sqlalchemy.orm import Session, joinedload
+from backend.models.academic import Faculty, Section
+from backend.models.space_time import Room
+from backend.schemas.timetable import (
+    TimetableVersionResponse,
+    TimetableVersionDetailResponse,
+    TimetableEntryResponse,
+    TimetableEntryDetailResponse,
+    TimetableEntryUpdate,
+)
+
 @router.get("/versions/{version_id}", response_model=TimetableVersionDetailResponse)
 def get_version(
     version_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("ADMIN"))
 ):
-    version = db.query(TimetableVersion).filter(TimetableVersion.id == version_id).first()
+    version = db.query(TimetableVersion).options(
+        joinedload(TimetableVersion.academic_year),
+        joinedload(TimetableVersion.timetable_entries).joinedload(TimetableEntry.course),
+        joinedload(TimetableVersion.timetable_entries).joinedload(TimetableEntry.faculty).joinedload(Faculty.user),
+        joinedload(TimetableVersion.timetable_entries).joinedload(TimetableEntry.room).joinedload(Room.building),
+        joinedload(TimetableVersion.timetable_entries).joinedload(TimetableEntry.slot),
+        joinedload(TimetableVersion.timetable_entries).joinedload(TimetableEntry.section).joinedload(Section.class_teacher).joinedload(Faculty.user),
+        joinedload(TimetableVersion.timetable_entries).joinedload(TimetableEntry.department),
+        joinedload(TimetableVersion.timetable_entries).joinedload(TimetableEntry.program),
+    ).filter(TimetableVersion.id == version_id).first()
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
-    return version
+
+    detail_entries = []
+    first_entry = version.timetable_entries[0] if version.timetable_entries else None
+
+    dept_name = first_entry.department.name if first_entry and first_entry.department else None
+    prog_name = first_entry.program.program_name if first_entry and first_entry.program else None
+    ay_name = version.academic_year.name if version.academic_year else None
+    sem_num = first_entry.semester_id if first_entry else None
+    sec_name = first_entry.section.section_name if first_entry and first_entry.section else None
+
+    ct_name = None
+    ct_desig = None
+    ct_contact = None
+    if first_entry and first_entry.section and first_entry.section.class_teacher:
+        ct = first_entry.section.class_teacher
+        ct_name = ct.user.name if ct.user else None
+        ct_desig = ct.designation
+        ct_contact = ct.contact_number
+
+    for e in version.timetable_entries:
+        entry_detail = TimetableEntryDetailResponse(
+            id=e.id,
+            version_id=e.version_id,
+            department_id=e.department_id,
+            program_id=e.program_id,
+            semester_id=e.semester_id,
+            section_id=e.section_id,
+            batch_id=e.batch_id,
+            course_id=e.course_id,
+            faculty_id=e.faculty_id,
+            room_id=e.room_id,
+            slot_id=e.slot_id,
+            status=e.status,
+            course_code=e.course.course_code if e.course else None,
+            course_name=e.course.course_name if e.course else None,
+            course_type=e.course.course_type if e.course else None,
+            faculty_name=e.faculty.user.name if e.faculty and e.faculty.user else None,
+            faculty_designation=e.faculty.designation if e.faculty else None,
+            faculty_contact=e.faculty.contact_number if e.faculty else None,
+            room_number=e.room.room_number if e.room else None,
+            building_name=e.room.building.name if e.room and e.room.building else None,
+            day=e.slot.day if e.slot else None,
+            start_time=e.slot.start_time.strftime("%H:%M") if (e.slot and e.slot.start_time) else None,
+            end_time=e.slot.end_time.strftime("%H:%M") if (e.slot and e.slot.end_time) else None,
+            slot_type=e.slot.slot_type if e.slot else None,
+            section_name=e.section.section_name if e.section else None,
+        )
+        detail_entries.append(entry_detail)
+
+    resp = TimetableVersionDetailResponse(
+        id=version.id,
+        academic_year_id=version.academic_year_id,
+        version_number=version.version_number,
+        status=version.status,
+        created_by=version.created_by,
+        approved_by=version.approved_by,
+        created_at=version.created_at,
+        published_at=version.published_at,
+        reason=version.reason,
+        department_name=dept_name,
+        program_name=prog_name,
+        academic_year_name=ay_name,
+        semester_number=sem_num,
+        section_name=sec_name,
+        class_teacher_name=ct_name,
+        class_teacher_designation=ct_desig,
+        class_teacher_contact=ct_contact,
+        timetable_entries=detail_entries
+    )
+    return resp
+
 
 @router.post("/versions/{version_id}/validate", response_model=ValidationResult)
 def validate_version(

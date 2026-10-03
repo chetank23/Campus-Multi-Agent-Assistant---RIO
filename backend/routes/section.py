@@ -1,14 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 
 from backend.database import get_db
-from backend.models.academic import Section
+from backend.models.academic import Section, Faculty
 from backend.models.identity import User
-from backend.schemas.section import SectionCreate, SectionUpdate, SectionResponse
+from backend.schemas.section import SectionCreate, SectionUpdate, SectionResponse, ClassTeacherSummary
 from backend.dependencies import get_current_user, require_role, require_department_scope
 
 router = APIRouter(prefix="/sections", tags=["Sections"])
+
+
+def _to_response(sec: Section) -> SectionResponse:
+    resp = SectionResponse.model_validate(sec)
+    if sec.class_teacher:
+        ct_summary = ClassTeacherSummary.model_validate(sec.class_teacher)
+        if sec.class_teacher.user:
+            ct_summary.name = sec.class_teacher.user.name
+        resp.class_teacher = ct_summary
+    return resp
 
 
 @router.get("/", response_model=List[SectionResponse])
@@ -16,16 +26,16 @@ def get_sections(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    query = db.query(Section).options(
+        joinedload(Section.class_teacher).joinedload(Faculty.user)
+    )
     if current_user.role == "ADMIN":
-        return db.query(Section).all()
+        sections = query.all()
     elif current_user.role == "FACULTY":
-        # Faculty can see sections of their own department
-        return db.query(Section).filter(Section.department_id == current_user.department_id).all()
+        sections = query.filter(Section.department_id == current_user.department_id).all()
     else:  # STUDENT
-        # Students can see sections they belong to (via their student record)
-        # For simplicity, we can return empty or join via student table; but spec says student sees own section.
-        # We'll implement later via student-specific endpoint; for now return empty list.
         return []
+    return [_to_response(s) for s in sections]
 
 
 @router.get("/{section_id}", response_model=SectionResponse)
@@ -34,18 +44,18 @@ def get_section(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    sec = db.query(Section).filter(Section.id == section_id).first()
+    sec = db.query(Section).options(
+        joinedload(Section.class_teacher).joinedload(Faculty.user)
+    ).filter(Section.id == section_id).first()
     if not sec:
         raise HTTPException(status_code=404, detail="Section not found")
     if current_user.role == "ADMIN":
-        return sec
+        return _to_response(sec)
     elif current_user.role == "FACULTY":
         if sec.department_id != current_user.department_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Out of department scope")
-        return sec
+        return _to_response(sec)
     else:  # STUDENT
-        # Student can only view if they are in that section (need to check via student table)
-        # We'll implement a separate endpoint for student sections; for now deny.
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
 
 
@@ -57,11 +67,23 @@ def create_section(
 ):
     if current_user.role != "ADMIN":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+    if section.class_teacher_id is not None:
+
+        fac = db.query(Faculty).filter(Faculty.id == section.class_teacher_id).first()
+        if not fac:
+            raise HTTPException(status_code=400, detail="Assigned class teacher faculty not found")
+        if fac.department_id != section.department_id:
+            raise HTTPException(status_code=400, detail="Class teacher must belong to the section department")
+
     db_sec = Section(**section.model_dump())
     db.add(db_sec)
     db.commit()
     db.refresh(db_sec)
-    return db_sec
+    sec_rel = db.query(Section).options(
+        joinedload(Section.class_teacher).joinedload(Faculty.user)
+    ).filter(Section.id == db_sec.id).first()
+    return _to_response(sec_rel or db_sec)
 
 
 @router.put("/{section_id}", response_model=SectionResponse)
@@ -76,11 +98,25 @@ def update_section(
     db_sec = db.query(Section).filter(Section.id == section_id).first()
     if not db_sec:
         raise HTTPException(status_code=404, detail="Section not found")
-    for key, value in section.model_dump(exclude_unset=True).items():
+
+    dump = section.model_dump(exclude_unset=True)
+    target_ct_id = dump.get("class_teacher_id", db_sec.class_teacher_id)
+    target_dept_id = dump.get("department_id", db_sec.department_id)
+
+    if target_ct_id is not None:
+        fac = db.query(Faculty).filter(Faculty.id == target_ct_id).first()
+        if not fac:
+            raise HTTPException(status_code=400, detail="Assigned class teacher faculty not found")
+        if target_dept_id and fac.department_id != target_dept_id:
+            raise HTTPException(status_code=400, detail="Class teacher must belong to the section department")
+
+    for key, value in dump.items():
         setattr(db_sec, key, value)
     db.commit()
-    db.refresh(db_sec)
-    return db_sec
+    sec_rel = db.query(Section).options(
+        joinedload(Section.class_teacher).joinedload(Faculty.user)
+    ).filter(Section.id == section_id).first()
+    return _to_response(sec_rel or db_sec)
 
 
 @router.delete("/{section_id}")
