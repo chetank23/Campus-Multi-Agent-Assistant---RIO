@@ -103,7 +103,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
         {
           groupTitle: 'Schedules & Teaching',
           items: [
-            { label: 'My Timetable', icon: <CalendarDays size={17} />, to: '/faculty/timetable', implemented: false },
+            { label: 'My Timetable', icon: <CalendarDays size={17} />, to: '/faculty/timetable', implemented: true },
             { label: 'Dept. Timetable', icon: <Building2 size={17} />, to: '/faculty/dept-timetable', implemented: false },
           ],
         },
@@ -119,7 +119,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
         {
           groupTitle: 'Academic Schedule',
           items: [
-            { label: 'My Timetable', icon: <CalendarDays size={17} />, to: '/student/timetable', implemented: false },
+            { label: 'My Timetable', icon: <CalendarDays size={17} />, to: '/student/timetable', implemented: true },
           ],
         },
       ];

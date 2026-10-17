@@ -156,3 +156,62 @@ export const publishTimetableVersion = async (versionId: number): Promise<{ mess
   const response = await apiClient.post(`/timetable/versions/${versionId}/publish`);
   return response.data;
 };
+
+export interface PersonalTimetableEntry {
+  id: number;
+  version_id?: number | null;
+  version_number?: string | null;
+  academic_year_name?: string | null;
+  semester_number?: number | null;
+  department_name?: string | null;
+  program_name?: string | null;
+  section_name?: string | null;
+  batch_name?: string | null;
+  course_code?: string | null;
+  course_name?: string | null;
+  course_type?: string | null;
+  faculty_name?: string | null;
+  faculty_designation?: string | null;
+  room_number?: string | null;
+  building_name?: string | null;
+  day?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  slot_type?: string | null;
+  status: string;
+}
+
+export interface FacultyTimetableResponse {
+  faculty_id?: number | null;
+  faculty_code?: string | null;
+  faculty_name?: string | null;
+  designation?: string | null;
+  department_name?: string | null;
+  total_teaching_hours: number;
+  entries: PersonalTimetableEntry[];
+}
+
+export interface StudentTimetableResponse {
+  student_id?: number | null;
+  student_code?: string | null;
+  student_name?: string | null;
+  department_name?: string | null;
+  program_name?: string | null;
+  semester_number?: number | null;
+  section_name?: string | null;
+  batch_name?: string | null;
+  total_class_hours: number;
+  entries: PersonalTimetableEntry[];
+}
+
+export const getFacultyMyTimetable = async (academicYearId?: number): Promise<FacultyTimetableResponse> => {
+  const params = academicYearId ? { academic_year_id: academicYearId } : {};
+  const response = await apiClient.get('/faculty/my-timetable', { params });
+  return response.data;
+};
+
+export const getStudentMyTimetable = async (academicYearId?: number): Promise<StudentTimetableResponse> => {
+  const params = academicYearId ? { academic_year_id: academicYearId } : {};
+  const response = await apiClient.get('/student/my-timetable', { params });
+  return response.data;
+};

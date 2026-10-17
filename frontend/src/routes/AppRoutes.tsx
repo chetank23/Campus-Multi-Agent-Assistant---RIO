@@ -42,6 +42,8 @@ import { FacultyPage } from '@/pages/admin/people/FacultyPage';
 import { CoursesPage } from '@/pages/admin/courses/CoursesPage';
 import { BuildingsPage } from '@/pages/admin/campus/BuildingsPage';
 import { RoomsPage } from '@/pages/admin/campus/RoomsPage';
+import { FacultyTimetablePage } from '@/pages/faculty/FacultyTimetablePage';
+import { StudentTimetablePage } from '@/pages/student/StudentTimetablePage';
 import { TimetableGenerationPage } from '@/pages/admin/timetable/TimetableGenerationPage';
 import { AdminTimetableVersionsPage } from '@/pages/admin/timetable/AdminTimetableVersionsPage';
 import { AdminTimetableReviewPage } from '@/pages/admin/timetable/AdminTimetableReviewPage';
@@ -132,7 +134,7 @@ export function AppRoutes() {
           }
         >
           <Route path="/faculty" element={<FacultyDashboard />} />
-          <Route path="/faculty/timetable" element={<PlaceholderPage label="My Timetable" />} />
+          <Route path="/faculty/timetable" element={<FacultyTimetablePage />} />
           <Route path="/faculty/dept-timetable" element={<PlaceholderPage label="Department Timetable" />} />
         </Route>
       </Route>
@@ -147,7 +149,7 @@ export function AppRoutes() {
           }
         >
           <Route path="/student" element={<StudentDashboard />} />
-          <Route path="/student/timetable" element={<PlaceholderPage label="My Timetable" />} />
+          <Route path="/student/timetable" element={<StudentTimetablePage />} />
         </Route>
       </Route>
 

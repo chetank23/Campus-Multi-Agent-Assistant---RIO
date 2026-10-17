@@ -61,3 +61,56 @@ class TimetableVersionDetailResponse(TimetableVersionResponse):
     class_teacher_designation: Optional[str] = None
     class_teacher_contact: Optional[str] = None
     timetable_entries: List[TimetableEntryDetailResponse] = []
+
+
+class PersonalTimetableEntry(BaseModel):
+    id: int
+    version_id: Optional[int] = None
+    version_number: Optional[str] = None
+    academic_year_name: Optional[str] = None
+    semester_number: Optional[int] = None
+    department_name: Optional[str] = None
+    program_name: Optional[str] = None
+    section_name: Optional[str] = None
+    batch_name: Optional[str] = None
+    course_code: Optional[str] = None
+    course_name: Optional[str] = None
+    course_type: Optional[str] = None
+    faculty_name: Optional[str] = None
+    faculty_designation: Optional[str] = None
+    room_number: Optional[str] = None
+    building_name: Optional[str] = None
+    day: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    slot_type: Optional[str] = None
+    status: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FacultyTimetableResponse(BaseModel):
+    faculty_id: Optional[int] = None
+    faculty_code: Optional[str] = None
+    faculty_name: Optional[str] = None
+    designation: Optional[str] = None
+    department_name: Optional[str] = None
+    total_teaching_hours: int = 0
+    entries: List[PersonalTimetableEntry] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StudentTimetableResponse(BaseModel):
+    student_id: Optional[int] = None
+    student_code: Optional[str] = None
+    student_name: Optional[str] = None
+    department_name: Optional[str] = None
+    program_name: Optional[str] = None
+    semester_number: Optional[int] = None
+    section_name: Optional[str] = None
+    batch_name: Optional[str] = None
+    total_class_hours: int = 0
+    entries: List[PersonalTimetableEntry] = []
+
+    model_config = ConfigDict(from_attributes=True)
