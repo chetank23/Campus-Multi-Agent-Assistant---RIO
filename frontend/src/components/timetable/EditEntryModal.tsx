@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { X, Loader2, Save } from 'lucide-react';
+import { X, Loader2, Save, Calendar, AlertCircle } from 'lucide-react';
 import type { TimetableEntryResponse, TimetableEntryUpdate } from '@/api/timetable';
 import { updateTimetableEntry } from '@/api/timetable';
 import type { TimeSlotResponse } from '@/api/timeSlots';
@@ -23,12 +23,12 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
   facultyList,
   rooms,
   onClose,
-  onSuccess
+  onSuccess,
 }) => {
   const [roomId, setRoomId] = useState<number | ''>(entry.room_id || '');
   const [slotId, setSlotId] = useState<number | ''>(entry.slot_id || '');
   const [facultyId, setFacultyId] = useState<number | ''>(entry.faculty_id || '');
-  
+
   const [errorStatus, setErrorStatus] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -45,7 +45,7 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
         setErrorStatus('ERROR');
         setErrorMessage('An unexpected error occurred while updating the entry.');
       }
-    }
+    },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -58,103 +58,131 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={onClose}>
-          <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/50">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-primary-50 text-primary-700">
+              <Calendar size={18} />
+            </div>
+            <div>
+              <h3 id="modal-title" className="text-base font-semibold text-slate-900">
+                Edit Timetable Entry
+              </h3>
+              <p className="text-xs text-slate-500">Slot ID #{entry.id} • Manual override</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            aria-label="Close modal"
+          >
+            <X size={18} />
+          </button>
         </div>
 
-        <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+        <div className="px-6 py-3 bg-amber-50/70 border-b border-amber-200/60 text-xs text-amber-800">
+          Modifying an entry will flag the timetable status as <strong>REVIEWED</strong>, requiring subsequent re-validation.
+        </div>
 
-        <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6 relative">
-          <button 
-            onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-500"
-          >
-            <X className="h-5 w-5" />
-          </button>
-          
-          <div className="mb-5">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
-              Edit Timetable Entry
-            </h3>
-            <p className="text-sm text-gray-500 mt-1">
-              Modifying an entry will change the timetable status to REVIEWED, requiring re-validation.
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Form Body */}
+        <form onSubmit={handleSubmit}>
+          <div className="px-6 py-5 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Room</label>
+              <label className="academic-label">Room Allocation</label>
               <select
                 value={roomId}
                 onChange={(e) => setRoomId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="academic-input"
                 disabled={updateMutation.isPending}
               >
-                <option value="">Unassigned</option>
-                {rooms.map(r => (
-                  <option key={r.id} value={r.id}>{r.room_number} (Cap: {r.capacity})</option>
+                <option value="">Unassigned Space</option>
+                {rooms.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    Room {r.room_number} (Capacity: {r.capacity} • {r.room_type})
+                  </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Time Slot</label>
+              <label className="academic-label">Time Slot</label>
               <select
                 value={slotId}
                 onChange={(e) => setSlotId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="academic-input"
                 disabled={updateMutation.isPending}
               >
-                <option value="">Unassigned</option>
-                {timeSlots.map(s => (
-                  <option key={s.id} value={s.id}>{s.day} {s.start_time.substring(0, 5)} - {s.end_time.substring(0, 5)}</option>
+                <option value="">Unassigned Slot</option>
+                {timeSlots.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.day} • {s.start_time.substring(0, 5)} - {s.end_time.substring(0, 5)}
+                  </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Faculty</label>
+              <label className="academic-label">Faculty Member</label>
               <select
                 value={facultyId}
                 onChange={(e) => setFacultyId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="academic-input"
                 disabled={updateMutation.isPending}
               >
-                <option value="">Unassigned</option>
-                {facultyList.map(f => (
-                  <option key={f.id} value={f.id}>Faculty {f.id} (User {f.user_id})</option>
+                <option value="">Unassigned Faculty</option>
+                {facultyList.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name || `Faculty Member #${f.id}`} (User ID: {f.user_id})
+                  </option>
                 ))}
               </select>
             </div>
 
             {errorStatus && (
-              <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">
-                {errorMessage}
+              <div className="flex items-start gap-2 text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg p-3">
+                <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                <span>{errorMessage}</span>
               </div>
             )}
+          </div>
 
-            <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:grid-flow-row-dense">
-              <button
-                type="submit"
-                disabled={updateMutation.isPending}
-                className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:col-start-2 sm:text-sm disabled:opacity-50"
-              >
-                {updateMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin mt-0.5" /> : <Save className="h-4 w-4 mr-2 mt-0.5" />}
-                Save Changes
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={updateMutation.isPending}
-                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:col-start-1 sm:text-sm disabled:opacity-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50/50">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={updateMutation.isPending}
+              className="academic-btn-secondary text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={updateMutation.isPending}
+              className="academic-btn-primary text-xs inline-flex items-center gap-2"
+            >
+              {updateMutation.isPending ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Saving Changes…</span>
+                </>
+              ) : (
+                <>
+                  <Save size={14} />
+                  <span>Save Changes</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

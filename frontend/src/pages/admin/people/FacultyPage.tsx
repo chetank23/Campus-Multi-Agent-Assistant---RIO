@@ -1,10 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, GraduationCap } from 'lucide-react';
 import { isAxiosError } from 'axios';
-import { DataTable, type Column } from '@/components/common/DataTable';
-import { FormModal } from '@/components/common/FormModal';
-import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { DataTable, type Column, FormModal, ConfirmDialog, PageHeader, StatusBadge } from '@/components/common';
 import { facultyApi, type FacultyResponse, type FacultyUpdate } from '@/api/faculty';
 import { departmentsApi } from '@/api/departments';
 
@@ -13,6 +11,7 @@ export function FacultyPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [selectedFaculty, setSelectedFaculty] = useState<FacultyResponse | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Form State
   const [userId, setUserId] = useState<number | ''>('');
@@ -29,6 +28,24 @@ export function FacultyPage() {
   });
 
   const { data: departments } = useQuery({ queryKey: ['departments'], queryFn: departmentsApi.getAll });
+
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    if (!searchTerm.trim()) return data;
+    const term = searchTerm.toLowerCase();
+    return data.filter((fac) => {
+      const deptName = departments?.find((d) => d.id === fac.department_id)?.name?.toLowerCase() || '';
+      const facultyName = fac.name?.toLowerCase() || '';
+      return (
+        facultyName.includes(term) ||
+        fac.designation.toLowerCase().includes(term) ||
+        deptName.includes(term) ||
+        String(fac.id).includes(term) ||
+        String(fac.user_id).includes(term) ||
+        (fac.contact_number && fac.contact_number.toLowerCase().includes(term))
+      );
+    });
+  }, [data, departments, searchTerm]);
 
   // Mutations
   const getErrorMsg = (err: unknown, defaultMsg: string) => {
@@ -47,7 +64,7 @@ export function FacultyPage() {
       closeForm();
     },
     onError: (err: unknown) => {
-      setFormError(getErrorMsg(err, 'Failed to create faculty.'));
+      setFormError(getErrorMsg(err, 'Failed to create faculty member.'));
     },
   });
 
@@ -58,7 +75,7 @@ export function FacultyPage() {
       closeForm();
     },
     onError: (err: unknown) => {
-      setFormError(getErrorMsg(err, 'Failed to update faculty.'));
+      setFormError(getErrorMsg(err, 'Failed to update faculty member.'));
     },
   });
 
@@ -70,27 +87,67 @@ export function FacultyPage() {
       setSelectedFaculty(null);
     },
     onError: (err: unknown) => {
-      alert(getErrorMsg(err, 'Failed to delete faculty.'));
+      alert(getErrorMsg(err, 'Failed to delete faculty member. They might be assigned to active courses.'));
       setIsConfirmOpen(false);
     },
   });
 
   const columns: Column<FacultyResponse>[] = [
-    { header: 'ID', accessor: 'id' },
-    { header: 'User ID', accessor: 'user_id' },
+    {
+      header: 'Faculty ID',
+      accessor: 'id',
+      render: (row) => (
+        <div className="font-mono text-xs font-bold text-slate-700 font-tabular">
+          FAC-{String(row.id).padStart(3, '0')}
+        </div>
+      ),
+    },
+    {
+      header: 'Faculty Name',
+      render: (row) => (
+        <div>
+          <div className="font-semibold text-slate-900">{row.name || `Faculty Member #${row.id}`}</div>
+          <div className="text-[11px] text-slate-400">User ID: #{row.user_id}</div>
+        </div>
+      ),
+    },
     { 
       header: 'Department', 
-      render: (row) => departments?.find(d => d.id === row.department_id)?.name || `ID: ${row.department_id}` 
+      render: (row) => {
+        const d = departments?.find((dept) => dept.id === row.department_id);
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200">
+            {d ? `${d.department_code} - ${d.name}` : `Dept #${row.department_id}`}
+          </span>
+        );
+      },
     },
-    { header: 'Designation', accessor: 'designation' },
-    { header: 'Max Hrs/Wk', accessor: 'max_hours_per_week' },
+    {
+      header: 'Designation',
+      accessor: 'designation',
+      render: (row) => <span className="font-medium text-slate-800">{row.designation}</span>,
+    },
+    {
+      header: 'Contact Number',
+      render: (row) => <span className="text-slate-600 font-tabular text-xs">{row.contact_number || '—'}</span>,
+    },
+    {
+      header: 'Max Weekly Load',
+      accessor: 'max_hours_per_week',
+      render: (row) => (
+        <span className="font-tabular font-semibold text-primary-800">
+          {row.max_hours_per_week} hrs/wk
+        </span>
+      ),
+    },
     { 
       header: 'Status', 
       render: (row) => (
-        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${row.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-          {row.is_active ? 'Active' : 'Inactive'}
-        </span>
-      ) 
+        <StatusBadge
+          status={row.is_active ? 'ACTIVE' : 'INACTIVE'}
+          label={row.is_active ? 'Active' : 'On Leave'}
+        />
+      ),
     },
   ];
 
@@ -126,7 +183,7 @@ export function FacultyPage() {
     setFormError(null);
     
     if (userId === '' || departmentId === '' || !designation.trim() || maxHours === '') {
-      setFormError('All fields are required.');
+      setFormError('All faculty fields are required.');
       return;
     }
 
@@ -147,22 +204,25 @@ export function FacultyPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Faculty</h2>
-          <p className="text-sm text-gray-500 mt-1">Manage faculty academic profiles.</p>
-        </div>
-        <button
-          onClick={() => setIsFormOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
-        >
-          <Plus size={16} /> Add Faculty
-        </button>
-      </div>
+      <PageHeader
+        title="Faculty Directory"
+        subtitle="Manage teaching faculty appointments, academic designations, weekly workload limits, and school affiliations."
+        icon={<GraduationCap size={20} />}
+        actions={
+          <button
+            onClick={() => setIsFormOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-xs font-semibold uppercase tracking-wider shadow-xs focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2"
+          >
+            <Plus size={15} /> Add Faculty
+          </button>
+        }
+      />
 
       <DataTable
+        title="Teaching Faculty Register"
+        subtitle="Active faculty workload profiles"
         columns={columns}
-        data={data}
+        data={filteredData}
         isLoading={isLoading}
         isError={isError}
         error={error as Error}
@@ -170,43 +230,47 @@ export function FacultyPage() {
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
         keyExtractor={(row) => row.id}
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Filter by name, designation, department…"
+        emptyMessage="No faculty records found matching your search."
       />
 
       <FormModal
         isOpen={isFormOpen}
-        title={selectedFaculty ? 'Edit Faculty' : 'Add Faculty'}
+        title={selectedFaculty ? 'Edit Faculty Record' : 'Register Faculty Member'}
+        subtitle="Configure department affiliation, academic ranking, and weekly teaching workload caps"
         onClose={closeForm}
       >
         <form onSubmit={handleFormSubmit} className="space-y-4">
           {formError && (
-            <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+            <div className="p-3 bg-rose-50 text-rose-800 text-xs rounded-lg border border-rose-200 font-medium">
               {formError}
             </div>
           )}
-          
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+              <label className="academic-label">User Account ID</label>
               <input
                 type="number"
                 value={userId}
                 onChange={(e) => setUserId(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="e.g. 2"
+                className="academic-input font-tabular"
+                placeholder="e.g. 5"
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+              <label className="academic-label">Department</label>
               <select
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="academic-input"
                 disabled={createMutation.isPending || updateMutation.isPending}
               >
-                <option value="">Select Department</option>
-                {departments?.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
+                <option value="">Select department…</option>
+                {departments?.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name} ({d.department_code})</option>
                 ))}
               </select>
             </div>
@@ -214,49 +278,49 @@ export function FacultyPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Designation</label>
+              <label className="academic-label">Designation</label>
               <input
                 type="text"
                 value={designation}
                 onChange={(e) => setDesignation(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="e.g. Professor"
+                className="academic-input"
+                placeholder="e.g. Associate Professor"
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Max Hours / Week</label>
+              <label className="academic-label">Max Teaching Hours / Week</label>
               <input
                 type="number"
                 min="1"
+                max="50"
                 value={maxHours}
                 onChange={(e) => setMaxHours(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="e.g. 40"
+                className="academic-input font-tabular"
+                placeholder="e.g. 18"
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-2 mt-2">
-            <input
-              type="checkbox"
-              id="isActiveFac"
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-              disabled={createMutation.isPending || updateMutation.isPending}
-            />
-            <label htmlFor="isActiveFac" className="text-sm font-medium text-gray-700">
-              Active
+          <div className="pt-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="w-4 h-4 rounded text-primary-600 border-slate-300 focus:ring-primary-600"
+                disabled={createMutation.isPending || updateMutation.isPending}
+              />
+              <span className="text-xs font-semibold text-slate-700">Active Teaching Status (Available for Timetable Scheduling)</span>
             </label>
           </div>
-          
-          <div className="pt-4 flex justify-end gap-3">
+
+          <div className="pt-4 flex justify-end gap-2.5 border-t border-slate-100">
             <button
               type="button"
               onClick={closeForm}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
               disabled={createMutation.isPending || updateMutation.isPending}
             >
               Cancel
@@ -264,9 +328,9 @@ export function FacultyPage() {
             <button
               type="submit"
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+              className="px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50"
             >
-              {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save'}
+              {createMutation.isPending || updateMutation.isPending ? 'Saving…' : 'Save Faculty'}
             </button>
           </div>
         </form>
@@ -274,8 +338,8 @@ export function FacultyPage() {
 
       <ConfirmDialog
         isOpen={isConfirmOpen}
-        title="Delete Faculty"
-        message={`Are you sure you want to delete faculty record for User ID ${selectedFaculty?.user_id}? This action cannot be undone.`}
+        title="Delete Faculty Member"
+        message={`Are you sure you want to delete this faculty member? This action cannot be undone.`}
         isProcessing={deleteMutation.isPending}
         onConfirm={() => selectedFaculty && deleteMutation.mutate(selectedFaculty.id)}
         onCancel={() => setIsConfirmOpen(false)}

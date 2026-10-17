@@ -63,31 +63,41 @@ export function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-950 via-primary-900 to-primary-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        {/* Card */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          {/* Logo */}
-          <div className="flex flex-col items-center mb-8">
-            <div className="w-14 h-14 rounded-2xl bg-primary-600 flex items-center justify-center shadow-md mb-4">
-              <span className="text-white text-2xl font-bold">R</span>
+    <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 selection:bg-primary-900 selection:text-white relative overflow-hidden">
+      {/* Subtle academic background accent */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950 pointer-events-none" />
+
+      <div className="w-full max-w-sm relative z-10">
+        {/* Academic Card */}
+        <div className="bg-white rounded-2xl shadow-modal border border-slate-200/90 p-8">
+          {/* Institution Brand */}
+          <div className="flex flex-col items-center mb-7">
+            <div className="w-12 h-12 rounded-xl bg-primary-700 flex items-center justify-center shadow-card mb-3.5 border border-primary-600/30">
+              <span className="text-white text-xl font-bold tracking-wider">R</span>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">RIO Campus AI</h1>
-            <p className="text-sm text-gray-500 mt-1">Sign in to your account</p>
+            <div className="flex items-center gap-1.5 mb-1">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">RIO-MJP</h1>
+              <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
+                ERP
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 text-center">
+              Campus Intelligence & Timetable Management
+            </p>
           </div>
 
-          {/* Error */}
+          {/* Error Alert */}
           {error && (
-            <div className="mb-5 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" role="alert">
+            <div className="mb-5 rounded-lg bg-rose-50 border border-rose-200/90 px-3.5 py-2.5 text-xs text-rose-700 font-medium leading-relaxed" role="alert">
               {error}
             </div>
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} noValidate className="space-y-5">
+          <form onSubmit={handleSubmit} noValidate className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
-                Email address
+              <label htmlFor="email" className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
+                University Email
               </label>
               <input
                 id="email"
@@ -96,14 +106,14 @@ export function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-3.5 py-2.5 rounded-lg border border-gray-300 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                placeholder="you@university.edu"
+                className="w-full px-3.5 py-2 rounded-lg border border-slate-300 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-600 focus:border-primary-600 transition-colors"
+                placeholder="user@university.edu"
                 disabled={submitting}
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label htmlFor="password" className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
                 Password
               </label>
               <input
@@ -113,7 +123,7 @@ export function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full px-3.5 py-2.5 rounded-lg border border-gray-300 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                className="w-full px-3.5 py-2 rounded-lg border border-slate-300 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-600 focus:border-primary-600 transition-colors"
                 placeholder="••••••••"
                 disabled={submitting}
               />
@@ -122,26 +132,26 @@ export function Login() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full bg-primary-600 hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+              className="w-full bg-primary-600 hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg transition-colors text-xs uppercase tracking-wider shadow-xs focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2"
             >
               {submitting ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Signing in…
+                  Authenticating…
                 </span>
               ) : (
-                'Sign in'
+                'Sign In to Portal'
               )}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-xs text-gray-400">
-            Access is granted by your institution administrator.
+          <p className="mt-6 text-center text-[11px] text-slate-400">
+            Authorized academic personnel only. Contact campus administrator for access.
           </p>
         </div>
 
-        <p className="text-center text-xs text-primary-300 mt-4">
-          RIO-MJP Campus AI Scheduling System
+        <p className="text-center text-xs text-slate-400 mt-5">
+          RIO-MJP Academic Information System • ERP
         </p>
       </div>
     </div>

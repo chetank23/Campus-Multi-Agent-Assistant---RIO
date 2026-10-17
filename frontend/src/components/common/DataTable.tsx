@@ -1,10 +1,16 @@
-import { Edit2, Trash2, RefreshCw } from 'lucide-react';
 import React from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
+import { IconButton } from './IconButton';
+import { EmptyState } from './EmptyState';
+import { ErrorState } from './ErrorState';
+import { SearchBar } from './SearchBar';
 
 export interface Column<T> {
   header: string;
   accessor?: keyof T;
   render?: (row: T) => React.ReactNode;
+  align?: 'left' | 'center' | 'right';
+  className?: string;
 }
 
 interface DataTableProps<T> {
@@ -18,6 +24,13 @@ interface DataTableProps<T> {
   onDelete?: (row: T) => void;
   keyExtractor: (row: T) => string | number;
   emptyMessage?: string;
+  // Optional enterprise visual extensions
+  title?: string;
+  subtitle?: string;
+  searchValue?: string;
+  onSearchChange?: (val: string) => void;
+  searchPlaceholder?: string;
+  actions?: React.ReactNode;
 }
 
 export function DataTable<T>({
@@ -31,98 +44,134 @@ export function DataTable<T>({
   onDelete,
   keyExtractor,
   emptyMessage = 'No records found.',
+  title,
+  subtitle,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder,
+  actions,
 }: DataTableProps<T>) {
   if (isError) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-        <p className="text-red-700 font-medium mb-2">Error loading data</p>
-        <p className="text-sm text-red-600 mb-4">{error?.message || 'Unknown error occurred.'}</p>
-        {onRefresh && (
-          <button
-            onClick={onRefresh}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-700 rounded-lg hover:bg-red-50 transition-colors text-sm font-medium"
-          >
-            <RefreshCw size={16} /> Retry
-          </button>
-        )}
-      </div>
+      <ErrorState
+        title="Error loading table records"
+        message={error?.message || 'An unexpected error occurred while fetching table records.'}
+        onRetry={onRefresh}
+      />
     );
   }
 
+  const hasHeaderToolbar = title || subtitle || onSearchChange || actions;
+  const colSpanCount = columns.length + (onEdit || onDelete ? 1 : 0);
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-card border border-slate-200/90 overflow-hidden">
+      {hasHeaderToolbar && (
+        <div className="p-4 sm:px-6 sm:py-4 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
+          {(title || subtitle) && (
+            <div>
+              {title && <h3 className="text-base font-semibold text-slate-900 tracking-tight">{title}</h3>}
+              {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+            </div>
+          )}
+          <div className="flex items-center gap-3 ml-auto w-full sm:w-auto">
+            {onSearchChange && (
+              <SearchBar
+                value={searchValue || ''}
+                onChange={onSearchChange}
+                placeholder={searchPlaceholder || 'Filter rows…'}
+                className="w-full sm:w-64"
+              />
+            )}
+            {actions}
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
+            <tr className="bg-slate-50 border-b border-slate-200">
               {columns.map((col, idx) => (
                 <th
                   key={idx}
-                  className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
+                  className={`px-6 py-3.5 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap ${
+                    col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
+                  } ${col.className || ''}`}
                 >
                   {col.header}
                 </th>
               ))}
               {(onEdit || onDelete) && (
-                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right w-24">
+                <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 uppercase tracking-wider text-right w-24 whitespace-nowrap">
                   Actions
                 </th>
               )}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-slate-100">
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
                   {columns.map((_, cIdx) => (
                     <td key={cIdx} className="px-6 py-4">
-                      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                      <div
+                        className="h-4 bg-slate-200/80 rounded"
+                        style={{ width: `${Math.max(30, 85 - (cIdx % 3) * 20)}%` }}
+                      />
                     </td>
                   ))}
                   {(onEdit || onDelete) && (
                     <td className="px-6 py-4 text-right">
-                      <div className="h-4 bg-gray-200 rounded w-12 ml-auto"></div>
+                      <div className="h-4 bg-slate-200/80 rounded w-12 ml-auto" />
                     </td>
                   )}
                 </tr>
               ))
             ) : !data || data.length === 0 ? (
               <tr>
-                <td
-                  colSpan={columns.length + (onEdit || onDelete ? 1 : 0)}
-                  className="px-6 py-12 text-center text-gray-500 text-sm"
-                >
-                  {emptyMessage}
+                <td colSpan={colSpanCount} className="p-0 border-0">
+                  <EmptyState title={emptyMessage} description="No data records currently match the current selection." />
                 </td>
               </tr>
             ) : (
               data.map((row) => (
-                <tr key={keyExtractor(row)} className="hover:bg-gray-50/50 transition-colors">
+                <tr
+                  key={keyExtractor(row)}
+                  className="hover:bg-slate-50/80 transition-colors group"
+                >
                   {columns.map((col, cIdx) => (
-                    <td key={cIdx} className="px-6 py-3 text-sm text-gray-700">
+                    <td
+                      key={cIdx}
+                      className={`px-6 py-3.5 text-sm text-slate-700 ${
+                        col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
+                      } ${col.className || ''}`}
+                    >
                       {col.render ? col.render(row) : (col.accessor ? String(row[col.accessor] ?? '') : '')}
                     </td>
                   ))}
                   {(onEdit || onDelete) && (
-                    <td className="px-6 py-3 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-6 py-3.5 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
                         {onEdit && (
-                          <button
-                            onClick={() => onEdit(row)}
-                            className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-md transition-colors"
+                          <IconButton
+                            icon={<Pencil size={14} />}
+                            aria-label="Edit record"
+                            variant="primary"
+                            size="sm"
                             title="Edit"
-                          >
-                            <Edit2 size={16} />
-                          </button>
+                            onClick={() => onEdit(row)}
+                          />
                         )}
                         {onDelete && (
-                          <button
-                            onClick={() => onDelete(row)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                          <IconButton
+                            icon={<Trash2 size={14} />}
+                            aria-label="Delete record"
+                            variant="danger"
+                            size="sm"
                             title="Delete"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                            onClick={() => onDelete(row)}
+                          />
                         )}
                       </div>
                     </td>
@@ -133,6 +182,15 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
+
+      {data && data.length > 0 && (
+        <div className="px-6 py-3 bg-slate-50/60 border-t border-slate-200/80 flex items-center justify-between text-xs text-slate-500">
+          <span className="font-medium font-tabular">
+            Showing {data.length} {data.length === 1 ? 'record' : 'records'}
+          </span>
+          <span className="text-[11px] text-slate-400">Campus Information System</span>
+        </div>
+      )}
     </div>
   );
 }

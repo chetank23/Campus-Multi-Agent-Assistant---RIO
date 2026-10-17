@@ -25,7 +25,7 @@ export function StudentDashboard() {
     <div className="max-w-3xl mx-auto space-y-6">
       <div>
         <h2 className="text-xl font-bold text-gray-900">
-          Hello, {user?.name?.split(' ')[0] ?? 'Student'} 👋
+          Welcome, {user?.name?.split(' ')[0] ?? 'Student'}
         </h2>
         <p className="text-sm text-gray-500 mt-1">
           Your account information is shown below. Timetable views will be available in Stage 6B.

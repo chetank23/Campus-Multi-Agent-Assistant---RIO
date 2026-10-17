@@ -1,10 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, CalendarDays } from 'lucide-react';
 import { isAxiosError } from 'axios';
-import { DataTable, type Column } from '@/components/common/DataTable';
-import { FormModal } from '@/components/common/FormModal';
-import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { DataTable, type Column, FormModal, ConfirmDialog, PageHeader, StatusBadge } from '@/components/common';
 import { academicYearsApi, type AcademicYearResponse, type AcademicYearUpdate } from '@/api/academicYears';
 
 export function AcademicYearsPage() {
@@ -12,6 +10,7 @@ export function AcademicYearsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState<AcademicYearResponse | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Form State
   const [yearName, setYearName] = useState('');
@@ -25,6 +24,17 @@ export function AcademicYearsPage() {
     queryKey: ['academic-years'],
     queryFn: academicYearsApi.getAll,
   });
+
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    if (!searchTerm.trim()) return data;
+    const term = searchTerm.toLowerCase();
+    return data.filter(
+      (ay) =>
+        ay.year_name.toLowerCase().includes(term) ||
+        String(ay.id).includes(term)
+    );
+  }, [data, searchTerm]);
 
   // Mutations
   const getErrorMsg = (err: unknown, defaultMsg: string) => {
@@ -66,23 +76,46 @@ export function AcademicYearsPage() {
       setSelectedYear(null);
     },
     onError: (err: unknown) => {
-      alert(getErrorMsg(err, 'Failed to delete academic year. It might be in use.'));
+      alert(getErrorMsg(err, 'Failed to delete academic year. It might be in use by active semesters or timetables.'));
       setIsConfirmOpen(false);
     },
   });
 
   const columns: Column<AcademicYearResponse>[] = [
-    { header: 'ID', accessor: 'id' },
-    { header: 'Name', accessor: 'year_name' },
-    { header: 'Start Date', render: (row) => new Date(row.start_date).toLocaleDateString() },
-    { header: 'End Date', render: (row) => new Date(row.end_date).toLocaleDateString() },
-    { 
-      header: 'Status', 
+    {
+      header: 'ID',
+      accessor: 'id',
+      render: (row) => <span className="font-tabular text-slate-500 font-medium">#{row.id}</span>,
+    },
+    {
+      header: 'Academic Year',
+      accessor: 'year_name',
+      render: (row) => <span className="font-semibold text-slate-900">{row.year_name}</span>,
+    },
+    {
+      header: 'Session Start',
       render: (row) => (
-        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${row.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-          {row.is_active ? 'Active' : 'Inactive'}
+        <span className="font-tabular text-slate-700">
+          {new Date(row.start_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
         </span>
-      ) 
+      ),
+    },
+    {
+      header: 'Session Concludes',
+      render: (row) => (
+        <span className="font-tabular text-slate-700">
+          {new Date(row.end_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+        </span>
+      ),
+    },
+    {
+      header: 'Active State',
+      render: (row) => (
+        <StatusBadge
+          status={row.is_active ? 'ACTIVE' : 'INACTIVE'}
+          label={row.is_active ? 'Current Year' : 'Archived'}
+        />
+      ),
     },
   ];
 
@@ -116,19 +149,14 @@ export function AcademicYearsPage() {
     setFormError(null);
     
     if (!yearName.trim() || !startDate || !endDate) {
-      setFormError('Name, start date, and end date are required.');
-      return;
-    }
-
-    if (new Date(startDate) >= new Date(endDate)) {
-      setFormError('End date must be after start date.');
+      setFormError('Academic year title, start date, and end date are required.');
       return;
     }
 
     const payload = {
       year_name: yearName.trim(),
-      start_date: startDate,
-      end_date: endDate,
+      start_date: new Date(startDate).toISOString(),
+      end_date: new Date(endDate).toISOString(),
       is_active: isActive,
     };
 
@@ -141,22 +169,25 @@ export function AcademicYearsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Academic Years</h2>
-          <p className="text-sm text-gray-500 mt-1">Manage academic years.</p>
-        </div>
-        <button
-          onClick={() => setIsFormOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
-        >
-          <Plus size={16} /> Add Year
-        </button>
-      </div>
+      <PageHeader
+        title="Academic Years"
+        subtitle="Configure institution calendar cycles, operational academic periods, and term date boundaries."
+        icon={<CalendarDays size={20} />}
+        actions={
+          <button
+            onClick={() => setIsFormOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-xs font-semibold uppercase tracking-wider shadow-xs focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2"
+          >
+            <Plus size={15} /> Add Academic Year
+          </button>
+        }
+      />
 
       <DataTable
+        title="Calendar Sessions"
+        subtitle="Institutional cycle history"
         columns={columns}
-        data={data}
+        data={filteredData}
         isLoading={isLoading}
         isError={isError}
         error={error as Error}
@@ -164,70 +195,74 @@ export function AcademicYearsPage() {
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
         keyExtractor={(row) => row.id}
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Filter academic years…"
+        emptyMessage="No academic years found matching your search."
       />
 
       <FormModal
         isOpen={isFormOpen}
-        title={selectedYear ? 'Edit Academic Year' : 'Add Academic Year'}
+        title={selectedYear ? 'Edit Academic Year' : 'Register Academic Year'}
+        subtitle="Set term boundaries and active status for scheduling algorithms"
         onClose={closeForm}
       >
         <form onSubmit={handleFormSubmit} className="space-y-4">
           {formError && (
-            <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+            <div className="p-3 bg-rose-50 text-rose-800 text-xs rounded-lg border border-rose-200 font-medium">
               {formError}
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Year Name</label>
+            <label className="academic-label">Year Name</label>
             <input
               type="text"
               value={yearName}
               onChange={(e) => setYearName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="e.g. 2023-2024"
+              className="academic-input font-tabular"
+              placeholder="e.g. 2024-2025"
               disabled={createMutation.isPending || updateMutation.isPending}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+              <label className="academic-label">Start Date</label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="academic-input font-tabular"
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+              <label className="academic-label">End Date</label>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="academic-input font-tabular"
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
           </div>
-          <div className="flex items-center gap-2 mt-2">
-            <input
-              type="checkbox"
-              id="isActive"
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-              disabled={createMutation.isPending || updateMutation.isPending}
-            />
-            <label htmlFor="isActive" className="text-sm font-medium text-gray-700">
-              Active Year
+          <div className="pt-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="w-4 h-4 rounded text-primary-600 border-slate-300 focus:ring-primary-600"
+                disabled={createMutation.isPending || updateMutation.isPending}
+              />
+              <span className="text-xs font-semibold text-slate-700">Set as Current Active Academic Year</span>
             </label>
           </div>
-          <div className="pt-4 flex justify-end gap-3">
+          <div className="pt-4 flex justify-end gap-2.5 border-t border-slate-100">
             <button
               type="button"
               onClick={closeForm}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
               disabled={createMutation.isPending || updateMutation.isPending}
             >
               Cancel
@@ -235,9 +270,9 @@ export function AcademicYearsPage() {
             <button
               type="submit"
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+              className="px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50"
             >
-              {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save'}
+              {createMutation.isPending || updateMutation.isPending ? 'Saving…' : 'Save Academic Year'}
             </button>
           </div>
         </form>
@@ -246,7 +281,7 @@ export function AcademicYearsPage() {
       <ConfirmDialog
         isOpen={isConfirmOpen}
         title="Delete Academic Year"
-        message={`Are you sure you want to delete ${selectedYear?.year_name}? This action cannot be undone.`}
+        message={`Are you sure you want to delete ${selectedYear?.year_name}? This action cannot be undone and will delete linked terms and timetables.`}
         isProcessing={deleteMutation.isPending}
         onConfirm={() => selectedYear && deleteMutation.mutate(selectedYear.id)}
         onCancel={() => setIsConfirmOpen(false)}

@@ -1,11 +1,12 @@
 /**
  * pages/NotFound.tsx
  * -------------------
- * Generic 404 page.
+ * Generic 404 page for nonexistent campus routes.
+ * Academic enterprise styling.
  */
 
 import { Link } from 'react-router-dom';
-import { FileQuestion } from 'lucide-react';
+import { FileQuestion, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import type { UserRole } from '@/auth/auth.types';
 
@@ -20,21 +21,22 @@ export function NotFound() {
   const home = user ? roleHome[user.role] : '/login';
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="text-center max-w-sm">
-        <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-5">
-          <FileQuestion className="text-gray-400" size={32} />
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200/90 shadow-card p-8 text-center">
+        <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center mx-auto mb-4">
+          <FileQuestion size={24} />
         </div>
-        <h1 className="text-5xl font-black text-gray-200 mb-2">404</h1>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Page not found</h2>
-        <p className="text-gray-500 text-sm mb-6">
-          The page you're looking for doesn't exist or has been moved.
+        <p className="text-3xl font-black text-slate-300 font-tabular mb-1">404</p>
+        <h1 className="text-xl font-bold text-slate-900 tracking-tight mb-2">Page Not Found</h1>
+        <p className="text-slate-500 text-xs leading-relaxed mb-6 max-w-sm mx-auto">
+          The requested campus resource or navigation route does not exist or has been relocated.
         </p>
         <Link
           to={home}
-          className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors"
+          className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white font-semibold px-4 py-2.5 rounded-lg text-xs uppercase tracking-wider transition-colors shadow-xs focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2"
         >
-          Back to Dashboard
+          <ArrowLeft size={14} />
+          <span>Return to Dashboard</span>
         </Link>
       </div>
     </div>

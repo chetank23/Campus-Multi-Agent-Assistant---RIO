@@ -1,10 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, Layers } from 'lucide-react';
 import { isAxiosError } from 'axios';
-import { DataTable, type Column } from '@/components/common/DataTable';
-import { FormModal } from '@/components/common/FormModal';
-import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { DataTable, type Column, FormModal, ConfirmDialog, PageHeader, StatusBadge } from '@/components/common';
 import { semestersApi, type SemesterResponse, type SemesterUpdate } from '@/api/semesters';
 import { academicYearsApi } from '@/api/academicYears';
 
@@ -13,6 +11,7 @@ export function SemestersPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [selectedSemester, setSelectedSemester] = useState<SemesterResponse | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Form State
   const [academicYearId, setAcademicYearId] = useState<number | ''>('');
@@ -33,6 +32,21 @@ export function SemestersPage() {
     queryKey: ['academic-years'],
     queryFn: academicYearsApi.getAll,
   });
+
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    if (!searchTerm.trim()) return data;
+    const s = searchTerm.toLowerCase();
+    return data.filter((sem) => {
+      const yearName = years?.find((y) => y.id === sem.academic_year_id)?.year_name?.toLowerCase() || '';
+      return (
+        sem.term.toLowerCase().includes(s) ||
+        String(sem.semester_number).includes(s) ||
+        yearName.includes(s) ||
+        String(sem.id).includes(s)
+      );
+    });
+  }, [data, years, searchTerm]);
 
   // Mutations
   const getErrorMsg = (err: unknown, defaultMsg: string) => {
@@ -74,28 +88,66 @@ export function SemestersPage() {
       setSelectedSemester(null);
     },
     onError: (err: unknown) => {
-      alert(getErrorMsg(err, 'Failed to delete semester. It might be in use.'));
+      alert(getErrorMsg(err, 'Failed to delete semester. It might be referenced by sections or course assignments.'));
       setIsConfirmOpen(false);
     },
   });
 
   const columns: Column<SemesterResponse>[] = [
-    { header: 'ID', accessor: 'id' },
+    {
+      header: 'ID',
+      accessor: 'id',
+      render: (row) => <span className="font-tabular text-slate-500 font-medium">#{row.id}</span>,
+    },
     { 
       header: 'Academic Year', 
-      render: (row) => years?.find(y => y.id === row.academic_year_id)?.year_name || `ID: ${row.academic_year_id}` 
+      render: (row) => {
+        const y = years?.find((year) => year.id === row.academic_year_id);
+        return <span className="font-semibold text-slate-900">{y ? y.year_name : `Year #${row.academic_year_id}`}</span>;
+      },
     },
-    { header: 'Term', accessor: 'term' },
-    { header: 'Number', accessor: 'semester_number' },
-    { header: 'Start Date', render: (row) => new Date(row.start_date).toLocaleDateString() },
-    { header: 'End Date', render: (row) => new Date(row.end_date).toLocaleDateString() },
+    {
+      header: 'Term',
+      accessor: 'term',
+      render: (row) => (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+          {row.term}
+        </span>
+      ),
+    },
+    {
+      header: 'Semester',
+      accessor: 'semester_number',
+      render: (row) => (
+        <span className="font-tabular font-semibold text-primary-800">
+          Semester {row.semester_number}
+        </span>
+      ),
+    },
+    {
+      header: 'Start Date',
+      render: (row) => (
+        <span className="font-tabular text-slate-700">
+          {new Date(row.start_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+        </span>
+      ),
+    },
+    {
+      header: 'End Date',
+      render: (row) => (
+        <span className="font-tabular text-slate-700">
+          {new Date(row.end_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+        </span>
+      ),
+    },
     { 
       header: 'Status', 
       render: (row) => (
-        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${row.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-          {row.is_active ? 'Active' : 'Inactive'}
-        </span>
-      ) 
+        <StatusBadge
+          status={row.is_active ? 'ACTIVE' : 'INACTIVE'}
+          label={row.is_active ? 'Active Term' : 'Concluded'}
+        />
+      ),
     },
   ];
 
@@ -133,12 +185,7 @@ export function SemestersPage() {
     setFormError(null);
     
     if (academicYearId === '' || semesterNumber === '' || !startDate || !endDate) {
-      setFormError('All fields are required.');
-      return;
-    }
-
-    if (new Date(startDate) >= new Date(endDate)) {
-      setFormError('End date must be after start date.');
+      setFormError('All semester fields are required.');
       return;
     }
 
@@ -146,8 +193,8 @@ export function SemestersPage() {
       academic_year_id: Number(academicYearId),
       term,
       semester_number: Number(semesterNumber),
-      start_date: startDate,
-      end_date: endDate,
+      start_date: new Date(startDate).toISOString(),
+      end_date: new Date(endDate).toISOString(),
       is_active: isActive,
     };
 
@@ -160,22 +207,25 @@ export function SemestersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Semesters</h2>
-          <p className="text-sm text-gray-500 mt-1">Manage academic semesters.</p>
-        </div>
-        <button
-          onClick={() => setIsFormOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
-        >
-          <Plus size={16} /> Add Semester
-        </button>
-      </div>
+      <PageHeader
+        title="Academic Semesters"
+        subtitle="Configure semester terms (Fall, Spring, Summer) and academic sequencing for class schedules."
+        icon={<Layers size={20} />}
+        actions={
+          <button
+            onClick={() => setIsFormOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-xs font-semibold uppercase tracking-wider shadow-xs focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2"
+          >
+            <Plus size={15} /> Add Semester
+          </button>
+        }
+      />
 
       <DataTable
+        title="Semester Term Registry"
+        subtitle="Term sequencing across academic years"
         columns={columns}
-        data={data}
+        data={filteredData}
         isLoading={isLoading}
         isError={isError}
         error={error as Error}
@@ -183,101 +233,106 @@ export function SemestersPage() {
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
         keyExtractor={(row) => row.id}
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Filter semesters…"
+        emptyMessage="No semesters found matching your search."
       />
 
       <FormModal
         isOpen={isFormOpen}
-        title={selectedSemester ? 'Edit Semester' : 'Add Semester'}
+        title={selectedSemester ? 'Edit Academic Semester' : 'Register Academic Semester'}
+        subtitle="Set term designation, semester number, and date range"
         onClose={closeForm}
       >
         <form onSubmit={handleFormSubmit} className="space-y-4">
           {formError && (
-            <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+            <div className="p-3 bg-rose-50 text-rose-800 text-xs rounded-lg border border-rose-200 font-medium">
               {formError}
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year</label>
+            <label className="academic-label">Academic Year</label>
             <select
               value={academicYearId}
               onChange={(e) => setAcademicYearId(e.target.value ? Number(e.target.value) : '')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="academic-input"
               disabled={createMutation.isPending || updateMutation.isPending}
             >
-              <option value="">Select Year</option>
-              {years?.map(y => (
+              <option value="">Select calendar year…</option>
+              {years?.map((y) => (
                 <option key={y.id} value={y.id}>{y.year_name}</option>
               ))}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Term</label>
+              <label className="academic-label">Term</label>
               <select
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="academic-input"
                 disabled={createMutation.isPending || updateMutation.isPending}
               >
                 <option value="FALL">FALL</option>
                 <option value="SPRING">SPRING</option>
                 <option value="SUMMER">SUMMER</option>
+                <option value="WINTER">WINTER</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Semester Number</label>
+              <label className="academic-label">Semester Number</label>
               <input
                 type="number"
                 min="1"
-                max="10"
+                max="12"
                 value={semesterNumber}
                 onChange={(e) => setSemesterNumber(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="e.g. 1"
+                className="academic-input font-tabular"
+                placeholder="e.g. 1, 2, 3..."
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+              <label className="academic-label">Start Date</label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="academic-input font-tabular"
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+              <label className="academic-label">End Date</label>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="academic-input font-tabular"
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
           </div>
-          <div className="flex items-center gap-2 mt-2">
-            <input
-              type="checkbox"
-              id="isActiveSem"
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-              disabled={createMutation.isPending || updateMutation.isPending}
-            />
-            <label htmlFor="isActiveSem" className="text-sm font-medium text-gray-700">
-              Active Semester
+          <div className="pt-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="w-4 h-4 rounded text-primary-600 border-slate-300 focus:ring-primary-600"
+                disabled={createMutation.isPending || updateMutation.isPending}
+              />
+              <span className="text-xs font-semibold text-slate-700">Currently Active Semester Term</span>
             </label>
           </div>
-          <div className="pt-4 flex justify-end gap-3">
+          <div className="pt-4 flex justify-end gap-2.5 border-t border-slate-100">
             <button
               type="button"
               onClick={closeForm}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
               disabled={createMutation.isPending || updateMutation.isPending}
             >
               Cancel
@@ -285,9 +340,9 @@ export function SemestersPage() {
             <button
               type="submit"
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+              className="px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50"
             >
-              {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save'}
+              {createMutation.isPending || updateMutation.isPending ? 'Saving…' : 'Save Semester'}
             </button>
           </div>
         </form>
@@ -296,7 +351,7 @@ export function SemestersPage() {
       <ConfirmDialog
         isOpen={isConfirmOpen}
         title="Delete Semester"
-        message={`Are you sure you want to delete ${selectedSemester?.term} - ${selectedSemester?.semester_number}? This action cannot be undone.`}
+        message={`Are you sure you want to delete ${selectedSemester?.term} Semester ${selectedSemester?.semester_number}? This will unlink related sections and timetable assignments.`}
         isProcessing={deleteMutation.isPending}
         onConfirm={() => selectedSemester && deleteMutation.mutate(selectedSemester.id)}
         onCancel={() => setIsConfirmOpen(false)}

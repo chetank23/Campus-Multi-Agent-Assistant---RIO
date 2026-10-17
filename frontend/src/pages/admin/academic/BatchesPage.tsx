@@ -1,10 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 import { isAxiosError } from 'axios';
-import { DataTable, type Column } from '@/components/common/DataTable';
-import { FormModal } from '@/components/common/FormModal';
-import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { DataTable, type Column, FormModal, ConfirmDialog, PageHeader } from '@/components/common';
 import { batchesApi, type BatchResponse, type BatchUpdate } from '@/api/batches';
 import { sectionsApi } from '@/api/sections';
 
@@ -13,6 +11,7 @@ export function BatchesPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [selectedBatch, setSelectedBatch] = useState<BatchResponse | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Form State
   const [sectionId, setSectionId] = useState<number | ''>('');
@@ -30,6 +29,21 @@ export function BatchesPage() {
     queryKey: ['sections'],
     queryFn: sectionsApi.getAll,
   });
+
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    if (!searchTerm.trim()) return data;
+    const term = searchTerm.toLowerCase();
+    return data.filter((b) => {
+      const secName = sections?.find((s) => s.id === b.section_id)?.section_name?.toLowerCase() || '';
+      return (
+        b.batch_name.toLowerCase().includes(term) ||
+        secName.includes(term) ||
+        String(b.id).includes(term) ||
+        String(b.student_count).includes(term)
+      );
+    });
+  }, [data, sections, searchTerm]);
 
   const getErrorMsg = (err: unknown, defaultMsg: string) => {
     if (isAxiosError(err)) {
@@ -71,19 +85,42 @@ export function BatchesPage() {
       setSelectedBatch(null);
     },
     onError: (err: unknown) => {
-      alert(getErrorMsg(err, 'Failed to delete batch. It might be in use.'));
+      alert(getErrorMsg(err, 'Failed to delete batch. It might be referenced by enrolled students.'));
       setIsConfirmOpen(false);
     },
   });
 
   const columns: Column<BatchResponse>[] = [
-    { header: 'ID', accessor: 'id' },
-    { 
-      header: 'Section', 
-      render: (row) => sections?.find(s => s.id === row.section_id)?.section_name || `ID: ${row.section_id}` 
+    {
+      header: 'ID',
+      accessor: 'id',
+      render: (row) => <span className="font-tabular text-slate-500 font-medium">#{row.id}</span>,
     },
-    { header: 'Batch Name', accessor: 'batch_name' },
-    { header: 'Student Count', accessor: 'student_count' },
+    {
+      header: 'Assigned Section',
+      render: (row) => {
+        const sec = sections?.find((s) => s.id === row.section_id);
+        return <span className="font-semibold text-slate-900">{sec ? `Section ${sec.section_name}` : `Section #${row.section_id}`}</span>;
+      },
+    },
+    {
+      header: 'Batch Identifier',
+      accessor: 'batch_name',
+      render: (row) => (
+        <span className="inline-flex items-center px-2 py-0.5 rounded font-mono text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200">
+          {row.batch_name}
+        </span>
+      ),
+    },
+    {
+      header: 'Student Count',
+      accessor: 'student_count',
+      render: (row) => (
+        <span className="font-tabular font-semibold text-slate-700">
+          {row.student_count} Students
+        </span>
+      ),
+    },
   ];
 
   const handleEdit = (batch: BatchResponse) => {
@@ -114,7 +151,7 @@ export function BatchesPage() {
     setFormError(null);
     
     if (sectionId === '' || !batchName.trim() || studentCount === '') {
-      setFormError('All fields are required.');
+      setFormError('All batch fields are required.');
       return;
     }
 
@@ -133,22 +170,25 @@ export function BatchesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Batches</h2>
-          <p className="text-sm text-gray-500 mt-1">Manage student batches.</p>
-        </div>
-        <button
-          onClick={() => setIsFormOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
-        >
-          <Plus size={16} /> Add Batch
-        </button>
-      </div>
+      <PageHeader
+        title="Student Batches"
+        subtitle="Manage student lab subgroups, tutorial cohorts, and batch divisions within academic sections."
+        icon={<Users size={20} />}
+        actions={
+          <button
+            onClick={() => setIsFormOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-xs font-semibold uppercase tracking-wider shadow-xs focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2"
+          >
+            <Plus size={15} /> Add Batch
+          </button>
+        }
+      />
 
       <DataTable
+        title="Batch Subgroups"
+        subtitle="Cohort divisions per section"
         columns={columns}
-        data={data}
+        data={filteredData}
         isLoading={isLoading}
         isError={isError}
         error={error as Error}
@@ -156,66 +196,70 @@ export function BatchesPage() {
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
         keyExtractor={(row) => row.id}
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Filter batches…"
+        emptyMessage="No batches found matching your search."
       />
 
       <FormModal
         isOpen={isFormOpen}
-        title={selectedBatch ? 'Edit Batch' : 'Add Batch'}
+        title={selectedBatch ? 'Edit Student Batch' : 'Create Student Batch'}
+        subtitle="Associate batch with classroom section and define expected student enrollment"
         onClose={closeForm}
       >
         <form onSubmit={handleFormSubmit} className="space-y-4">
           {formError && (
-            <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+            <div className="p-3 bg-rose-50 text-rose-800 text-xs rounded-lg border border-rose-200 font-medium">
               {formError}
             </div>
           )}
-          
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
+            <label className="academic-label">Parent Section</label>
             <select
               value={sectionId}
               onChange={(e) => setSectionId(e.target.value ? Number(e.target.value) : '')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="academic-input"
               disabled={createMutation.isPending || updateMutation.isPending}
             >
-              <option value="">Select Section</option>
-              {sections?.map(s => (
-                <option key={s.id} value={s.id}>{s.section_name}</option>
+              <option value="">Select parent classroom section…</option>
+              {sections?.map((s) => (
+                <option key={s.id} value={s.id}>
+                  Section {s.section_name} (Capacity: {s.student_count})
+                </option>
               ))}
             </select>
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Batch Name</label>
+              <label className="academic-label">Batch Name</label>
               <input
                 type="text"
                 value={batchName}
                 onChange={(e) => setBatchName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="e.g. B1"
+                className="academic-input font-mono"
+                placeholder="e.g. B1, B2, Batch-A"
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Student Count</label>
+              <label className="academic-label">Student Count</label>
               <input
                 type="number"
                 min="1"
                 value={studentCount}
                 onChange={(e) => setStudentCount(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="academic-input font-tabular"
                 placeholder="e.g. 30"
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
           </div>
-          
-          <div className="pt-4 flex justify-end gap-3">
+          <div className="pt-4 flex justify-end gap-2.5 border-t border-slate-100">
             <button
               type="button"
               onClick={closeForm}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
               disabled={createMutation.isPending || updateMutation.isPending}
             >
               Cancel
@@ -223,9 +267,9 @@ export function BatchesPage() {
             <button
               type="submit"
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+              className="px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50"
             >
-              {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save'}
+              {createMutation.isPending || updateMutation.isPending ? 'Saving…' : 'Save Batch'}
             </button>
           </div>
         </form>
@@ -233,7 +277,7 @@ export function BatchesPage() {
 
       <ConfirmDialog
         isOpen={isConfirmOpen}
-        title="Delete Batch"
+        title="Delete Student Batch"
         message={`Are you sure you want to delete ${selectedBatch?.batch_name}? This action cannot be undone.`}
         isProcessing={deleteMutation.isPending}
         onConfirm={() => selectedBatch && deleteMutation.mutate(selectedBatch.id)}

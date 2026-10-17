@@ -1,10 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, BookOpen, FlaskConical } from 'lucide-react';
 import { isAxiosError } from 'axios';
-import { DataTable, type Column } from '@/components/common/DataTable';
-import { FormModal } from '@/components/common/FormModal';
-import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { DataTable, type Column, FormModal, ConfirmDialog, PageHeader, StatusBadge } from '@/components/common';
 import { coursesApi, type CourseResponse, type CourseUpdate } from '@/api/courses';
 import { departmentsApi } from '@/api/departments';
 
@@ -13,6 +11,7 @@ export function CoursesPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<CourseResponse | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Form State
   const [courseCode, setCourseCode] = useState('');
@@ -33,6 +32,22 @@ export function CoursesPage() {
   });
 
   const { data: departments } = useQuery({ queryKey: ['departments'], queryFn: departmentsApi.getAll });
+
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    if (!searchTerm.trim()) return data;
+    const term = searchTerm.toLowerCase();
+    return data.filter((crs) => {
+      const dept = departments?.find((d) => d.id === crs.department_id)?.name?.toLowerCase() || '';
+      return (
+        crs.course_code.toLowerCase().includes(term) ||
+        crs.course_name.toLowerCase().includes(term) ||
+        crs.course_type.toLowerCase().includes(term) ||
+        dept.includes(term) ||
+        String(crs.id).includes(term)
+      );
+    });
+  }, [data, departments, searchTerm]);
 
   // Mutations
   const getErrorMsg = (err: unknown, defaultMsg: string) => {
@@ -80,25 +95,59 @@ export function CoursesPage() {
   });
 
   const columns: Column<CourseResponse>[] = [
-    { header: 'Code', accessor: 'course_code' },
-    { header: 'Name', accessor: 'course_name' },
+    {
+      header: 'Code',
+      accessor: 'course_code',
+      render: (row) => (
+        <span className="inline-flex items-center px-2 py-0.5 rounded font-mono text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200">
+          {row.course_code}
+        </span>
+      ),
+    },
+    {
+      header: 'Course Name',
+      accessor: 'course_name',
+      render: (row) => <span className="font-semibold text-slate-900">{row.course_name}</span>,
+    },
     { 
       header: 'Department', 
-      render: (row) => departments?.find(d => d.id === row.department_id)?.name || `ID: ${row.department_id}` 
+      render: (row) => {
+        const d = departments?.find((dept) => dept.id === row.department_id);
+        return <span className="text-slate-700 text-xs font-medium">{d ? `${d.department_code} - ${d.name}` : `Dept #${row.department_id}`}</span>;
+      },
     },
-    { header: 'Type', accessor: 'course_type' },
-    { header: 'Credits', accessor: 'credits' },
+    {
+      header: 'Type',
+      accessor: 'course_type',
+      render: (row) => <StatusBadge status={row.course_type} />,
+    },
+    {
+      header: 'Credits',
+      accessor: 'credits',
+      render: (row) => <span className="font-tabular font-bold text-primary-800">{row.credits}</span>,
+    },
     { 
       header: 'L-T-P', 
-      render: (row) => `${row.lecture_hours}-${row.tutorial_hours}-${row.practical_hours}` 
-    },
-    { 
-      header: 'Lab', 
       render: (row) => (
-        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${row.requires_lab ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}`}>
-          {row.requires_lab ? 'Yes' : 'No'}
+        <span className="font-tabular font-mono text-xs text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 font-semibold" title="Lecture - Tutorial - Practical hours">
+          {row.lecture_hours}-{row.tutorial_hours}-{row.practical_hours}
         </span>
-      ) 
+      ),
+    },
+    {
+      header: 'Lab Needed',
+      render: (row) => (
+        <span
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${
+            row.requires_lab
+              ? 'bg-sky-50 text-sky-800 border-sky-200'
+              : 'bg-slate-100 text-slate-500 border-slate-200'
+          }`}
+        >
+          {row.requires_lab && <FlaskConical size={11} />}
+          <span>{row.requires_lab ? 'Yes' : 'No'}</span>
+        </span>
+      ),
     },
   ];
 
@@ -145,7 +194,7 @@ export function CoursesPage() {
       !courseCode.trim() || !courseName.trim() || departmentId === '' ||
       credits === '' || lectureHours === '' || tutorialHours === '' || practicalHours === ''
     ) {
-      setFormError('All fields are required.');
+      setFormError('All course fields are required.');
       return;
     }
 
@@ -170,22 +219,25 @@ export function CoursesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Courses</h2>
-          <p className="text-sm text-gray-500 mt-1">Manage course catalog.</p>
-        </div>
-        <button
-          onClick={() => setIsFormOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
-        >
-          <Plus size={16} /> Add Course
-        </button>
-      </div>
+      <PageHeader
+        title="Course Catalog"
+        subtitle="Manage academic courses, instructional credits, lecture-tutorial-practical (L-T-P) weekly distribution, and lab prerequisites."
+        icon={<BookOpen size={20} />}
+        actions={
+          <button
+            onClick={() => setIsFormOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-xs font-semibold uppercase tracking-wider shadow-xs focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2"
+          >
+            <Plus size={15} /> Add Course
+          </button>
+        }
+      />
 
       <DataTable
+        title="Master Course Register"
+        subtitle="Curricular courses with credit breakdown"
         columns={columns}
-        data={data}
+        data={filteredData}
         isLoading={isLoading}
         isError={isError}
         error={error as Error}
@@ -193,38 +245,44 @@ export function CoursesPage() {
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
         keyExtractor={(row) => row.id}
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Filter courses by code, title, type…"
+        emptyMessage="No courses found matching your search."
       />
 
       <FormModal
         isOpen={isFormOpen}
-        title={selectedCourse ? 'Edit Course' : 'Add Course'}
+        title={selectedCourse ? 'Edit Course Catalog Entry' : 'Register New Course'}
+        subtitle="Define course classification, credit weight, and contact hour requirements"
+        maxWidth="xl"
         onClose={closeForm}
       >
         <form onSubmit={handleFormSubmit} className="space-y-4">
           {formError && (
-            <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+            <div className="p-3 bg-rose-50 text-rose-800 text-xs rounded-lg border border-rose-200 font-medium">
               {formError}
             </div>
           )}
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Course Code</label>
+              <label className="academic-label">Course Code</label>
               <input
                 type="text"
                 value={courseCode}
                 onChange={(e) => setCourseCode(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="e.g. CS101"
+                className="academic-input font-mono uppercase"
+                placeholder="e.g. CS201"
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Course Type</label>
+              <label className="academic-label">Course Classification</label>
               <select
                 value={courseType}
                 onChange={(e) => setCourseType(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="academic-input"
                 disabled={createMutation.isPending || updateMutation.isPending}
               >
                 <option value="CORE">CORE</option>
@@ -236,40 +294,41 @@ export function CoursesPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Course Name</label>
+            <label className="academic-label">Course Title</label>
             <input
               type="text"
               value={courseName}
               onChange={(e) => setCourseName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="e.g. Intro to Computer Science"
+              className="academic-input"
+              placeholder="e.g. Data Structures and Algorithms"
               disabled={createMutation.isPending || updateMutation.isPending}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+              <label className="academic-label">Department</label>
               <select
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="academic-input"
                 disabled={createMutation.isPending || updateMutation.isPending}
               >
-                <option value="">Select Department</option>
-                {departments?.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
+                <option value="">Select department…</option>
+                {departments?.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name} ({d.department_code})</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Credits</label>
+              <label className="academic-label">Total Credits</label>
               <input
                 type="number"
                 min="0"
                 value={credits}
                 onChange={(e) => setCredits(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="academic-input font-tabular"
+                placeholder="e.g. 4"
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
@@ -277,59 +336,61 @@ export function CoursesPage() {
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Lecture Hrs</label>
+              <label className="academic-label">Lecture Hrs (L)</label>
               <input
                 type="number"
                 min="0"
                 value={lectureHours}
                 onChange={(e) => setLectureHours(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="academic-input font-tabular"
+                placeholder="e.g. 3"
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tutorial Hrs</label>
+              <label className="academic-label">Tutorial Hrs (T)</label>
               <input
                 type="number"
                 min="0"
                 value={tutorialHours}
                 onChange={(e) => setTutorialHours(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="academic-input font-tabular"
+                placeholder="e.g. 1"
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Practical Hrs</label>
+              <label className="academic-label">Practical Hrs (P)</label>
               <input
                 type="number"
                 min="0"
                 value={practicalHours}
                 onChange={(e) => setPracticalHours(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="academic-input font-tabular"
+                placeholder="e.g. 2"
                 disabled={createMutation.isPending || updateMutation.isPending}
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-2 mt-2">
-            <input
-              type="checkbox"
-              id="requiresLab"
-              checked={requiresLab}
-              onChange={(e) => setRequiresLab(e.target.checked)}
-              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-              disabled={createMutation.isPending || updateMutation.isPending}
-            />
-            <label htmlFor="requiresLab" className="text-sm font-medium text-gray-700">
-              Requires Lab
+          <div className="pt-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={requiresLab}
+                onChange={(e) => setRequiresLab(e.target.checked)}
+                className="w-4 h-4 rounded text-primary-600 border-slate-300 focus:ring-primary-600"
+                disabled={createMutation.isPending || updateMutation.isPending}
+              />
+              <span className="text-xs font-semibold text-slate-700">Requires Specialized Lab Infrastructure</span>
             </label>
           </div>
           
-          <div className="pt-4 flex justify-end gap-3">
+          <div className="pt-4 flex justify-end gap-2.5 border-t border-slate-100">
             <button
               type="button"
               onClick={closeForm}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
               disabled={createMutation.isPending || updateMutation.isPending}
             >
               Cancel
@@ -337,9 +398,9 @@ export function CoursesPage() {
             <button
               type="submit"
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+              className="px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50"
             >
-              {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save'}
+              {createMutation.isPending || updateMutation.isPending ? 'Saving…' : 'Save Course'}
             </button>
           </div>
         </form>
@@ -348,7 +409,7 @@ export function CoursesPage() {
       <ConfirmDialog
         isOpen={isConfirmOpen}
         title="Delete Course"
-        message={`Are you sure you want to delete ${selectedCourse?.course_code}? This action cannot be undone.`}
+        message={`Are you sure you want to delete ${selectedCourse?.course_code} - ${selectedCourse?.course_name}? This action cannot be undone.`}
         isProcessing={deleteMutation.isPending}
         onConfirm={() => selectedCourse && deleteMutation.mutate(selectedCourse.id)}
         onCancel={() => setIsConfirmOpen(false)}

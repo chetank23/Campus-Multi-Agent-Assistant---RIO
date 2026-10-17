@@ -17,10 +17,12 @@
  */
 
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { Clock } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { ProtectedRoute } from '@/auth/ProtectedRoute';
 import { RoleRoute } from '@/auth/RoleRoute';
 import { AppShell } from '@/components/layout/AppShell';
+import { EmptyState, LoadingState } from '@/components/common';
 
 import { Login } from '@/pages/Login';
 import { Unauthorized } from '@/pages/Unauthorized';
@@ -62,8 +64,8 @@ function RoleRedirect() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <LoadingState message="Detecting user permissions & active portal session…" />
       </div>
     );
   }
@@ -158,17 +160,30 @@ export function AppRoutes() {
   );
 }
 
-/** Generic placeholder for unimplemented Stage 6B+ pages. */
+/** Professional placeholder for future academic ERP modules. */
 function PlaceholderPage({ label }: { label: string }) {
+  const getMessage = (name: string) => {
+    switch (name) {
+      case 'Audit Logs':
+        return 'Audit log access is not available yet. System audit trails and event telemetry will be enabled in an upcoming release.';
+      case 'Resources':
+        return 'Resource allocation and campus asset tracking is not available yet. Physical and digital asset registers are being configured.';
+      case 'Change Requests':
+        return 'Change request workflow is not available yet. Administrative approval queues and delegation routing are pending release.';
+      case 'Notifications':
+        return 'Notification center is not available yet. Automated alert dispatches and announcement broadcast services are scheduled.';
+      default:
+        return `${label} management is not available yet. Module services will be activated once backend endpoints are deployed.`;
+    }
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-[40vh] text-center gap-3">
-      <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
-        <span className="text-2xl">🚧</span>
-      </div>
-      <h3 className="text-base font-semibold text-gray-700">{label}</h3>
-      <p className="text-sm text-gray-400 max-w-xs">
-        This page will be implemented in Stage 6B. It is listed in navigation for structural completeness.
-      </p>
+    <div className="py-12 max-w-xl mx-auto">
+      <EmptyState
+        icon={<Clock size={24} className="text-primary-600" />}
+        title={`${label} Module`}
+        description={getMessage(label)}
+      />
     </div>
   );
 }

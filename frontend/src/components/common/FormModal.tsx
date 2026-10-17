@@ -1,14 +1,32 @@
+import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { IconButton } from './IconButton';
 
 interface FormModalProps {
   isOpen: boolean;
   title: string;
+  subtitle?: string;
   onClose: () => void;
   children: React.ReactNode;
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }
 
-export function FormModal({ isOpen, title, onClose, children }: FormModalProps) {
+const maxWidthStyles = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
+};
+
+export function FormModal({
+  isOpen,
+  title,
+  subtitle,
+  onClose,
+  children,
+  maxWidth = 'lg',
+}: FormModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,7 +45,7 @@ export function FormModal({ isOpen, title, onClose, children }: FormModalProps) 
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-40 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/50 backdrop-blur-xs transition-opacity"
       onClick={(e) => {
         if (e.target === overlayRef.current) onClose();
       }}
@@ -35,18 +53,25 @@ export function FormModal({ isOpen, title, onClose, children }: FormModalProps) 
       aria-modal="true"
       aria-labelledby="modal-title"
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <h2 id="modal-title" className="text-lg font-semibold text-gray-900">
-            {title}
-          </h2>
-          <button
+      <div
+        className={`bg-white rounded-xl shadow-modal border border-slate-200/90 w-full ${maxWidthStyles[maxWidth]} overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150`}
+      >
+        <div className="px-6 py-4 border-b border-slate-200/80 flex items-start justify-between shrink-0 bg-slate-50/50">
+          <div>
+            <h2 id="modal-title" className="text-base font-semibold text-slate-900 tracking-tight">
+              {title}
+            </h2>
+            {subtitle && (
+              <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
+            )}
+          </div>
+          <IconButton
+            icon={<X size={16} />}
+            aria-label="Close dialog"
+            variant="ghost"
+            size="sm"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
-            aria-label="Close"
-          >
-            <X size={20} />
-          </button>
+          />
         </div>
         <div className="p-6 overflow-y-auto">
           {children}

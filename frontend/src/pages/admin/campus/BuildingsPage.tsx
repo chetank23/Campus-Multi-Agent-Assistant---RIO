@@ -1,10 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, Building2 } from 'lucide-react';
 import { isAxiosError } from 'axios';
-import { DataTable, type Column } from '@/components/common/DataTable';
-import { FormModal } from '@/components/common/FormModal';
-import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { DataTable, type Column, FormModal, ConfirmDialog, PageHeader } from '@/components/common';
 import { buildingsApi, type BuildingResponse, type BuildingUpdate } from '@/api/buildings';
 
 export function BuildingsPage() {
@@ -12,6 +10,7 @@ export function BuildingsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingResponse | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Form State
   const [buildingName, setBuildingName] = useState('');
@@ -23,6 +22,18 @@ export function BuildingsPage() {
     queryKey: ['buildings'],
     queryFn: buildingsApi.getAll,
   });
+
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    if (!searchTerm.trim()) return data;
+    const term = searchTerm.toLowerCase();
+    return data.filter(
+      (bldg) =>
+        bldg.building_name.toLowerCase().includes(term) ||
+        String(bldg.id).includes(term) ||
+        String(bldg.floors).includes(term)
+    );
+  }, [data, searchTerm]);
 
   // Mutations
   const getErrorMsg = (err: unknown, defaultMsg: string) => {
@@ -64,15 +75,36 @@ export function BuildingsPage() {
       setSelectedBuilding(null);
     },
     onError: (err: unknown) => {
-      alert(getErrorMsg(err, 'Failed to delete building. It might be in use.'));
+      alert(getErrorMsg(err, 'Failed to delete building. It might contain active rooms.'));
       setIsConfirmOpen(false);
     },
   });
 
   const columns: Column<BuildingResponse>[] = [
-    { header: 'ID', accessor: 'id' },
-    { header: 'Building Name', accessor: 'building_name' },
-    { header: 'Floors', accessor: 'floors' },
+    {
+      header: 'ID',
+      accessor: 'id',
+      render: (row) => <span className="font-tabular text-slate-500 font-medium">#{row.id}</span>,
+    },
+    {
+      header: 'Building Name',
+      accessor: 'building_name',
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <Building2 size={16} className="text-slate-400" />
+          <span className="font-semibold text-slate-900">{row.building_name}</span>
+        </div>
+      ),
+    },
+    {
+      header: 'Total Floors',
+      accessor: 'floors',
+      render: (row) => (
+        <span className="font-tabular text-slate-700">
+          {row.floors} {row.floors === 1 ? 'Floor' : 'Floors'}
+        </span>
+      ),
+    },
   ];
 
   const handleEdit = (bldg: BuildingResponse) => {
@@ -101,7 +133,7 @@ export function BuildingsPage() {
     setFormError(null);
     
     if (!buildingName.trim() || floors === '') {
-      setFormError('All fields are required.');
+      setFormError('Building title and floor count are required.');
       return;
     }
 
@@ -119,22 +151,25 @@ export function BuildingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Buildings</h2>
-          <p className="text-sm text-gray-500 mt-1">Manage campus buildings.</p>
-        </div>
-        <button
-          onClick={() => setIsFormOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
-        >
-          <Plus size={16} /> Add Building
-        </button>
-      </div>
+      <PageHeader
+        title="Campus Buildings"
+        subtitle="Manage physical infrastructure, academic blocks, lecture complexes, and floor configurations."
+        icon={<Building2 size={20} />}
+        actions={
+          <button
+            onClick={() => setIsFormOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-xs font-semibold uppercase tracking-wider shadow-xs focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2"
+          >
+            <Plus size={15} /> Add Building
+          </button>
+        }
+      />
 
       <DataTable
+        title="Physical Infrastructure Registry"
+        subtitle="Campus blocks & structures"
         columns={columns}
-        data={data}
+        data={filteredData}
         isLoading={isLoading}
         isError={isError}
         error={error as Error}
@@ -142,47 +177,53 @@ export function BuildingsPage() {
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
         keyExtractor={(row) => row.id}
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Filter buildings…"
+        emptyMessage="No buildings found matching your search."
       />
 
       <FormModal
         isOpen={isFormOpen}
-        title={selectedBuilding ? 'Edit Building' : 'Add Building'}
+        title={selectedBuilding ? 'Edit Campus Building' : 'Register Campus Building'}
+        subtitle="Specify building designation and vertical floor limits"
         onClose={closeForm}
       >
         <form onSubmit={handleFormSubmit} className="space-y-4">
           {formError && (
-            <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+            <div className="p-3 bg-rose-50 text-rose-800 text-xs rounded-lg border border-rose-200 font-medium">
               {formError}
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Building Name</label>
+            <label className="academic-label">Building Name</label>
             <input
               type="text"
               value={buildingName}
               onChange={(e) => setBuildingName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="e.g. Main Block"
+              className="academic-input"
+              placeholder="e.g. Sir M. Visvesvaraya Block"
               disabled={createMutation.isPending || updateMutation.isPending}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Floors</label>
+            <label className="academic-label">Number of Floors</label>
             <input
               type="number"
               min="1"
+              max="50"
               value={floors}
               onChange={(e) => setFloors(e.target.value === '' ? '' : Number(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="e.g. 4"
+              className="academic-input font-tabular"
+              placeholder="e.g. 5"
               disabled={createMutation.isPending || updateMutation.isPending}
             />
           </div>
-          <div className="pt-4 flex justify-end gap-3">
+          <div className="pt-4 flex justify-end gap-2.5 border-t border-slate-100">
             <button
               type="button"
               onClick={closeForm}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
               disabled={createMutation.isPending || updateMutation.isPending}
             >
               Cancel
@@ -190,9 +231,9 @@ export function BuildingsPage() {
             <button
               type="submit"
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+              className="px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50"
             >
-              {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save'}
+              {createMutation.isPending || updateMutation.isPending ? 'Saving…' : 'Save Building'}
             </button>
           </div>
         </form>
@@ -200,8 +241,8 @@ export function BuildingsPage() {
 
       <ConfirmDialog
         isOpen={isConfirmOpen}
-        title="Delete Building"
-        message={`Are you sure you want to delete ${selectedBuilding?.building_name}? This action cannot be undone.`}
+        title="Delete Campus Building"
+        message={`Are you sure you want to delete ${selectedBuilding?.building_name}? All linked rooms and timetable entries must be relocated first.`}
         isProcessing={deleteMutation.isPending}
         onConfirm={() => selectedBuilding && deleteMutation.mutate(selectedBuilding.id)}
         onCancel={() => setIsConfirmOpen(false)}
