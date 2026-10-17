@@ -65,13 +65,13 @@ export function DataTable<T>({
   const colSpanCount = columns.length + (onEdit || onDelete ? 1 : 0);
 
   return (
-    <div className="bg-white rounded-xl shadow-card border border-slate-200/90 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-subtle border border-[#E4EAF2] overflow-hidden">
       {hasHeaderToolbar && (
-        <div className="p-4 sm:px-6 sm:py-4 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
+        <div className="p-4 sm:px-6 sm:py-4 border-b border-[#E4EAF2] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
           {(title || subtitle) && (
             <div>
-              {title && <h3 className="text-base font-semibold text-slate-900 tracking-tight">{title}</h3>}
-              {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+              {title && <h3 className="text-sm sm:text-base font-bold text-[#111D35] tracking-tight">{title}</h3>}
+              {subtitle && <p className="text-xs text-[#536783] mt-0.5">{subtitle}</p>}
             </div>
           )}
           <div className="flex items-center gap-3 ml-auto w-full sm:w-auto">
@@ -89,13 +89,13 @@ export function DataTable<T>({
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
+        <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
+            <tr className="bg-[#F8FAFC] border-b border-[#E4EAF2]">
               {columns.map((col, idx) => (
                 <th
                   key={idx}
-                  className={`px-6 py-3.5 text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap ${
+                  className={`px-6 py-3.5 text-[11px] font-bold text-[#536783] uppercase tracking-wider whitespace-nowrap ${
                     col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
                   } ${col.className || ''}`}
                 >
@@ -103,13 +103,13 @@ export function DataTable<T>({
                 </th>
               ))}
               {(onEdit || onDelete) && (
-                <th className="px-6 py-3.5 text-xs font-semibold text-slate-600 uppercase tracking-wider text-right w-24 whitespace-nowrap">
+                <th className="px-6 py-3.5 text-[11px] font-bold text-[#536783] uppercase tracking-wider text-right w-24 whitespace-nowrap">
                   Actions
                 </th>
               )}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-[#E4EAF2]/60">
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
@@ -138,7 +138,7 @@ export function DataTable<T>({
               data.map((row) => (
                 <tr
                   key={keyExtractor(row)}
-                  className="hover:bg-slate-50/80 transition-colors group"
+                  className="hover:bg-[#F8FAFC]/80 transition-colors group"
                 >
                   {columns.map((col, cIdx) => (
                     <td

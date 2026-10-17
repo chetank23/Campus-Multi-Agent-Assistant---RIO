@@ -65,10 +65,6 @@ export function StudentDashboard() {
     return set.size;
   }, [entries]);
 
-  if (isUserLoading && !user) {
-    return <LoadingState message="Connecting to student portal…" />;
-  }
-
   const academicSubtitle = React.useMemo(() => {
     const parts = [];
     if (timetable?.program_name) parts.push(timetable.program_name);
@@ -77,6 +73,10 @@ export function StudentDashboard() {
     if (timetable?.batch_name) parts.push(`Batch ${timetable.batch_name}`);
     return parts.length > 0 ? parts.join(' • ') : 'Student Academic Portal • Class Schedule & Allocations';
   }, [timetable]);
+
+  if (isUserLoading && !user) {
+    return <LoadingState message="Connecting to student portal…" />;
+  }
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">

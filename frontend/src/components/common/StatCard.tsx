@@ -10,11 +10,11 @@ interface StatCardProps {
 }
 
 const iconVariantStyles: Record<string, string> = {
-  default: 'bg-slate-100 text-slate-700',
-  primary: 'bg-primary-50 text-primary-700',
-  success: 'bg-emerald-50 text-emerald-700',
-  warning: 'bg-amber-50 text-amber-700',
-  danger: 'bg-rose-50 text-rose-700',
+  default: 'bg-[#F1F5F9] text-[#536783]',
+  primary: 'bg-[#D8E9FE] text-[#1685E8]',
+  success: 'bg-[#D1F4E0] text-[#059669]',
+  warning: 'bg-[#FDE8C7] text-[#D97706]',
+  danger: 'bg-[#FCD7D7] text-[#DC2626]',
 };
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -27,20 +27,20 @@ export const StatCard: React.FC<StatCardProps> = ({
 }) => {
   return (
     <div
-      className={`bg-white rounded-xl border border-slate-200/80 p-5 shadow-card hover:shadow-elevated transition-all flex flex-col justify-between ${className}`}
+      className={`bg-white rounded-xl border border-[#E4EAF2] p-4 sm:p-5 shadow-subtle hover:shadow-card transition-all flex flex-col justify-between ${className}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 truncate">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-[#536783] truncate">
             {label}
           </p>
-          <p className="text-2xl font-bold text-slate-900 mt-1 tracking-tight font-tabular">
+          <p className="text-2xl font-extrabold text-[#111D35] mt-1 tracking-tight font-tabular">
             {value}
           </p>
         </div>
         {icon && (
           <div
-            className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${iconVariantStyles[variant] || iconVariantStyles.default}`}
+            className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${iconVariantStyles[variant] || iconVariantStyles.default}`}
             aria-hidden="true"
           >
             {icon}
@@ -48,7 +48,7 @@ export const StatCard: React.FC<StatCardProps> = ({
         )}
       </div>
       {sub && (
-        <p className="text-xs text-slate-500 mt-3 pt-2.5 border-t border-slate-100 truncate">
+        <p className="text-xs text-[#536783] mt-3 pt-2.5 border-t border-[#E4EAF2]/60 truncate">
           {sub}
         </p>
       )}

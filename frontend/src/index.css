@@ -13,7 +13,7 @@ html {
 }
 
 body {
-  @apply font-sans text-slate-800 bg-slate-50 antialiased;
+  @apply font-sans text-[#111D35] bg-[#F4F7FB] antialiased;
   margin: 0;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -46,24 +46,24 @@ body {
 
 /* ── Focus Visible Ring (WCAG AA Compliant) ────────────────────────────────── */
 :focus-visible {
-  @apply outline-none ring-2 ring-primary-600 ring-offset-2 ring-offset-white;
+  @apply outline-none ring-2 ring-[#93B5E8] ring-offset-2 ring-offset-white;
 }
 
 /* ── Subtle Elevation & Card Utilities ─────────────────────────────────────── */
 @layer components {
   .academic-card {
-    @apply bg-white rounded-xl border border-slate-200/80 shadow-card transition-shadow;
+    @apply bg-white rounded-xl border border-[#E4EAF2] shadow-card transition-shadow;
   }
 
   .academic-card-hover {
-    @apply bg-white rounded-xl border border-slate-200/80 shadow-card hover:shadow-elevated transition-all;
+    @apply bg-white rounded-xl border border-[#E4EAF2] shadow-card hover:shadow-elevated transition-all;
   }
 
   .academic-input {
-    @apply w-full px-3.5 py-2 rounded-lg border border-slate-300 text-sm text-slate-800 bg-white placeholder-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-600 focus:border-primary-600 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed;
+    @apply w-full px-3.5 py-2 rounded-lg border border-[#D6DFEA] text-sm text-[#111D35] bg-white placeholder-[#8190A5] transition-colors focus:outline-none focus:ring-2 focus:ring-[#93B5E8] focus:border-[#2563EB] disabled:bg-[#F8FAFC] disabled:text-[#8190A5] disabled:cursor-not-allowed;
   }
 
   .academic-label {
-    @apply block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5;
+    @apply block text-xs font-semibold uppercase tracking-wider text-[#536783] mb-1.5;
   }
 }

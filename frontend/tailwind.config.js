@@ -30,6 +30,48 @@ export default {
           900: '#1c2942',
           950: '#101726',
         },
+        // Reference design system tokens
+        canvas: '#F4F7FB',
+        surface: {
+          DEFAULT: '#FFFFFF',
+          secondary: '#F8FAFC',
+        },
+        ink: {
+          primary: '#111D35',
+          secondary: '#536783',
+          muted: '#8190A5',
+        },
+        border: {
+          subtle: '#E4EAF2',
+          input: '#D6DFEA',
+          ring: '#93B5E8',
+        },
+        sidebar: {
+          DEFAULT: '#10243A',
+          secondary: '#142B43',
+          hover: '#1D3B5C',
+          active: '#2B568F',
+          divider: '#2B4057',
+          text: '#F4F7FB',
+          muted: '#B8C7D9',
+        },
+        kpi: {
+          students: { bg: '#EDF5FF', iconBg: '#D8E9FE', accent: '#1685E8' },
+          faculty: { bg: '#EAF8F1', iconBg: '#D1F4E0', accent: '#059669' },
+          courses: { bg: '#F1EDFF', iconBg: '#E1D7FE', accent: '#8055E8' },
+          rooms: { bg: '#FFF5E5', iconBg: '#FDE8C7', accent: '#D97706' },
+          published: { bg: '#E6F7EF', iconBg: '#C8F1DF', accent: '#087F5B' },
+          conflicts: { bg: '#FDECEC', iconBg: '#FCD7D7', accent: '#DC2626' },
+        },
+        semantic: {
+          blue: '#2563EB',
+          navy: '#254B7A',
+          emerald: '#059669',
+          teal: '#36BDB2',
+          purple: '#8055E8',
+          amber: '#F59E0B',
+          red: '#EF4444',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],

@@ -13,28 +13,28 @@ interface StatusBadgeProps {
 
 const variantStyles: Record<StatusVariant, { badge: string; dot: string }> = {
   success: {
-    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
-    dot: 'bg-emerald-500',
+    badge: 'bg-[#E6F7EF] text-[#087F5B] border-[#C8F1DF]',
+    dot: 'bg-[#059669]',
   },
   warning: {
-    badge: 'bg-amber-50 text-amber-700 border-amber-200/80',
-    dot: 'bg-amber-500',
+    badge: 'bg-[#FFF5E5] text-[#D97706] border-[#FDE8C7]',
+    dot: 'bg-[#F59E0B]',
   },
   danger: {
-    badge: 'bg-rose-50 text-rose-700 border-rose-200/80',
-    dot: 'bg-rose-500',
+    badge: 'bg-[#FDECEC] text-[#DC2626] border-[#FCD7D7]',
+    dot: 'bg-[#EF4444]',
   },
   info: {
-    badge: 'bg-sky-50 text-sky-700 border-sky-200/80',
-    dot: 'bg-sky-500',
+    badge: 'bg-[#EDF5FF] text-[#1685E8] border-[#D8E9FE]',
+    dot: 'bg-[#2563EB]',
   },
   primary: {
-    badge: 'bg-primary-50 text-primary-800 border-primary-200/80',
-    dot: 'bg-primary-600',
+    badge: 'bg-[#EDF5FF] text-[#1685E8] border-[#D8E9FE]',
+    dot: 'bg-[#2563EB]',
   },
   neutral: {
-    badge: 'bg-slate-100 text-slate-700 border-slate-200',
-    dot: 'bg-slate-400',
+    badge: 'bg-[#F1F5F9] text-[#536783] border-[#E4EAF2]',
+    dot: 'bg-[#8190A5]',
   },
 };
 

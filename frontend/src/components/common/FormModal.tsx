@@ -54,15 +54,15 @@ export function FormModal({
       aria-labelledby="modal-title"
     >
       <div
-        className={`bg-white rounded-xl shadow-modal border border-slate-200/90 w-full ${maxWidthStyles[maxWidth]} overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150`}
+        className={`bg-white rounded-xl shadow-modal border border-[#E4EAF2] w-full ${maxWidthStyles[maxWidth]} overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150`}
       >
-        <div className="px-6 py-4 border-b border-slate-200/80 flex items-start justify-between shrink-0 bg-slate-50/50">
+        <div className="px-6 py-4 border-b border-[#E4EAF2] flex items-start justify-between shrink-0 bg-[#F8FAFC]">
           <div>
-            <h2 id="modal-title" className="text-base font-semibold text-slate-900 tracking-tight">
+            <h2 id="modal-title" className="text-base font-bold text-[#111D35] tracking-tight">
               {title}
             </h2>
             {subtitle && (
-              <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
+              <p className="text-xs text-[#536783] mt-0.5">{subtitle}</p>
             )}
           </div>
           <IconButton

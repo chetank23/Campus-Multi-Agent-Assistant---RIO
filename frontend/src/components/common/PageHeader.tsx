@@ -46,19 +46,19 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-start gap-3 min-w-0">
           {icon && (
-            <div className="w-10 h-10 rounded-xl bg-primary-50 text-primary-700 flex items-center justify-center shrink-0 mt-0.5 border border-primary-100 shadow-subtle">
+            <div className="w-10 h-10 rounded-xl bg-[#EDF5FF] text-[#1685E8] flex items-center justify-center shrink-0 mt-0.5 border border-[#D8E9FE] shadow-2xs">
               {icon}
             </div>
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 truncate">
+              <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#111D35] truncate">
                 {title}
               </h1>
               {badge}
             </div>
             {subtitle && (
-              <p className="text-sm text-slate-500 mt-0.5 leading-relaxed max-w-3xl">
+              <p className="text-xs sm:text-sm text-[#536783] mt-0.5 leading-relaxed max-w-3xl font-medium">
                 {subtitle}
               </p>
             )}

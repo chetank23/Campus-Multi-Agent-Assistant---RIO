@@ -20,7 +20,7 @@ export function AppShell({ title }: { title?: string }) {
   if (!user) return null;
 
   return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-800 antialiased selection:bg-primary-100 selection:text-primary-900">
+    <div className="flex min-h-screen bg-[#F4F7FB] text-[#111D35] antialiased selection:bg-primary-100 selection:text-primary-900">
       <Sidebar
         role={user.role}
         mobileOpen={mobileOpen}
@@ -31,7 +31,7 @@ export function AppShell({ title }: { title?: string }) {
           title={title}
           onToggleMobile={() => setMobileOpen((prev) => !prev)}
         />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-6 w-full max-w-[1600px] mx-auto overflow-y-auto">
           <Outlet />
         </main>
       </div>

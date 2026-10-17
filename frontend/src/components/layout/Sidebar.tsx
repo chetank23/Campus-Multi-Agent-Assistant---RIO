@@ -1,37 +1,38 @@
-/**
- * components/layout/Sidebar.tsx
- * ------------------------------
- * Role-aware left navigation sidebar for RIO-MJP.
- * High-fidelity academic ERP design with grouped navigation,
- * clear active states, semantic Lucide icons, and mobile drawer support.
- */
-
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   GraduationCap,
   Users,
-  BookOpen,
   Building2,
   CalendarDays,
-  DoorOpen,
-  School,
-  Package,
-  FileText,
-  Bell,
-  ClipboardList,
   Sparkles,
-  X,
   Layers,
+  History,
+  Clock,
+  UploadCloud,
+  BarChart3,
+  ShieldCheck,
+  ClipboardList,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  X,
 } from 'lucide-react';
 import type { UserRole } from '@/auth/auth.types';
+
+interface SubNavItem {
+  label: string;
+  to: string;
+}
 
 interface NavItem {
   label: string;
   icon: React.ReactNode;
   to: string;
   implemented: boolean;
+  subItems?: SubNavItem[];
 }
 
 interface NavGroup {
@@ -44,82 +45,167 @@ function getNavGroups(role: UserRole): NavGroup[] {
     case 'ADMIN':
       return [
         {
-          groupTitle: 'Overview',
+          groupTitle: 'GENERAL',
           items: [
-            { label: 'Dashboard', icon: <LayoutDashboard size={17} />, to: '/admin', implemented: true },
+            {
+              label: 'Dashboard',
+              icon: <LayoutDashboard size={18} />,
+              to: '/admin',
+              implemented: true,
+            },
           ],
         },
         {
-          groupTitle: 'Academic Architecture',
+          groupTitle: 'ACADEMIC MANAGEMENT',
           items: [
-            { label: 'Departments', icon: <Building2 size={17} />, to: '/admin/academic/departments', implemented: true },
-            { label: 'Programs', icon: <GraduationCap size={17} />, to: '/admin/academic/programs', implemented: true },
-            { label: 'Academic Years', icon: <CalendarDays size={17} />, to: '/admin/academic/years', implemented: true },
-            { label: 'Semesters', icon: <Layers size={17} />, to: '/admin/academic/semesters', implemented: true },
-            { label: 'Batches', icon: <Users size={17} />, to: '/admin/academic/batches', implemented: true },
-            { label: 'Sections', icon: <BookOpen size={17} />, to: '/admin/academic/sections', implemented: true },
+            {
+              label: 'Departments & Programs',
+              icon: <Layers size={18} />,
+              to: '/admin/academic/departments',
+              implemented: true,
+              subItems: [
+                { label: 'Departments', to: '/admin/academic/departments' },
+                { label: 'Programs', to: '/admin/academic/programs' },
+                { label: 'Academic Years', to: '/admin/academic/years' },
+                { label: 'Semesters', to: '/admin/academic/semesters' },
+              ],
+            },
+            {
+              label: 'Students & Sections',
+              icon: <Users size={18} />,
+              to: '/admin/people/students',
+              implemented: true,
+              subItems: [
+                { label: 'Students Roster', to: '/admin/people/students' },
+                { label: 'Sections', to: '/admin/academic/sections' },
+                { label: 'Batches', to: '/admin/academic/batches' },
+              ],
+            },
+            {
+              label: 'Faculty & Courses',
+              icon: <GraduationCap size={18} />,
+              to: '/admin/people/faculty',
+              implemented: true,
+              subItems: [
+                { label: 'Faculty Directory', to: '/admin/people/faculty' },
+                { label: 'Course Catalog', to: '/admin/courses' },
+              ],
+            },
           ],
         },
         {
-          groupTitle: 'Campus & Catalog',
+          groupTitle: 'TIMETABLE ENGINE',
           items: [
-            { label: 'Courses', icon: <BookOpen size={17} />, to: '/admin/courses', implemented: true },
-            { label: 'Buildings', icon: <Building2 size={17} />, to: '/admin/campus/buildings', implemented: true },
-            { label: 'Rooms', icon: <DoorOpen size={17} />, to: '/admin/campus/rooms', implemented: true },
+            {
+              label: 'Timetable Workspace',
+              icon: <CalendarDays size={18} />,
+              to: '/admin/timetable/versions',
+              implemented: true,
+            },
+            {
+              label: 'Generation & Conflicts',
+              icon: <Sparkles size={18} />,
+              to: '/admin/timetable/generate',
+              implemented: true,
+            },
+            {
+              label: 'Versions & Publishing',
+              icon: <History size={18} />,
+              to: '/admin/timetable/versions',
+              implemented: true,
+            },
           ],
         },
         {
-          groupTitle: 'People',
+          groupTitle: 'CAMPUS INFRASTRUCTURE',
           items: [
-            { label: 'Faculty', icon: <GraduationCap size={17} />, to: '/admin/people/faculty', implemented: true },
-            { label: 'Students', icon: <School size={17} />, to: '/admin/people/students', implemented: true },
+            {
+              label: 'Buildings, Rooms & Labs',
+              icon: <Building2 size={18} />,
+              to: '/admin/campus/buildings',
+              implemented: true,
+              subItems: [
+                { label: 'Buildings', to: '/admin/campus/buildings' },
+                { label: 'Rooms & Labs', to: '/admin/campus/rooms' },
+              ],
+            },
+            {
+              label: 'Time Slots & Calendar',
+              icon: <Clock size={18} />,
+              to: '/admin/academic/semesters',
+              implemented: true,
+            },
           ],
         },
         {
-          groupTitle: 'Timetable Engine',
+          groupTitle: 'DATA & INTEGRATION',
           items: [
-            { label: 'Versions & Review', icon: <CalendarDays size={17} />, to: '/admin/timetable/versions', implemented: true },
-            { label: 'Generate Timetable', icon: <Sparkles size={17} />, to: '/admin/timetable/generate', implemented: true },
+            {
+              label: 'Import & Validation',
+              icon: <UploadCloud size={18} />,
+              to: '/admin/campus/rooms',
+              implemented: true,
+            },
+            {
+              label: 'Reports & Analytics',
+              icon: <BarChart3 size={18} />,
+              to: '/admin/resources',
+              implemented: false,
+            },
           ],
         },
         {
-          groupTitle: 'System & Records',
+          groupTitle: 'SYSTEM',
           items: [
-            { label: 'Resources', icon: <Package size={17} />, to: '/admin/resources', implemented: false },
-            { label: 'Change Requests', icon: <FileText size={17} />, to: '/admin/requests', implemented: false },
-            { label: 'Notifications', icon: <Bell size={17} />, to: '/admin/notifications', implemented: false },
-            { label: 'Audit Logs', icon: <ClipboardList size={17} />, to: '/admin/audit', implemented: false },
+            {
+              label: 'Users & Roles',
+              icon: <ShieldCheck size={18} />,
+              to: '/admin/audit',
+              implemented: false,
+            },
+            {
+              label: 'Audit Logs',
+              icon: <ClipboardList size={18} />,
+              to: '/admin/audit',
+              implemented: false,
+            },
+            {
+              label: 'Settings',
+              icon: <Settings size={18} />,
+              to: '/admin/resources',
+              implemented: false,
+            },
           ],
         },
       ];
     case 'FACULTY':
       return [
         {
-          groupTitle: 'Overview',
+          groupTitle: 'GENERAL',
           items: [
-            { label: 'Dashboard', icon: <LayoutDashboard size={17} />, to: '/faculty', implemented: true },
+            { label: 'Dashboard', icon: <LayoutDashboard size={18} />, to: '/faculty', implemented: true },
           ],
         },
         {
-          groupTitle: 'Schedules & Teaching',
+          groupTitle: 'SCHEDULES & TEACHING',
           items: [
-            { label: 'My Timetable', icon: <CalendarDays size={17} />, to: '/faculty/timetable', implemented: true },
-            { label: 'Dept. Timetable', icon: <Building2 size={17} />, to: '/faculty/dept-timetable', implemented: false },
+            { label: 'My Timetable', icon: <CalendarDays size={18} />, to: '/faculty/timetable', implemented: true },
+            { label: 'Dept. Timetable', icon: <Building2 size={18} />, to: '/faculty/dept-timetable', implemented: false },
           ],
         },
       ];
     case 'STUDENT':
       return [
         {
-          groupTitle: 'Overview',
+          groupTitle: 'GENERAL',
           items: [
-            { label: 'Dashboard', icon: <LayoutDashboard size={17} />, to: '/student', implemented: true },
+            { label: 'Dashboard', icon: <LayoutDashboard size={18} />, to: '/student', implemented: true },
           ],
         },
         {
-          groupTitle: 'Academic Schedule',
+          groupTitle: 'ACADEMIC SCHEDULE',
           items: [
-            { label: 'My Timetable', icon: <CalendarDays size={17} />, to: '/student/timetable', implemented: true },
+            { label: 'My Timetable', icon: <CalendarDays size={18} />, to: '/student/timetable', implemented: true },
           ],
         },
       ];
@@ -134,49 +220,53 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ role, mobileOpen = false, onCloseMobile }) => {
   const location = useLocation();
+  const [collapsed, setCollapsed] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const navGroups = getNavGroups(role);
 
-  const roleLabels: Record<UserRole, string> = {
-    ADMIN: 'System Admin',
-    FACULTY: 'Faculty Member',
-    STUDENT: 'Enrolled Student',
+  const toggleExpand = (label: string) => {
+    setExpandedItems((prev) => ({
+      ...prev,
+      [label]: !prev[label],
+    }));
   };
 
-  const roleBadgeStyles: Record<UserRole, string> = {
-    ADMIN: 'bg-primary-900/90 text-primary-100 border-primary-800',
-    FACULTY: 'bg-sky-900/80 text-sky-100 border-sky-800',
-    STUDENT: 'bg-emerald-900/80 text-emerald-100 border-emerald-800',
+  const isItemActive = (item: NavItem): boolean => {
+    if (item.to === '/admin' || item.to === '/faculty' || item.to === '/student') {
+      return location.pathname === item.to;
+    }
+    if (item.subItems) {
+      return item.subItems.some((sub) => location.pathname === sub.to || location.pathname.startsWith(sub.to));
+    }
+    return location.pathname === item.to || location.pathname.startsWith(item.to);
   };
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-slate-900 text-slate-100 border-r border-slate-800">
+    <div className="flex flex-col h-full bg-[#10243A] text-[#F4F7FB] border-r border-[#2B4057] select-none">
       {/* Brand Header */}
-      <div className="h-16 flex items-center justify-between px-5 border-b border-slate-800/90 shrink-0 bg-slate-950/40">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center shrink-0 shadow-sm border border-primary-500/30">
-            <span className="text-white font-bold text-sm tracking-wider">R</span>
+      <div className="h-[70px] flex items-center justify-between px-5 border-b border-[#2B4057] shrink-0 bg-[#10243A]">
+        <Link to={role === 'ADMIN' ? '/admin' : role === 'FACULTY' ? '/faculty' : '/student'} className="flex items-center gap-3 min-w-0 group">
+          <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0 text-[#36BDB2] group-hover:scale-105 transition-transform">
+            <GraduationCap size={22} className="text-[#36BDB2]" />
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-bold text-white tracking-tight leading-none truncate">
-                RIO-MJP
+          {!collapsed && (
+            <div className="min-w-0">
+              <span className="text-xl font-extrabold text-white tracking-tight leading-none block">
+                RIO
               </span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider bg-primary-500/20 text-primary-300 px-1.5 py-0.2 rounded border border-primary-500/30">
-                ERP
-              </span>
+              <p className="text-[10px] text-[#B8C7D9] leading-tight mt-0.5 font-normal tracking-wide">
+                Campus Assistant<br />& Timetable Engine
+              </p>
             </div>
-            <p className="text-[11px] text-slate-400 mt-1 truncate">
-              Campus Intelligence
-            </p>
-          </div>
-        </div>
+          )}
+        </Link>
 
         {/* Mobile close button */}
         {onCloseMobile && (
           <button
             type="button"
             onClick={onCloseMobile}
-            className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="lg:hidden p-1.5 rounded-lg text-[#B8C7D9] hover:text-white hover:bg-[#1D3B5C] transition-colors"
             aria-label="Close navigation"
           >
             <X size={18} />
@@ -184,69 +274,110 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, mobileOpen = false, onCl
         )}
       </div>
 
-      {/* Role Context Chip */}
-      <div className="px-5 py-3 border-b border-slate-800/60 bg-slate-900/50">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium text-slate-400">Context:</span>
-          <span
-            className={`text-[10px] font-semibold tracking-wide uppercase px-2 py-0.5 rounded-full border ${roleBadgeStyles[role]}`}
-          >
-            {roleLabels[role]}
-          </span>
-        </div>
-      </div>
-
       {/* Navigation Groups */}
-      <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-4">
+      <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-4 scrollbar-thin">
         {navGroups.map((group, gIdx) => (
           <div key={gIdx} className="space-y-1">
-            {group.groupTitle && (
-              <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+            {group.groupTitle && !collapsed && (
+              <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-[#8190A5] mb-1.5">
                 {group.groupTitle}
               </p>
             )}
+            {group.groupTitle && collapsed && (
+              <div className="h-px bg-[#2B4057] my-2 mx-1" />
+            )}
             <div className="space-y-0.5">
               {group.items.map((item) => {
-                const isActive =
-                  item.to === '/admin' || item.to === '/faculty' || item.to === '/student'
-                    ? location.pathname === item.to
-                    : location.pathname.startsWith(item.to);
+                const active = isItemActive(item);
+                const hasSub = item.subItems && item.subItems.length > 0;
+                const isExpanded = !!expandedItems[item.label] || active;
 
                 if (item.implemented) {
                   return (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      onClick={onCloseMobile}
-                      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all group ${
-                        isActive
-                          ? 'bg-primary-600 text-white font-semibold shadow-xs'
-                          : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                      }`}
-                    >
-                      <span
-                        className={`shrink-0 transition-colors ${
-                          isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'
-                        }`}
-                      >
-                        {item.icon}
-                      </span>
-                      <span className="truncate">{item.label}</span>
-                    </Link>
+                    <div key={item.label} className="space-y-0.5">
+                      <div className="flex items-center">
+                        <Link
+                          to={item.to}
+                          onClick={onCloseMobile}
+                          title={collapsed ? item.label : undefined}
+                          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-colors w-full group ${
+                            active
+                              ? 'bg-[#2B568F] text-white font-semibold shadow-xs'
+                              : 'text-[#B8C7D9] hover:bg-[#1D3B5C] hover:text-[#F4F7FB]'
+                          }`}
+                        >
+                          <span
+                            className={`shrink-0 transition-colors ${
+                              active ? 'text-white' : 'text-[#B8C7D9] group-hover:text-white'
+                            }`}
+                          >
+                            {item.icon}
+                          </span>
+                          {!collapsed && (
+                            <span className="truncate flex-1 text-left">{item.label}</span>
+                          )}
+                        </Link>
+                        {hasSub && !collapsed && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              toggleExpand(item.label);
+                            }}
+                            className="p-1.5 text-[#B8C7D9] hover:text-white rounded-md hover:bg-[#1D3B5C] transition-colors"
+                            aria-label={`Toggle ${item.label} submenu`}
+                          >
+                            <ChevronDown
+                              size={13}
+                              className={`transition-transform duration-200 ${
+                                isExpanded ? 'rotate-180' : ''
+                              }`}
+                            />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Sub-items for fast child navigation */}
+                      {hasSub && !collapsed && isExpanded && (
+                        <div className="pl-9 pr-2 py-1 space-y-1">
+                          {item.subItems!.map((sub) => {
+                            const isSubActive = location.pathname === sub.to;
+                            return (
+                              <Link
+                                key={sub.to}
+                                to={sub.to}
+                                onClick={onCloseMobile}
+                                className={`block px-2.5 py-1 rounded text-[11px] transition-colors truncate ${
+                                  isSubActive
+                                    ? 'bg-[#1D3B5C] text-white font-semibold'
+                                    : 'text-[#8190A5] hover:text-white hover:bg-[#142B43]'
+                                }`}
+                              >
+                                {sub.label}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   );
                 }
 
                 return (
                   <div
-                    key={item.to}
-                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-slate-500 cursor-not-allowed select-none transition-colors"
-                    title="Module scheduled for next development stage"
+                    key={item.label}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-[#8190A5]/60 cursor-not-allowed select-none transition-colors"
+                    title="Module scheduled for upcoming deployment"
                   >
-                    <span className="text-slate-600 shrink-0">{item.icon}</span>
-                    <span className="truncate">{item.label}</span>
-                    <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider bg-slate-800/90 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700/50">
-                      Soon
-                    </span>
+                    <span className="shrink-0 text-[#8190A5]/60">{item.icon}</span>
+                    {!collapsed && (
+                      <>
+                        <span className="truncate">{item.label}</span>
+                        <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider bg-[#142B43] text-[#8190A5] px-1.5 py-0.2 rounded border border-[#2B4057]">
+                          Soon
+                        </span>
+                      </>
+                    )}
                   </div>
                 );
               })}
@@ -255,14 +386,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, mobileOpen = false, onCl
         ))}
       </nav>
 
-      {/* Institutional Footer */}
-      <div className="p-3.5 border-t border-slate-800/90 bg-slate-950/30 shrink-0 text-center">
-        <p className="text-[11px] font-medium text-slate-400">
-          RIO-MJP Enterprise ERP
-        </p>
-        <p className="text-[10px] text-slate-400 mt-0.5">
-          Academic Information System
-        </p>
+      {/* Collapse Sidebar Footer Toggle */}
+      <div className="p-3 border-t border-[#2B4057] bg-[#10243A] shrink-0">
+        <button
+          type="button"
+          onClick={() => setCollapsed(!collapsed)}
+          className="w-full hidden lg:flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[#B8C7D9] hover:text-white hover:bg-[#1D3B5C] transition-colors"
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          {!collapsed && <span>Collapse Sidebar</span>}
+        </button>
+        <div className="lg:hidden text-center py-1">
+          <p className="text-[10px] text-[#8190A5]">RIO ERP System</p>
+        </div>
       </div>
     </div>
   );
@@ -270,7 +406,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, mobileOpen = false, onCl
   return (
     <>
       {/* Desktop Persistent Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 min-h-screen shrink-0 sticky top-0 h-screen z-20">
+      <aside
+        className={`hidden lg:flex flex-col min-h-screen shrink-0 sticky top-0 h-screen z-20 transition-all duration-200 ${
+          collapsed ? 'w-[72px]' : 'w-[250px]'
+        }`}
+      >
         {sidebarContent}
       </aside>
 
@@ -284,7 +424,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, mobileOpen = false, onCl
             aria-hidden="true"
           />
           {/* Drawer container */}
-          <div className="relative flex flex-col w-72 max-w-[85vw] h-full shadow-2xl z-10 animate-in slide-in-from-left duration-200">
+          <div className="relative flex flex-col w-[260px] max-w-[85vw] h-full shadow-2xl z-10 animate-in slide-in-from-left duration-200">
             {sidebarContent}
           </div>
         </div>
