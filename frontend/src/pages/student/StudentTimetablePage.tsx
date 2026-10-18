@@ -8,11 +8,10 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import { getStudentMyTimetable } from '@/api/timetable';
-import { PageHeader, StatCard, LoadingState, ErrorState } from '@/components/common';
+import { LoadingState, ErrorState } from '@/components/common';
 import { PersonalTimetableGrid } from '@/components/timetable/PersonalTimetableGrid';
 
 export const StudentTimetablePage: React.FC = () => {
-
   const {
     data: timetable,
     isLoading,
@@ -26,7 +25,7 @@ export const StudentTimetablePage: React.FC = () => {
     staleTime: 60_000,
   });
 
-  const entries = timetable?.entries || [];
+  const entries = React.useMemo(() => timetable?.entries || [], [timetable?.entries]);
 
   // Computed summary metrics from real returned schedule data
   const distinctCourses = React.useMemo(() => {
@@ -56,24 +55,32 @@ export const StudentTimetablePage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="My Class Schedule"
-        subtitle={academicLabel}
-        actions={
-          <button
-            type="button"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-xs disabled:opacity-50"
-          >
-            <RefreshCw size={13} className={isFetching ? 'animate-spin' : ''} />
-            <span>Refresh</span>
-          </button>
-        }
-      />
+      {/* ── Page Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#E5ECF5]">
+        <div>
+          <h3 className="text-xl sm:text-2xl font-extrabold text-[#17243B] tracking-tight">
+            My Class Schedule
+          </h3>
+          <p className="text-xs text-[#71819A] mt-1 font-medium">
+            {academicLabel}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[#E5ECF5] bg-white text-xs font-semibold text-[#17243B] hover:bg-[#F1F6FF] hover:border-[#D0E2FC] transition-all shadow-xs self-start sm:self-auto disabled:opacity-50"
+        >
+          <RefreshCw size={13} className={isFetching ? 'animate-spin text-[#4B83D1]' : 'text-[#71819A]'} />
+          <span>Refresh</span>
+        </button>
+      </div>
 
       {isLoading ? (
-        <LoadingState message="Loading your class timetable from campus database…" />
+        <div className="py-16">
+          <LoadingState message="Loading your class timetable from campus database…" />
+        </div>
       ) : isError ? (
         <ErrorState
           message={(error as Error)?.message || 'Failed to load class schedule.'}
@@ -81,47 +88,95 @@ export const StudentTimetablePage: React.FC = () => {
         />
       ) : (
         <>
-          {/* Quick Stats Banner */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard
-              label="Weekly Class Hours"
-              value={timetable?.total_class_hours ?? entries.length}
-              sub="Official lecture & lab hours"
-              icon={<Clock size={20} />}
-              variant="primary"
-            />
-            <StatCard
-              label="Active Courses"
-              value={distinctCourses}
-              sub="Scheduled curriculum subjects"
-              icon={<BookOpen size={20} />}
-              variant="default"
-            />
-            <StatCard
-              label="Assigned Section"
-              value={timetable?.section_name ? `Sec ${timetable.section_name}` : 'Not assigned'}
-              sub={timetable?.batch_name ? `Batch ${timetable.batch_name}` : 'Section-wide'}
-              icon={<Users size={20} />}
-              variant="warning"
-            />
-            <StatCard
-              label="Instructors"
-              value={distinctFaculty}
-              sub="Faculty members teaching"
-              icon={<GraduationCap size={20} />}
-              variant="default"
-            />
+          {/* ── Compact Pastel Summary Cards ── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+            {/* Soft Blue: Weekly Class Hours */}
+            <div className="p-4 rounded-[20px] bg-[#F1F6FF] border border-[#E1ECF8] flex flex-col justify-between transition-all hover:shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#4B83D1] uppercase tracking-wider">
+                  Weekly Hours
+                </span>
+                <div className="w-8 h-8 rounded-full bg-white text-[#4B83D1] flex items-center justify-center shadow-2xs">
+                  <Clock size={15} />
+                </div>
+              </div>
+              <div className="mt-3">
+                <p className="text-2xl font-extrabold text-[#17243B] font-tabular">
+                  {timetable?.total_class_hours ?? entries.length}
+                </p>
+                <p className="text-xs text-[#71819A] mt-0.5 truncate">Lecture & practical hours</p>
+              </div>
+            </div>
+
+            {/* Lavender: Active Courses */}
+            <div className="p-4 rounded-[20px] bg-[#F0EBFF] border border-[#E5DEFF] flex flex-col justify-between transition-all hover:shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#6C5CE7] uppercase tracking-wider">
+                  Active Subjects
+                </span>
+                <div className="w-8 h-8 rounded-full bg-white text-[#6C5CE7] flex items-center justify-center shadow-2xs">
+                  <BookOpen size={15} />
+                </div>
+              </div>
+              <div className="mt-3">
+                <p className="text-2xl font-extrabold text-[#17243B] font-tabular">
+                  {distinctCourses}
+                </p>
+                <p className="text-xs text-[#71819A] mt-0.5 truncate">Curriculum course units</p>
+              </div>
+            </div>
+
+            {/* Mint: Assigned Section & Cohort */}
+            <div className="p-4 rounded-[20px] bg-[#DDF7EC] border border-[#C6F2DF] flex flex-col justify-between transition-all hover:shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#1B7A53] uppercase tracking-wider">
+                  Section Cohort
+                </span>
+                <div className="w-8 h-8 rounded-full bg-white text-[#1B7A53] flex items-center justify-center shadow-2xs">
+                  <Users size={15} />
+                </div>
+              </div>
+              <div className="mt-3">
+                <p className="text-2xl font-extrabold text-[#17243B] truncate">
+                  {timetable?.section_name ? `Sec ${timetable.section_name}` : 'Not assigned'}
+                </p>
+                <p className="text-xs text-[#71819A] mt-0.5 truncate">
+                  {timetable?.batch_name ? `Lab Batch ${timetable.batch_name}` : 'Section Cohort'}
+                </p>
+              </div>
+            </div>
+
+            {/* Pale Amber: Instructors */}
+            <div className="p-4 rounded-[20px] bg-[#FFF5E6] border border-[#FFE8CC] flex flex-col justify-between transition-all hover:shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#D97706] uppercase tracking-wider">
+                  Instructors
+                </span>
+                <div className="w-8 h-8 rounded-full bg-white text-[#D97706] flex items-center justify-center shadow-2xs">
+                  <GraduationCap size={15} />
+                </div>
+              </div>
+              <div className="mt-3">
+                <p className="text-2xl font-extrabold text-[#17243B] font-tabular">
+                  {distinctFaculty}
+                </p>
+                <p className="text-xs text-[#71819A] mt-0.5 truncate">Assigned faculty members</p>
+              </div>
+            </div>
           </div>
 
-          {/* Timetable Grid */}
-          <PersonalTimetableGrid
-            entries={entries}
-            role="STUDENT"
-            emptyMessage="No published timetable entries found for your section/batch"
-          />
+          {/* ── Timetable Grid / Agenda ── */}
+          <div className="bg-white rounded-[24px] border border-[#E5ECF5] p-4 sm:p-5 shadow-xs">
+            <PersonalTimetableGrid
+              entries={entries}
+              role="STUDENT"
+              emptyMessage="No published timetable entries found for your section/batch"
+            />
+          </div>
         </>
       )}
     </div>
   );
 };
+
 export default StudentTimetablePage;

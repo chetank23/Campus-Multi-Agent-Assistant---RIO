@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { academicYearsApi } from '@/api/academicYears';
+import { SignOutConfirmDialog } from '@/components/common';
 import type { UserRole } from '@/auth/auth.types';
 
 interface TopbarProps {
@@ -28,6 +29,7 @@ const roleLabel: Record<UserRole, string> = {
 export const Topbar: React.FC<TopbarProps> = ({ onToggleMobile }) => {
   const { user, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
@@ -64,14 +66,23 @@ export const Topbar: React.FC<TopbarProps> = ({ onToggleMobile }) => {
     };
   }, [menuOpen]);
 
-  async function handleLogout() {
+  const handleOpenSignOutConfirm = () => {
+    setMenuOpen(false);
+    setShowSignOutConfirm(true);
+  };
+
+  const handleLogoutConfirm = async () => {
+    if (loggingOut) return;
     setLoggingOut(true);
     try {
       await logout();
+      setShowSignOutConfirm(false);
+    } catch (err) {
+      console.error('Logout error:', err);
     } finally {
       setLoggingOut(false);
     }
-  }
+  };
 
   if (!user) return null;
 
@@ -192,18 +203,25 @@ export const Topbar: React.FC<TopbarProps> = ({ onToggleMobile }) => {
               <div className="p-1.5">
                 <button
                   type="button"
-                  onClick={handleLogout}
+                  onClick={handleOpenSignOutConfirm}
                   disabled={loggingOut}
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
                 >
                   <LogOut size={14} />
-                  <span>{loggingOut ? 'Signing out…' : 'Sign out of portal'}</span>
+                  <span>Sign out of portal</span>
                 </button>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      <SignOutConfirmDialog
+        isOpen={showSignOutConfirm}
+        isProcessing={loggingOut}
+        onConfirm={handleLogoutConfirm}
+        onCancel={() => setShowSignOutConfirm(false)}
+      />
     </header>
   );
 };

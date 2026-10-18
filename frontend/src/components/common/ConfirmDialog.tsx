@@ -9,6 +9,9 @@ interface ConfirmDialogProps {
   cancelLabel?: string;
   isDestructive?: boolean;
   isProcessing?: boolean;
+  processingLabel?: string;
+  icon?: React.ReactNode;
+  iconContainerClassName?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -21,6 +24,9 @@ export function ConfirmDialog({
   cancelLabel = 'Cancel',
   isDestructive = true,
   isProcessing = false,
+  processingLabel = 'Processing…',
+  icon,
+  iconContainerClassName,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -55,12 +61,14 @@ export function ConfirmDialog({
           <div className="flex items-start gap-4">
             <div
               className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
-                isDestructive
-                  ? 'bg-rose-50 text-rose-600 border border-rose-200/80'
-                  : 'bg-primary-50 text-primary-600 border border-primary-200/80'
+                iconContainerClassName
+                  ? iconContainerClassName
+                  : isDestructive
+                    ? 'bg-rose-50 text-rose-600 border border-rose-200/80'
+                    : 'bg-primary-50 text-primary-600 border border-primary-200/80'
               }`}
             >
-              <AlertTriangle size={20} />
+              {icon ?? <AlertTriangle size={20} />}
             </div>
             <div className="min-w-0">
               <h3 id="confirm-dialog-title" className="text-base font-semibold text-slate-900 mb-1.5 tracking-tight">
@@ -90,7 +98,7 @@ export function ConfirmDialog({
             }`}
           >
             {isProcessing && <Loader2 size={13} className="animate-spin" />}
-            <span>{isProcessing ? 'Processing…' : confirmLabel}</span>
+            <span>{isProcessing ? processingLabel : confirmLabel}</span>
           </button>
         </div>
       </div>

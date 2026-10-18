@@ -11,3 +11,4 @@ export * from './ErrorState';
 export * from './SearchBar';
 export * from './FilterBar';
 export * from './IconButton';
+export * from './SignOutConfirmDialog';

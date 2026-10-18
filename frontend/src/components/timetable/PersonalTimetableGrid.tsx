@@ -82,14 +82,28 @@ export const PersonalTimetableGrid: React.FC<PersonalTimetableGridProps> = ({
   }, [activeDay]);
 
   if (!entries || entries.length === 0) {
-    return (
-      <div className="bg-white rounded-xl border border-slate-200/90 p-12 text-center shadow-card">
-        <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center mb-3">
-          <CalendarDays size={24} />
+    if (role === 'STUDENT') {
+      return (
+        <div className="bg-[#F1F6FF]/60 rounded-[20px] border border-[#E5ECF5] p-10 sm:p-12 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-[#EBF3FE] border border-[#D0E2FC] text-[#4B83D1] mx-auto flex items-center justify-center mb-3.5 shadow-xs">
+            <CalendarDays size={26} />
+          </div>
+          <h3 className="text-sm font-bold text-[#17243B]">{emptyMessage}</h3>
+          <p className="text-xs text-[#71819A] mt-1.5 max-w-sm mx-auto leading-relaxed">
+            When an administrator publishes a verified timetable version for your section, your complete scheduled classes will appear here.
+          </p>
         </div>
-        <h3 className="text-sm font-semibold text-slate-900">{emptyMessage}</h3>
-        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-          When an administrator publishes a timetable version for your academic unit, your schedule will appear here.
+      );
+    }
+
+    return (
+      <div className="bg-[#F8FAFD] rounded-2xl border border-[#E3EBF6] p-10 sm:p-12 text-center my-2">
+        <div className="w-14 h-14 rounded-2xl bg-[#E4EEFF] text-[#3975D1] mx-auto flex items-center justify-center mb-3 shadow-2xs">
+          <CalendarDays size={26} />
+        </div>
+        <h3 className="text-sm font-bold text-[#101D36]">{emptyMessage}</h3>
+        <p className="text-xs text-[#647795] mt-1 max-w-sm mx-auto leading-relaxed">
+          When an administrator publishes a verified timetable version for your department, your complete teaching assignments will appear here.
         </p>
       </div>
     );
@@ -98,16 +112,16 @@ export const PersonalTimetableGrid: React.FC<PersonalTimetableGridProps> = ({
   return (
     <div className="space-y-4">
       {/* View Switcher and Day Filter */}
-      <div className="bg-white rounded-xl border border-slate-200/90 p-3 shadow-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-white rounded-2xl border border-[#E3EBF6] p-3 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Day selection tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
           <button
             type="button"
             onClick={() => setActiveDay('ALL')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
               activeDay === 'ALL'
-                ? 'bg-primary-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                ? 'bg-[#3975D1] text-white shadow-xs'
+                : 'text-[#647795] hover:text-[#101D36] hover:bg-[#F1F6FD]'
             }`}
           >
             Full Week ({entries.length})
@@ -119,17 +133,17 @@ export const PersonalTimetableGrid: React.FC<PersonalTimetableGridProps> = ({
                 key={d}
                 type="button"
                 onClick={() => setActiveDay(d)}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                   activeDay === d
-                    ? 'bg-primary-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    ? 'bg-[#3975D1] text-white shadow-xs'
+                    : 'text-[#647795] hover:text-[#101D36] hover:bg-[#F1F6FD]'
                 }`}
               >
                 <span>{DAY_LABELS[d]}</span>
                 {count > 0 && (
                   <span
                     className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                      activeDay === d ? 'bg-primary-700 text-white' : 'bg-slate-200 text-slate-700'
+                      activeDay === d ? 'bg-[#2F65B8] text-white' : 'bg-[#E3EBF6] text-[#101D36]'
                     }`}
                   >
                     {count}

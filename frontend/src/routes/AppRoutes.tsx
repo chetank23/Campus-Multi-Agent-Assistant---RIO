@@ -22,6 +22,8 @@ import { useAuth } from '@/auth/AuthProvider';
 import { ProtectedRoute } from '@/auth/ProtectedRoute';
 import { RoleRoute } from '@/auth/RoleRoute';
 import { AppShell } from '@/components/layout/AppShell';
+import { FacultyLayout } from '@/layouts/FacultyLayout';
+import { StudentLayout } from '@/layouts/StudentLayout';
 import { EmptyState, LoadingState } from '@/components/common';
 
 import { Login } from '@/pages/Login';
@@ -129,7 +131,7 @@ export function AppRoutes() {
         <Route
           element={
             <RoleRoute roles={['FACULTY']}>
-              <AppShell title="Faculty Dashboard" />
+              <FacultyLayout />
             </RoleRoute>
           }
         >
@@ -144,7 +146,7 @@ export function AppRoutes() {
         <Route
           element={
             <RoleRoute roles={['STUDENT']}>
-              <AppShell title="Student Dashboard" />
+              <StudentLayout />
             </RoleRoute>
           }
         >
