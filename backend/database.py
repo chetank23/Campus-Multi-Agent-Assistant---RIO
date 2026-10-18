@@ -2,19 +2,13 @@
 backend/database.py
 -------------------
 Database connection and session management.
+Re-exports the central engine, SessionLocal, and DATABASE_URL from backend.config
+to ensure a single, unified connection pool with pool_pre_ping=True enabled
+across all API routes.
 """
 
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
+from backend.config import DATABASE_URL, engine, SessionLocal
 
-load_dotenv(".env")
-
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@localhost/campus_ai")
-
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
     db = SessionLocal()

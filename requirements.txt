@@ -1,12 +1,25 @@
-# Stage 1 — Database only
-# Add nothing beyond this until Stage 2+ is reached per the roadmap.
+# Database & Migrations
 sqlalchemy>=2.0
 alembic
 psycopg[binary]
 python-dotenv
+
+# Web Framework & ASGI Server
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+python-multipart>=0.0.9
+
+# Scheduling & Optimization Engine
+ortools>=9.8.0
+
+# Authentication & Security
 pydantic>=2.0
+email-validator
 passlib[bcrypt]
 bcrypt<4.0.0
-Faker
 PyJWT
-email-validator
+
+# Testing & Utilities
+Faker
+httpx>=0.27.0
+pytest>=8.0.0

@@ -16,7 +16,9 @@ from sqlalchemy.orm import sessionmaker
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_ENV_PATH)
 
-DATABASE_URL: str = os.environ["DATABASE_URL"]
+DATABASE_URL: str = os.environ.get("DATABASE_URL", "").strip()
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL environment variable is required and must be set")
 _DEFAULT_DEV_SECRET = "super-secret-key-for-dev-change-to-a-long-random-secret-at-least-32-bytes"
 SECRET_KEY: str = os.environ["SECRET_KEY"]
 if not SECRET_KEY or SECRET_KEY == _DEFAULT_DEV_SECRET:

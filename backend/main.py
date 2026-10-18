@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,11 @@ from backend.routes import (
 
 app = FastAPI(title="Campus AI System")
 
+@app.get("/health", tags=["system"])
+def health_check():
+    """Liveness & readiness probe for cloud hosting and monitoring."""
+    return {"status": "ok", "service": "rio-mjp-backend"}
+
 @app.exception_handler(IntegrityError)
 async def sqlalchemy_integrity_error_handler(request: Request, exc: IntegrityError):
     return JSONResponse(
@@ -21,9 +27,23 @@ async def sqlalchemy_integrity_error_handler(request: Request, exc: IntegrityErr
         }
     )
 
+# Determine CORS allowed origins:
+# In staging/production, configure ALLOWED_ORIGINS as comma-separated origins.
+# If unconfigured, default to standard local frontend development origins.
+_allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "").strip()
+if _allowed_origins_env:
+    allowed_origins = [origin.strip() for origin in _allowed_origins_env.split(",") if origin.strip()]
+else:
+    allowed_origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
