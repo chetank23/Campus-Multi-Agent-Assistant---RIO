@@ -1,0 +1,15 @@
+# ==============================================================================
+# Netlify Redirects & API Forwarding for RIO-MJP
+#
+# IMPORTANT - Order matters:
+# 1. API proxy rule(s) must appear FIRST so /api/* calls are not captured by SPA fallback.
+# 2. SPA client-side routing fallback must appear LAST.
+# ==============================================================================
+
+# Production API Forwarding Rule (Reverse Proxy):
+# When your backend service is deployed (e.g., on Render), uncomment the line below
+# and replace the target URL with your verified backend service origin:
+# /api/*  https://YOUR-BACKEND-SERVICE.onrender.com/:splat  200!
+
+# SPA client-side routing fallback for React Router:
+/*  /index.html  200

@@ -59,3 +59,38 @@ def test_get_me_expired_or_malformed_token():
 def test_get_me_missing_token():
     response = client.get("/auth/me")
     assert response.status_code == 401
+
+def test_refresh_token_success(get_seeded_users):
+    fresh_client = TestClient(app)
+    email = get_seeded_users["ADMIN"]
+    login_resp = fresh_client.post("/auth/login", json={"email": email, "password": "Test@1234"})
+    assert login_resp.status_code == 200
+    assert "refresh_token" in login_resp.cookies
+
+    refresh_resp = fresh_client.post("/auth/refresh")
+    assert refresh_resp.status_code == 200
+    data = refresh_resp.json()
+    assert "access_token" in data
+    assert data["token_type"] == "bearer"
+
+def test_refresh_token_missing_cookie():
+    fresh_client = TestClient(app)
+    response = fresh_client.post("/auth/refresh")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Refresh token missing"
+
+def test_refresh_token_invalid_cookie():
+    fresh_client = TestClient(app)
+    fresh_client.cookies.set("refresh_token", "invalid.refresh.token")
+    response = fresh_client.post("/auth/refresh")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid or expired refresh token"
+
+def test_logout_clears_cookie():
+    fresh_client = TestClient(app)
+    response = fresh_client.post("/auth/logout")
+    assert response.status_code == 200
+    assert response.json()["message"] == "Logged out successfully"
+    set_cookie = response.headers.get("set-cookie", "")
+    assert "refresh_token=" in set_cookie
+    assert "max-age=0" in set_cookie.lower() or "expires=" in set_cookie.lower()

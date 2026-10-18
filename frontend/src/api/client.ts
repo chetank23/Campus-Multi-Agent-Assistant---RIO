@@ -29,9 +29,43 @@ export function getAccessToken(): string | null {
   return _accessToken;
 }
 
+/**
+ * Resolves the API base URL.
+ *
+ * Defaults to '/api' so all requests route through:
+ *  - the Vite dev-server proxy during local development (`localhost:5173/api` → backend root)
+ *  - the Netlify reverse-proxy / rewrite rule in production (`site/api` → backend root)
+ *
+ * This preserves same-origin cookie delivery for the httpOnly refresh_token.
+ *
+ * If a custom base URL is specified via `VITE_API_BASE_URL` (for example, when
+ * targeting a standalone backend directly in production without a reverse proxy):
+ *  - Empty or '/api' defaults to '/api'.
+ *  - In local development (`import.meta.env.DEV`), if pointing to localhost/127.0.0.1:8000,
+ *    it defaults to '/api' so the Vite dev-server proxy handles it with same-origin cookies.
+ *  - Otherwise, trims whitespace and strips trailing slashes to avoid double slashes.
+ */
+export function getApiBaseUrl(): string {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (!envUrl || typeof envUrl !== 'string') {
+    return '/api';
+  }
+  const trimmed = envUrl.trim();
+  if (!trimmed || trimmed === '/api') {
+    return '/api';
+  }
+  if (
+    import.meta.env.DEV &&
+    (trimmed.includes('localhost:8000') || trimmed.includes('127.0.0.1:8000'))
+  ) {
+    return '/api';
+  }
+  return trimmed.replace(/\/+$/, '');
+}
+
 export const apiClient = axios.create({
-  // All API traffic goes through the Vite proxy at /api → backend root
-  baseURL: '/api',
+  // Defaults to /api; configurable via VITE_API_BASE_URL if required
+  baseURL: getApiBaseUrl(),
   withCredentials: true, // send the httpOnly refresh_token cookie
   headers: {
     'Content-Type': 'application/json',

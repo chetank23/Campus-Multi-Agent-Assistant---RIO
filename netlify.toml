@@ -1,0 +1,23 @@
+# Netlify Configuration for RIO-MJP
+# Reference: https://docs.netlify.com/configure-builds/file-based-configuration/
+
+[build]
+  base = "frontend"
+  publish = "dist"
+  command = "npm run build"
+
+# API forwarding rule (reverse proxy) to the backend service.
+# Must appear BEFORE the SPA fallback rule to avoid swallowing API requests.
+# When your backend is deployed (e.g., on Render), uncomment and configure the destination:
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://YOUR-BACKEND-SERVICE.onrender.com/:splat"
+#   status = 200
+#   force = true
+
+# SPA client-side routing fallback:
+# Direct route loads (e.g., /admin, /faculty, /student, /login) will serve index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
