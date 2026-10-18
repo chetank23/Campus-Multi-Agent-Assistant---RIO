@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   ClipboardList,
   Settings,
+  Boxes,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -128,6 +129,12 @@ function getNavGroups(role: UserRole): NavGroup[] {
                 { label: 'Buildings', to: '/admin/campus/buildings' },
                 { label: 'Rooms & Labs', to: '/admin/campus/rooms' },
               ],
+            },
+            {
+              label: 'Resource Management',
+              icon: <Boxes size={18} />,
+              to: '/admin/resources',
+              implemented: true,
             },
             {
               label: 'Time Slots & Calendar',

@@ -49,6 +49,7 @@ import { StudentTimetablePage } from '@/pages/student/StudentTimetablePage';
 import { TimetableGenerationPage } from '@/pages/admin/timetable/TimetableGenerationPage';
 import { AdminTimetableVersionsPage } from '@/pages/admin/timetable/AdminTimetableVersionsPage';
 import { AdminTimetableReviewPage } from '@/pages/admin/timetable/AdminTimetableReviewPage';
+import { ResourcesPage } from '@/pages/admin/resources/ResourcesPage';
 
 import type { UserRole } from '@/auth/auth.types';
 
@@ -118,8 +119,8 @@ export function AppRoutes() {
           <Route path="/admin/timetable/versions" element={<AdminTimetableVersionsPage />} />
           <Route path="/admin/timetable/versions/:id" element={<AdminTimetableReviewPage />} />
           <Route path="/admin/timetable/generate" element={<TimetableGenerationPage />} />
-          {/* Placeholder routes for future Stage 6B+ modules */}
-          <Route path="/admin/resources" element={<PlaceholderPage label="Resources" />} />
+          {/* Stage 7 Resource Allocation & Administration Route */}
+          <Route path="/admin/resources" element={<ResourcesPage />} />
           <Route path="/admin/requests" element={<PlaceholderPage label="Change Requests" />} />
           <Route path="/admin/notifications" element={<PlaceholderPage label="Notifications" />} />
           <Route path="/admin/audit" element={<PlaceholderPage label="Audit Logs" />} />
