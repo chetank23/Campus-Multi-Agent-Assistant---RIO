@@ -18,6 +18,7 @@ from backend.models.identity import User
 from agents.state.state import AgentState
 from agents.query_agent.agent import run_query_agent
 from agents.scheduling_agent.agent import run_scheduling_agent
+from agents.resource_agent.agent import run_resource_agent
 
 
 def classify_intent(message: str) -> str:
@@ -26,7 +27,11 @@ def classify_intent(message: str) -> str:
     """
     msg = message.lower().strip()
 
-    # 1. Scheduling / Timetable Generation requests & confirmation
+    # 1. Resource Confirmation token: confirm res_prop_<hex>
+    if re.search(r"\b(?:confirm|execute|approve|proceed)\s+res_prop_[a-zA-Z0-9_-]+\b", msg):
+        return "RESOURCE_BOOKING"
+
+    # 2. Scheduling / Timetable Generation requests & confirmation
     scheduling_patterns = [
         r"\bgenerate\b.*\btimetable\b",
         r"\bcreate\b.*\btimetable\b",
@@ -49,19 +54,27 @@ def classify_intent(message: str) -> str:
         if re.search(pat, msg):
             return "TIMETABLE_GENERATION"
 
-    # 2. Resource Booking requests (Out-of-scope until Stage 9C)
-    booking_patterns = [
+    # 3. Resource Agent requests (Discovery, Availability, Booking, Status, Cancellation)
+    resource_patterns = [
+        r"\bbook\b\s+.*",
+        r"\breserve\b\s+.*",
         r"\bbook\b.*\b(hall|room|lab|projector|auditorium|facility|resource)\b",
         r"\breserve\b.*\b(hall|room|lab|projector|auditorium|facility|resource)\b",
-        r"\bbooking\s+request\b",
+        r"\bbooking\s+(request|requests|status|details)\b",
+        r"\bmy\s+bookings?\b",
+        r"\bshow\s+my\s+bookings?\b",
         r"\bcancel\b.*\bbooking\b",
         r"\bapprove\b.*\bbooking\b",
+        r"\breject\b.*\bbooking\b",
+        r"\b(check|find|search|show|list)\s+.*?\b(available|free|seminar\s+halls?|labs?|auditoriums?|projectors?|facilities|resources)\b",
+        r"\bis\b.*\b(available|free)\b",
+        r"\bavailability\b",
     ]
-    for pat in booking_patterns:
+    for pat in resource_patterns:
         if re.search(pat, msg):
             return "RESOURCE_BOOKING"
 
-    # 3. Informational Queries supported by Query Agent
+    # 4. Informational Queries supported by Query Agent
     query_patterns = [
         "timetable", "schedule", "class", "classes", "lecture", "timing", "when is",
         "ongoing", "upcoming", "next class", "faculty", "professor", "teacher",
@@ -96,12 +109,7 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
     elif intent == "RESOURCE_BOOKING":
         return {
             "intent": intent,
-            "selected_agent": "resource_agent_stub",
-            "final_response": (
-                "ℹ️ **Conversational resource booking is not enabled in Stage 9B.**\n\n"
-                "To submit, inspect, or manage bookings for campus facilities (seminar halls, labs, equipment), "
-                "please navigate to the **Resource Management workspace** (`/admin/resources`)."
-            ),
+            "selected_agent": "resource_agent",
         }
 
     elif intent == "CAMPUS_GREETING":
@@ -113,8 +121,9 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
                 "I can help you with verified campus operations, including:\n"
                 "- 📅 **Your Published Schedule**: *'What classes do I have on Monday?'*\n"
                 "- ⏱️ **Class Status**: *'What is my next class?'*\n"
+                "- 🏛️ **Resource Booking**: *'Book Seminar Hall A tomorrow 2pm to 4pm'* or *'Find seminar halls'*\n"
                 "- 🤖 **Timetable Generation**: *'Generate a timetable for CSE Semester 1'* (Admin only)\n"
-                "- 🏛️ **Campus Facilities**: *'Where is Room 101?'*\n"
+                "- 📍 **Campus Facilities**: *'Where is Room 101?'*\n"
                 "- 📚 **Course Catalog**: *'What are the credits for CS101?'*\n"
                 "- 👨‍🏫 **Faculty Directory**: *'Who is teaching Dr. Allison Hill?'*\n"
                 "- 📆 **University Calendar**: *'When are the upcoming holidays?'*\n\n"
@@ -135,12 +144,12 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
             "final_response": (
                 "🤔 I could not find a matching campus service for your request.\n\n"
                 "You can ask me about your published timetable, real-time class status, faculty profiles, "
-                "classroom locations, course credits, university calendar events, or timetable generation (Admin only)."
+                "classroom locations, course credits, resource bookings and facility availability, university calendar events, or timetable generation (Admin only)."
             ),
         }
 
 
-def route_supervisor(state: AgentState) -> Literal["query_agent_node", "scheduling_agent_node", "end_node"]:
+def route_supervisor(state: AgentState) -> Literal["query_agent_node", "scheduling_agent_node", "resource_agent_node", "end_node"]:
     """
     Conditional routing function for LangGraph.
     """
@@ -149,6 +158,8 @@ def route_supervisor(state: AgentState) -> Literal["query_agent_node", "scheduli
         return "query_agent_node"
     elif selected == "scheduling_agent":
         return "scheduling_agent_node"
+    elif selected == "resource_agent":
+        return "resource_agent_node"
     return "end_node"
 
 
@@ -171,6 +182,11 @@ def build_supervisor_graph(db: Session, user: User):
 
     workflow.add_node("scheduling_agent_node", scheduling_node_runner)
 
+    def resource_node_runner(state: AgentState) -> Dict[str, Any]:
+        return run_resource_agent(state=state, db=db, user=user)
+
+    workflow.add_node("resource_agent_node", resource_node_runner)
+
     def end_node(state: AgentState) -> Dict[str, Any]:
         return {}
 
@@ -185,12 +201,14 @@ def build_supervisor_graph(db: Session, user: User):
         {
             "query_agent_node": "query_agent_node",
             "scheduling_agent_node": "scheduling_agent_node",
+            "resource_agent_node": "resource_agent_node",
             "end_node": "end_node",
         },
     )
 
     workflow.add_edge("query_agent_node", "end_node")
     workflow.add_edge("scheduling_agent_node", "end_node")
+    workflow.add_edge("resource_agent_node", "end_node")
     workflow.add_edge("end_node", END)
 
     return workflow.compile()

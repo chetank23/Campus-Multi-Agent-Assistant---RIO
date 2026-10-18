@@ -17,7 +17,7 @@ export interface ChatToolCall {
 
 export interface ChatProposalData {
   proposal_id: string;
-  scope_display: {
+  scope_display?: {
     department?: string;
     program?: string;
     semester?: string;
@@ -28,6 +28,17 @@ export interface ChatProposalData {
   strategy?: string;
   readiness_status?: string;
   expires_at?: number;
+
+  // Stage 9C: Resource Booking Proposal Fields
+  resource_id?: number;
+  resource_name?: string;
+  resource_type?: string;
+  location?: string | null;
+  capacity?: number | null;
+  date?: string;
+  start_time?: string;
+  end_time?: string;
+  purpose?: string;
 }
 
 export interface ChatMessageResponse {

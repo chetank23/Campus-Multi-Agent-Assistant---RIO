@@ -180,6 +180,79 @@ QUERY_TOOL_DEFINITIONS = [
         },
         "allowed_roles": ["ADMIN"],
     },
+    {
+        "name": "discover_resources",
+        "description": "Searches campus facilities, seminar halls, and labs by type, capacity, and location.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "resource_type": {"type": "string"},
+                "min_capacity": {"type": "integer"},
+                "search_query": {"type": "string"},
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "check_resource_availability",
+        "description": "Checks authoritative interval conflicts against approved bookings and published timetables.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "resource_id": {"type": "integer"},
+                "date": {"type": "string"},
+                "start_time": {"type": "string"},
+                "end_time": {"type": "string"},
+            },
+            "required": ["resource_id", "date", "start_time", "end_time"],
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_user_bookings",
+        "description": "Retrieves the authenticated user's submitted resource bookings.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_booking_details",
+        "description": "Retrieves details of a specific resource booking request with role privacy masking.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "booking_id": {"type": "integer"},
+            },
+            "required": ["booking_id"],
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "confirm_resource_proposal",
+        "description": "Confirms an existing single-use resource booking proposal token and creates a PENDING reservation.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "proposal_id": {"type": "string"},
+            },
+            "required": ["proposal_id"],
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "execute_cancel_booking",
+        "description": "Cancels a resource booking request owned by the user or as Administrator.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "booking_id": {"type": "integer"},
+            },
+            "required": ["booking_id"],
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
 ]
 
 
@@ -270,6 +343,42 @@ def execute_tool(
                 db=db,
                 scope_dict=tool_args.get("scope", {}),
             )
+
+        elif tool_name == "discover_resources":
+            from agents.tools.resource_tools import discover_resources_data
+            return discover_resources_data(
+                db=db,
+                resource_type=tool_args.get("resource_type"),
+                min_capacity=tool_args.get("min_capacity"),
+                location_query=tool_args.get("location_query"),
+                search_query=tool_args.get("search_query"),
+            )
+
+        elif tool_name == "check_resource_availability":
+            from agents.tools.resource_tools import check_resource_availability_data
+            import datetime
+            d = datetime.date.fromisoformat(tool_args["date"]) if isinstance(tool_args.get("date"), str) else tool_args.get("date")
+            st = datetime.time.fromisoformat(tool_args["start_time"]) if isinstance(tool_args.get("start_time"), str) else tool_args.get("start_time")
+            et = datetime.time.fromisoformat(tool_args["end_time"]) if isinstance(tool_args.get("end_time"), str) else tool_args.get("end_time")
+            return check_resource_availability_data(
+                db=db,
+                resource_id=tool_args["resource_id"],
+                date=d,
+                start_time=st,
+                end_time=et,
+            )
+
+        elif tool_name == "get_user_bookings":
+            from agents.tools.resource_tools import get_user_bookings_data
+            return get_user_bookings_data(db=db, user=user)
+
+        elif tool_name == "get_booking_details":
+            from agents.tools.resource_tools import get_booking_details_data
+            return get_booking_details_data(db=db, booking_id=tool_args["booking_id"], user=user)
+
+        elif tool_name == "execute_cancel_booking":
+            from agents.tools.resource_tools import execute_cancel_booking_data
+            return execute_cancel_booking_data(db=db, booking_id=tool_args["booking_id"], user=user)
 
         else:
             return {"error": f"No implementation for tool '{tool_name}'."}

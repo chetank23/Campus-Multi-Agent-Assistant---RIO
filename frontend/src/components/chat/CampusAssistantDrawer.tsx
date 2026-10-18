@@ -16,7 +16,6 @@ import {
   Clock,
   Calendar,
   Building2,
-  BookOpen,
   ShieldCheck,
   CheckCircle2,
   AlertTriangle,
@@ -128,24 +127,24 @@ export const CampusAssistantDrawer: React.FC = () => {
   const getSuggestions = () => {
     if (user.role === 'STUDENT') {
       return [
+        { label: 'Find seminar halls', icon: <Building2 size={13} /> },
+        { label: 'Show my bookings', icon: <Clock size={13} /> },
         { label: 'What is my next class?', icon: <Clock size={13} /> },
-        { label: 'Show my timetable for Monday', icon: <Calendar size={13} /> },
         { label: 'Where is Room 101?', icon: <Building2 size={13} /> },
-        { label: 'Upcoming academic holidays', icon: <Calendar size={13} /> },
       ];
     } else if (user.role === 'FACULTY') {
       return [
+        { label: 'Find seminar halls', icon: <Building2 size={13} /> },
+        { label: 'Show my bookings', icon: <Clock size={13} /> },
         { label: 'My teaching schedule today', icon: <Calendar size={13} /> },
-        { label: 'What is my current class status?', icon: <Clock size={13} /> },
-        { label: 'Course syllabus for CS101', icon: <BookOpen size={13} /> },
         { label: 'Upcoming university events', icon: <Calendar size={13} /> },
       ];
     } else {
       return [
         { label: 'Generate timetable for CSE Semester 1', icon: <Play size={13} /> },
+        { label: 'Find seminar halls', icon: <Building2 size={13} /> },
         { label: 'Compare scheduling strategies', icon: <Settings2 size={13} /> },
-        { label: 'Class status today', icon: <Clock size={13} /> },
-        { label: 'Look up Room 101 details', icon: <Building2 size={13} /> },
+        { label: 'Show my bookings', icon: <Clock size={13} /> },
       ];
     }
   };
@@ -256,59 +255,119 @@ export const CampusAssistantDrawer: React.FC = () => {
                         {/* Proposal Interactive Card */}
                         {!isUser && msg.proposal && (
                           <div className="mt-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200/90 shadow-2xs space-y-2.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                                <Settings2 size={13} className="text-primary-600" />
-                                Timetable Proposal
-                              </span>
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  msg.proposal.readiness_status === 'READY'
-                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                    : msg.proposal.readiness_status === 'READY_WITH_WARNINGS'
-                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                    : 'bg-rose-100 text-rose-800 border border-rose-300'
-                                }`}
-                              >
-                                {msg.proposal.readiness_status}
-                              </span>
-                            </div>
+                            {msg.proposal.proposal_id.startsWith('res_prop_') ? (
+                              <>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Building2 size={13} className="text-primary-600" />
+                                    Facility Booking Proposal
+                                  </span>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                    Verified Available
+                                  </span>
+                                </div>
 
-                            <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 bg-white p-2.5 rounded-lg border border-slate-100">
-                              <div>
-                                <span className="font-semibold text-slate-500 block text-[10px] uppercase">Scope</span>
-                                <span className="font-medium text-slate-800">
-                                  {msg.proposal.scope_display.department || 'Department'} &bull; {msg.proposal.scope_display.semester || 'Semester'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="font-semibold text-slate-500 block text-[10px] uppercase">Strategy</span>
-                                <span className="font-medium text-indigo-700 font-mono text-[11px]">
-                                  {msg.proposal.strategy}
-                                </span>
-                              </div>
-                              <div className="col-span-2">
-                                <span className="font-semibold text-slate-500 block text-[10px] uppercase">Academic Year</span>
-                                <span className="font-medium text-slate-800">
-                                  {msg.proposal.scope_display.academic_year || 'Current'}
-                                </span>
-                              </div>
-                            </div>
+                                <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 bg-white p-2.5 rounded-lg border border-slate-100">
+                                  <div>
+                                    <span className="font-semibold text-slate-500 block text-[10px] uppercase">Facility</span>
+                                    <span className="font-medium text-slate-800">
+                                      {msg.proposal.resource_name} ({msg.proposal.resource_type})
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold text-slate-500 block text-[10px] uppercase">Date</span>
+                                    <span className="font-medium text-slate-800 font-mono text-[11px]">
+                                      {msg.proposal.date}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold text-slate-500 block text-[10px] uppercase">Time Interval</span>
+                                    <span className="font-medium text-indigo-700 font-mono text-[11px]">
+                                      {msg.proposal.start_time?.slice(0, 5)} &ndash; {msg.proposal.end_time?.slice(0, 5)}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold text-slate-500 block text-[10px] uppercase">Location</span>
+                                    <span className="font-medium text-slate-800">
+                                      {msg.proposal.location || 'Main Campus'}
+                                    </span>
+                                  </div>
+                                  {msg.proposal.purpose && (
+                                    <div className="col-span-2">
+                                      <span className="font-semibold text-slate-500 block text-[10px] uppercase">Purpose</span>
+                                      <span className="font-medium text-slate-700">
+                                        {msg.proposal.purpose}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
 
-                            {msg.proposal.readiness_status !== 'BLOCKED' ? (
-                              <button
-                                onClick={() => handleSendMessage(`confirm ${msg.proposal?.proposal_id}`)}
-                                disabled={isLoading}
-                                className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium text-xs rounded-lg shadow-xs hover:shadow-md transition-all duration-150 disabled:opacity-50"
-                              >
-                                <CheckCircle2 size={14} />
-                                <span>Authorize &amp; Generate Timetable</span>
-                              </button>
+                                <button
+                                  onClick={() => handleSendMessage(`confirm ${msg.proposal?.proposal_id}`)}
+                                  disabled={isLoading}
+                                  className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium text-xs rounded-lg shadow-xs hover:shadow-md transition-all duration-150 disabled:opacity-50"
+                                >
+                                  <CheckCircle2 size={14} />
+                                  <span>Confirm &amp; Submit Booking</span>
+                                </button>
+                              </>
                             ) : (
-                              <div className="flex items-center gap-1.5 p-2 bg-rose-50 text-rose-700 text-xs rounded-lg border border-rose-200">
-                                <AlertTriangle size={14} className="shrink-0" />
-                                <span>Generation is blocked until data issues are resolved.</span>
-                              </div>
+                              <>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Settings2 size={13} className="text-primary-600" />
+                                    Timetable Proposal
+                                  </span>
+                                  <span
+                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                      msg.proposal.readiness_status === 'READY'
+                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                        : msg.proposal.readiness_status === 'READY_WITH_WARNINGS'
+                                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                        : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                    }`}
+                                  >
+                                    {msg.proposal.readiness_status}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 bg-white p-2.5 rounded-lg border border-slate-100">
+                                  <div>
+                                    <span className="font-semibold text-slate-500 block text-[10px] uppercase">Scope</span>
+                                    <span className="font-medium text-slate-800">
+                                      {msg.proposal.scope_display?.department || 'Department'} &bull; {msg.proposal.scope_display?.semester || 'Semester'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold text-slate-500 block text-[10px] uppercase">Strategy</span>
+                                    <span className="font-medium text-indigo-700 font-mono text-[11px]">
+                                      {msg.proposal.strategy}
+                                    </span>
+                                  </div>
+                                  <div className="col-span-2">
+                                    <span className="font-semibold text-slate-500 block text-[10px] uppercase">Academic Year</span>
+                                    <span className="font-medium text-slate-800">
+                                      {msg.proposal.scope_display?.academic_year || 'Current'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {msg.proposal.readiness_status !== 'BLOCKED' ? (
+                                  <button
+                                    onClick={() => handleSendMessage(`confirm ${msg.proposal?.proposal_id}`)}
+                                    disabled={isLoading}
+                                    className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium text-xs rounded-lg shadow-xs hover:shadow-md transition-all duration-150 disabled:opacity-50"
+                                  >
+                                    <CheckCircle2 size={14} />
+                                    <span>Authorize &amp; Generate Timetable</span>
+                                  </button>
+                                ) : (
+                                  <div className="flex items-center gap-1.5 p-2 bg-rose-50 text-rose-700 text-xs rounded-lg border border-rose-200">
+                                    <AlertTriangle size={14} className="shrink-0" />
+                                    <span>Generation is blocked until data issues are resolved.</span>
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
                         )}

@@ -83,13 +83,23 @@ def test_chat_scheduling_scope_clarification(admin_token):
     assert "Academic Scope Clarification Needed" in data["reply"] or "Which department" in data["reply"]
 
 
-def test_chat_unsupported_booking_response(faculty_token):
+def test_chat_resource_booking_response(faculty_token):
     headers = {"Authorization": f"Bearer {faculty_token}"}
     resp = client.post("/agents/chat", headers=headers, json={"message": "Book the seminar hall for tomorrow"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["intent"] == "RESOURCE_BOOKING"
-    assert "not enabled in Stage 9B" in data["reply"]
+    assert data["selected_agent"] == "resource_agent"
+    assert "Resource Details Needed" in data["reply"] or "time interval" in data["reply"]
+
+
+def test_chat_resource_discovery(student_token):
+    headers = {"Authorization": f"Bearer {student_token}"}
+    resp = client.post("/agents/chat", headers=headers, json={"message": "Find seminar halls"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["intent"] in ("RESOURCE_BOOKING", "RESOURCE_DISCOVERY")
+    assert "matching" in data["reply"].lower() or "facilities" in data["reply"].lower() or "found" in data["reply"].lower()
 
 
 

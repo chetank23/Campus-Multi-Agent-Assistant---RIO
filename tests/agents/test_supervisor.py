@@ -60,18 +60,30 @@ def test_supervisor_node_routes_scheduling_agent():
 
 
 
-def test_supervisor_node_blocks_unsupported_booking():
+def test_supervisor_node_routes_resource_agent():
     state = {
         "user_id": 2,
         "role": "FACULTY",
         "department_id": 1,
-        "message": "Book Seminar Hall A for next Friday",
+        "message": "Book Seminar Hall A for tomorrow from 2pm to 4pm",
     }
     result = supervisor_node(state)
     assert result["intent"] == "RESOURCE_BOOKING"
-    assert result["selected_agent"] == "resource_agent_stub"
-    assert "not enabled in Stage 9B" in result["final_response"]
-    assert "Resource Management workspace" in result["final_response"]
+    assert result["selected_agent"] == "resource_agent"
+
+
+def test_supervisor_routes_resource_proposal_confirmation():
+    assert classify_intent("confirm res_prop_1234567890abcdef1234567890abcdef") == "RESOURCE_BOOKING"
+    state = {
+        "user_id": 2,
+        "role": "FACULTY",
+        "department_id": 1,
+        "message": "confirm res_prop_1234567890abcdef1234567890abcdef",
+    }
+    result = supervisor_node(state)
+    assert result["intent"] == "RESOURCE_BOOKING"
+    assert result["selected_agent"] == "resource_agent"
+    assert route_supervisor(result) == "resource_agent_node"
 
 
 
