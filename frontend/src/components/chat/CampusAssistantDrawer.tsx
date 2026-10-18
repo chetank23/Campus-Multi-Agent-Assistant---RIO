@@ -18,6 +18,10 @@ import {
   Building2,
   BookOpen,
   ShieldCheck,
+  CheckCircle2,
+  AlertTriangle,
+  Play,
+  Settings2,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { sendChatMessage, type ChatHistoryMessage } from '@/api/chat';
@@ -37,7 +41,8 @@ export const CampusAssistantDrawer: React.FC = () => {
     {
       id: 'welcome',
       sender: 'assistant',
-      content: 'Hello! I am your **RIO Campus Assistant**.\n\nI can answer questions grounded in the official university database, such as your **published class timetable**, **next class status**, **course syllabus details**, **room locations**, or **academic holidays**.',
+      content: 'Hello! I am your **RIO Campus Assistant**.\n\nI can answer questions grounded in the official university database, such as your **published class timetable**, **next class status**, **course syllabus details**, **room locations**, or **academic holidays**.' +
+        (user?.role === 'ADMIN' ? '\n\nAs an **Admin**, I can also resolve academic scopes, inspect data readiness, explain optimization strategies, and prepare validated timetable generation proposals.' : ''),
       timestamp: new Date(),
       sources: ['Verified Campus Database'],
     },
@@ -80,6 +85,8 @@ export const CampusAssistantDrawer: React.FC = () => {
         intent: res.intent,
         sources: res.sources,
         error: res.error,
+        proposal: res.proposal,
+        action_type: res.action_type,
       };
       setHistory((prev) => [...prev, assistantMsg]);
     } catch (err: any) {
@@ -135,10 +142,10 @@ export const CampusAssistantDrawer: React.FC = () => {
       ];
     } else {
       return [
+        { label: 'Generate timetable for CSE Semester 1', icon: <Play size={13} /> },
+        { label: 'Compare scheduling strategies', icon: <Settings2 size={13} /> },
         { label: 'Class status today', icon: <Clock size={13} /> },
         { label: 'Look up Room 101 details', icon: <Building2 size={13} /> },
-        { label: 'Course catalog details for CS101', icon: <BookOpen size={13} /> },
-        { label: 'Academic calendar schedule', icon: <Calendar size={13} /> },
       ];
     }
   };
@@ -245,6 +252,66 @@ export const CampusAssistantDrawer: React.FC = () => {
                         <div className="whitespace-pre-wrap break-words prose prose-slate prose-sm max-w-none">
                           {msg.content}
                         </div>
+
+                        {/* Proposal Interactive Card */}
+                        {!isUser && msg.proposal && (
+                          <div className="mt-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200/90 shadow-2xs space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                <Settings2 size={13} className="text-primary-600" />
+                                Timetable Proposal
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  msg.proposal.readiness_status === 'READY'
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : msg.proposal.readiness_status === 'READY_WITH_WARNINGS'
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                    : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                }`}
+                              >
+                                {msg.proposal.readiness_status}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 bg-white p-2.5 rounded-lg border border-slate-100">
+                              <div>
+                                <span className="font-semibold text-slate-500 block text-[10px] uppercase">Scope</span>
+                                <span className="font-medium text-slate-800">
+                                  {msg.proposal.scope_display.department || 'Department'} &bull; {msg.proposal.scope_display.semester || 'Semester'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="font-semibold text-slate-500 block text-[10px] uppercase">Strategy</span>
+                                <span className="font-medium text-indigo-700 font-mono text-[11px]">
+                                  {msg.proposal.strategy}
+                                </span>
+                              </div>
+                              <div className="col-span-2">
+                                <span className="font-semibold text-slate-500 block text-[10px] uppercase">Academic Year</span>
+                                <span className="font-medium text-slate-800">
+                                  {msg.proposal.scope_display.academic_year || 'Current'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {msg.proposal.readiness_status !== 'BLOCKED' ? (
+                              <button
+                                onClick={() => handleSendMessage(`confirm ${msg.proposal?.proposal_id}`)}
+                                disabled={isLoading}
+                                className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium text-xs rounded-lg shadow-xs hover:shadow-md transition-all duration-150 disabled:opacity-50"
+                              >
+                                <CheckCircle2 size={14} />
+                                <span>Authorize &amp; Generate Timetable</span>
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-1.5 p-2 bg-rose-50 text-rose-700 text-xs rounded-lg border border-rose-200">
+                                <AlertTriangle size={14} className="shrink-0" />
+                                <span>Generation is blocked until data issues are resolved.</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Source citations for assistant responses */}
                         {!isUser && msg.sources && msg.sources.length > 0 && (

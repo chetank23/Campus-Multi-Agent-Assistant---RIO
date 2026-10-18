@@ -29,23 +29,25 @@ def test_intent_classification_supported_queries():
     assert classify_intent("What is the department schedule?") == "QUERY_AGENT"
 
 
-def test_intent_classification_unsupported_scheduling_blocked():
-    # Stage 9A boundary: Conversational timetable generation must NOT be dispatched
+def test_intent_classification_supported_scheduling():
+    # Stage 9B: Timetable generation requests are classified for Scheduling Agent
     assert classify_intent("Generate a new semester timetable") == "TIMETABLE_GENERATION"
     assert classify_intent("Create timetable for Department of CSE") == "TIMETABLE_GENERATION"
     assert classify_intent("Run the timetable optimizer solver") == "TIMETABLE_GENERATION"
     assert classify_intent("Auto-generate schedule") == "TIMETABLE_GENERATION"
+    assert classify_intent("Compare scheduling strategies") == "TIMETABLE_GENERATION"
+    assert classify_intent("confirm prop_abc123") == "TIMETABLE_GENERATION"
 
 
 def test_intent_classification_unsupported_resource_booking_blocked():
-    # Stage 9A boundary: Conversational booking mutations must NOT be dispatched
+    # Conversational booking mutations remain out of scope until Resource Agent stage
     assert classify_intent("Book the seminar hall for tomorrow") == "RESOURCE_BOOKING"
     assert classify_intent("Reserve lab 301 from 10 to 12") == "RESOURCE_BOOKING"
     assert classify_intent("Cancel booking #4") == "RESOURCE_BOOKING"
     assert classify_intent("Approve booking #10") == "RESOURCE_BOOKING"
 
 
-def test_supervisor_node_blocks_unsupported_scheduling():
+def test_supervisor_node_routes_scheduling_agent():
     state = {
         "user_id": 1,
         "role": "ADMIN",
@@ -54,9 +56,8 @@ def test_supervisor_node_blocks_unsupported_scheduling():
     }
     result = supervisor_node(state)
     assert result["intent"] == "TIMETABLE_GENERATION"
-    assert result["selected_agent"] == "scheduling_agent_stub"
-    assert "not enabled in Stage 9A" in result["final_response"]
-    assert "Admin Timetable Generation workspace" in result["final_response"]
+    assert result["selected_agent"] == "scheduling_agent"
+
 
 
 def test_supervisor_node_blocks_unsupported_booking():
@@ -69,8 +70,9 @@ def test_supervisor_node_blocks_unsupported_booking():
     result = supervisor_node(state)
     assert result["intent"] == "RESOURCE_BOOKING"
     assert result["selected_agent"] == "resource_agent_stub"
-    assert "not enabled in Stage 9A" in result["final_response"]
+    assert "not enabled in Stage 9B" in result["final_response"]
     assert "Resource Management workspace" in result["final_response"]
+
 
 
 def test_supervisor_node_handles_greetings():
@@ -100,8 +102,8 @@ def test_supervisor_node_handles_unknown_intent():
 
 
 def test_route_supervisor_conditional_edges():
-    # Only query_agent routes to query_agent_node
+    # query_agent and scheduling_agent route to their dedicated nodes
     assert route_supervisor({"selected_agent": "query_agent"}) == "query_agent_node"
-    assert route_supervisor({"selected_agent": "scheduling_agent_stub"}) == "end_node"
+    assert route_supervisor({"selected_agent": "scheduling_agent"}) == "scheduling_agent_node"
     assert route_supervisor({"selected_agent": "resource_agent_stub"}) == "end_node"
     assert route_supervisor({"selected_agent": None}) == "end_node"

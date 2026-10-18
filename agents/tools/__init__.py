@@ -150,6 +150,36 @@ QUERY_TOOL_DEFINITIONS = [
         },
         "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
     },
+    {
+        "name": "resolve_academic_scope",
+        "description": "Resolves natural-language text into a validated academic scope (Department, Program, Semester, Academic Year, Sections).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query_text": {
+                    "type": "string",
+                    "description": "The user's query text containing department, semester, or program references.",
+                }
+            },
+            "required": ["query_text"],
+        },
+        "allowed_roles": ["ADMIN"],
+    },
+    {
+        "name": "analyze_scheduling_readiness",
+        "description": "Performs pre-flight data readiness analysis for a resolved academic scope before timetable generation.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "scope": {
+                    "type": "object",
+                    "description": "The resolved generation scope dictionary.",
+                }
+            },
+            "required": ["scope"],
+        },
+        "allowed_roles": ["ADMIN"],
+    },
 ]
 
 
@@ -221,6 +251,24 @@ def execute_tool(
             return get_campus_room_inventory_data(
                 db=db,
                 room_type=tool_args.get("room_type"),
+            )
+
+        elif tool_name == "resolve_academic_scope":
+            from agents.tools.scheduling_tools import resolve_academic_scope_data
+            return resolve_academic_scope_data(
+                db=db,
+                query_text=tool_args.get("query_text", ""),
+                department_id=tool_args.get("department_id"),
+                program_id=tool_args.get("program_id"),
+                semester_id=tool_args.get("semester_id"),
+                academic_year_id=tool_args.get("academic_year_id"),
+            )
+
+        elif tool_name == "analyze_scheduling_readiness":
+            from agents.tools.scheduling_tools import analyze_scheduling_readiness_data
+            return analyze_scheduling_readiness_data(
+                db=db,
+                scope_dict=tool_args.get("scope", {}),
             )
 
         else:

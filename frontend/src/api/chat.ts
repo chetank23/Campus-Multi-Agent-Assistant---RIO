@@ -15,12 +15,29 @@ export interface ChatToolCall {
   args: Record<string, unknown>;
 }
 
+export interface ChatProposalData {
+  proposal_id: string;
+  scope_display: {
+    department?: string;
+    program?: string;
+    semester?: string;
+    academic_year?: string;
+    sections_count?: string;
+    section_names?: string;
+  };
+  strategy?: string;
+  readiness_status?: string;
+  expires_at?: number;
+}
+
 export interface ChatMessageResponse {
   reply: string;
   intent?: string;
   selected_agent?: string;
   tool_calls: ChatToolCall[];
   sources: string[];
+  proposal?: ChatProposalData | null;
+  action_type?: string | null;
   success: boolean;
   error?: string | null;
 }
@@ -32,8 +49,11 @@ export interface ChatHistoryMessage {
   timestamp: Date;
   intent?: string;
   sources?: string[];
+  proposal?: ChatProposalData | null;
+  action_type?: string | null;
   error?: string | null;
 }
+
 
 /**
  * Sends a message to the authenticated AI Agent Supervisor endpoint.

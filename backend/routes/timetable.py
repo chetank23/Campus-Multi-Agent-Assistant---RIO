@@ -30,91 +30,44 @@ def generate_timetable(
 ):
     """
     Stage 4 Part 2 & Stage 6D: Validates scope, solves, and persists.
+    Delegates to shared authoritative service.
     """
-    optimizer_input = validate_and_load_input(db, scope)
-    solver = TimetableSolver(opt_input=optimizer_input, time_limit=60)
-    result = solver.solve()
-    
-    score_data = None
-    version_id = None
+    from backend.services.timetable_service import execute_timetable_generation
 
-    if result.feasible:
-        val_result = validate_timetable(result.entries, optimizer_input)
-        if len([v for v in val_result.violations if v.severity == "HARD"]) > 0:
-            violations = ", ".join([v.message for v in val_result.violations if v.severity == "HARD"])
+    gen_res = execute_timetable_generation(
+        db=db,
+        scope=scope,
+        current_user=current_user,
+    )
+
+    if not gen_res.success:
+        if gen_res.status == "VALIDATION_FAILED":
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Solver produced invalid timetable: {violations}"
+                detail=gen_res.message,
             )
-        
-        score_dict = compute_score(val_result, result.entries, optimizer_input)
-        score_data = TimetableScore(**score_dict)
-
-        try:
-            new_version = TimetableVersion(
-                academic_year_id=scope.academic_year_id,
-                status="GENERATED",
-                created_by=current_user.id
-            )
-            db.add(new_version)
-            db.flush()
-            version_id = new_version.id
-
-            assignments = {a.id: a for a in optimizer_input.course_assignments}
-            
-            for entry_res in result.entries:
-                a = assignments[entry_res.course_assignment_id]
-                new_entry = TimetableEntry(
-                    version_id=version_id,
-                    department_id=scope.department_id,
-                    program_id=scope.program_id,
-                    semester_id=scope.semester_id,
-                    section_id=a.section_id,
-                    batch_id=a.batch_id,
-                    course_id=a.course_id,
-                    faculty_id=a.faculty_id,
-                    room_id=entry_res.room_id,
-                    slot_id=entry_res.slot_id,
-                    status="DRAFT"
-                )
-                db.add(new_entry)
-
-            audit = AuditLog(
-                user_id=current_user.id,
-                action="TIMETABLE_GENERATED",
-                entity_type="TimetableVersion",
-                entity_id=version_id,
-                new_value={"status": "GENERATED"}
-            )
-            db.add(audit)
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            raise HTTPException(status_code=500, detail=f"Database persistence failed: {str(e)}")
-            
-    if not result.feasible:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, 
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
-                "message": result.message,
-                "diagnostics": getattr(result, 'diagnostics', [])
-            }
+                "message": gen_res.message,
+                "diagnostics": gen_res.diagnostics,
+            },
         )
 
     return GenerationSummary(
-        status=result.status,
-        message=result.message,
-        loaded_sections=len(optimizer_input.sections),
-        loaded_courses=len(optimizer_input.courses),
-        loaded_faculty=len(optimizer_input.faculty),
-        loaded_rooms=len(optimizer_input.rooms),
-        loaded_time_slots=len(optimizer_input.time_slots),
-        solve_time_seconds=result.solve_time_seconds,
-        generated_entries=result.entries,
-        diagnostics=getattr(result, 'diagnostics', []),
-        score=score_data,
-        version_id=version_id
+        status=gen_res.status,
+        message=gen_res.message,
+        loaded_sections=gen_res.loaded_sections,
+        loaded_courses=gen_res.loaded_courses,
+        loaded_faculty=gen_res.loaded_faculty,
+        loaded_rooms=gen_res.loaded_rooms,
+        loaded_time_slots=gen_res.loaded_time_slots,
+        solve_time_seconds=gen_res.solve_time_seconds,
+        diagnostics=gen_res.diagnostics,
+        score=gen_res.score,
+        version_id=gen_res.version_id,
     )
+
 
 from typing import List, Optional
 

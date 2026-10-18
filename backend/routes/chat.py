@@ -62,6 +62,8 @@ def chat_with_campus_assistant(
         selected_agent=result.get("selected_agent"),
         tool_calls=result.get("tool_calls", []),
         sources=result.get("sources", []),
+        proposal=result.get("proposal"),
+        action_type=result.get("action_type"),
         success=result.get("success", True),
         error=result.get("error"),
     )

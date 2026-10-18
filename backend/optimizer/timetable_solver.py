@@ -14,9 +14,10 @@ class SolverResult(BaseModel):
     diagnostics: List[str] = []
 
 class TimetableSolver:
-    def __init__(self, opt_input: OptimizerInput, time_limit: int = 60):
+    def __init__(self, opt_input: OptimizerInput, time_limit: int = 60, strategy: str = "BALANCED"):
         self.input = opt_input
         self.time_limit = time_limit
+        self.strategy = (strategy or "BALANCED").upper()
         self.model = cp_model.CpModel()
         self.x = {}  # decision variables
         
@@ -193,7 +194,7 @@ class TimetableSolver:
 
 
     def _build_soft_constraints(self):
-        # Weights for the objective function (W_* constants)
+        # Base weights for BALANCED
         W_FACULTY_GAP = 10
         W_STUDENT_GAP = 10
         W_PREFERRED_SLOT = 5
@@ -201,7 +202,28 @@ class TimetableSolver:
         W_LATE_LAB = 5
         W_WORKLOAD_BALANCE = 10
 
+        # Optimization profiles modify soft-objective penalties/bonuses without touching hard constraints
+        if self.strategy == "FACULTY_COMFORT":
+            W_FACULTY_GAP = 30
+            W_WORKLOAD_BALANCE = 25
+            W_PREFERRED_SLOT = 15
+            W_ROOM_CHANGE = 2
+            W_LATE_LAB = 5
+        elif self.strategy == "ROOM_EFFICIENCY":
+            W_ROOM_CHANGE = 25
+            W_STUDENT_GAP = 15
+            W_FACULTY_GAP = 5
+            W_WORKLOAD_BALANCE = 5
+            W_PREFERRED_SLOT = 5
+        elif self.strategy == "LAB_PREFERENCE":
+            W_LATE_LAB = 30
+            W_STUDENT_GAP = 10
+            W_FACULTY_GAP = 10
+            W_PREFERRED_SLOT = 5
+            W_ROOM_CHANGE = 5
+
         objective_terms = []
+
 
         # 1. Preferred Slot Bonus (maximize preference -> minimize -1 * preference)
         # 2. Late Lab Penalty

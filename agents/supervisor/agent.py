@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from backend.models.identity import User
 from agents.state.state import AgentState
 from agents.query_agent.agent import run_query_agent
+from agents.scheduling_agent.agent import run_scheduling_agent
 
 
 def classify_intent(message: str) -> str:
@@ -25,7 +26,7 @@ def classify_intent(message: str) -> str:
     """
     msg = message.lower().strip()
 
-    # 1. Scheduling / Timetable Generation requests (Out-of-scope for Stage 9A)
+    # 1. Scheduling / Timetable Generation requests & confirmation
     scheduling_patterns = [
         r"\bgenerate\b.*\btimetable\b",
         r"\bcreate\b.*\btimetable\b",
@@ -34,12 +35,21 @@ def classify_intent(message: str) -> str:
         r"\bnew\b.*\btimetable\b",
         r"\bpublish\b.*\btimetable\b",
         r"\bauto-generate\b",
+        r"\bconfirm\s+prop_[a-zA-Z0-9_-]+\b",
+        r"\bexecute\s+prop_[a-zA-Z0-9_-]+\b",
+        r"\bproceed\s+prop_[a-zA-Z0-9_-]+\b",
+        r"\bwhy\b.*\b(infeasible|fail|couldn't|cannot)\b.*\b(timetable|generate|schedule)\b",
+        r"\bcompare\b.*\b(strategies|scheduling|scenarios)\b",
+        r"\bscheduling\s+strateg(y|ies)\b",
+        r"\bfaculty-comfort\b",
+        r"\broom-efficiency\b",
+        r"\blab-preference\b",
     ]
     for pat in scheduling_patterns:
         if re.search(pat, msg):
             return "TIMETABLE_GENERATION"
 
-    # 2. Resource Booking requests (Out-of-scope for Stage 9A)
+    # 2. Resource Booking requests (Out-of-scope until Stage 9C)
     booking_patterns = [
         r"\bbook\b.*\b(hall|room|lab|projector|auditorium|facility|resource)\b",
         r"\breserve\b.*\b(hall|room|lab|projector|auditorium|facility|resource)\b",
@@ -63,7 +73,7 @@ def classify_intent(message: str) -> str:
     if any(q in msg for q in query_patterns):
         return "QUERY_AGENT"
 
-    # Greetings and general campus inquiries (use word boundaries to avoid false substring matches like 'hi' in 'hill')
+    # Greetings and general campus inquiries
     if re.search(r"\b(hi|hello|hey|help|good morning|good afternoon|who are you|what can you do)\b", msg):
         return "CAMPUS_GREETING"
 
@@ -80,12 +90,7 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
     if intent == "TIMETABLE_GENERATION":
         return {
             "intent": intent,
-            "selected_agent": "scheduling_agent_stub",
-            "final_response": (
-                "ℹ️ **Conversational timetable generation is not enabled in Stage 9A.**\n\n"
-                "Timetables are produced using the constraint-satisfaction engine and can be initiated "
-                "through the **Admin Timetable Generation workspace** (`/admin/timetable/generate`) by authorized Administrators."
-            ),
+            "selected_agent": "scheduling_agent",
         }
 
     elif intent == "RESOURCE_BOOKING":
@@ -93,7 +98,7 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
             "intent": intent,
             "selected_agent": "resource_agent_stub",
             "final_response": (
-                "ℹ️ **Conversational resource booking is not enabled in Stage 9A.**\n\n"
+                "ℹ️ **Conversational resource booking is not enabled in Stage 9B.**\n\n"
                 "To submit, inspect, or manage bookings for campus facilities (seminar halls, labs, equipment), "
                 "please navigate to the **Resource Management workspace** (`/admin/resources`)."
             ),
@@ -105,9 +110,10 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
             "selected_agent": None,
             "final_response": (
                 "👋 Hello! I am the **RIO Campus Assistant**.\n\n"
-                "I can help you with verified campus information, including:\n"
+                "I can help you with verified campus operations, including:\n"
                 "- 📅 **Your Published Schedule**: *'What classes do I have on Monday?'*\n"
                 "- ⏱️ **Class Status**: *'What is my next class?'*\n"
+                "- 🤖 **Timetable Generation**: *'Generate a timetable for CSE Semester 1'* (Admin only)\n"
                 "- 🏛️ **Campus Facilities**: *'Where is Room 101?'*\n"
                 "- 📚 **Course Catalog**: *'What are the credits for CS101?'*\n"
                 "- 👨‍🏫 **Faculty Directory**: *'Who is teaching Dr. Allison Hill?'*\n"
@@ -129,17 +135,20 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
             "final_response": (
                 "🤔 I could not find a matching campus service for your request.\n\n"
                 "You can ask me about your published timetable, real-time class status, faculty profiles, "
-                "classroom locations, course credits, or university calendar events."
+                "classroom locations, course credits, university calendar events, or timetable generation (Admin only)."
             ),
         }
 
 
-def route_supervisor(state: AgentState) -> Literal["query_agent_node", "end_node"]:
+def route_supervisor(state: AgentState) -> Literal["query_agent_node", "scheduling_agent_node", "end_node"]:
     """
     Conditional routing function for LangGraph.
     """
-    if state.get("selected_agent") == "query_agent":
+    selected = state.get("selected_agent")
+    if selected == "query_agent":
         return "query_agent_node"
+    elif selected == "scheduling_agent":
+        return "scheduling_agent_node"
     return "end_node"
 
 
@@ -157,6 +166,11 @@ def build_supervisor_graph(db: Session, user: User):
 
     workflow.add_node("query_agent_node", query_node_runner)
 
+    def scheduling_node_runner(state: AgentState) -> Dict[str, Any]:
+        return run_scheduling_agent(state=state, db=db, user=user)
+
+    workflow.add_node("scheduling_agent_node", scheduling_node_runner)
+
     def end_node(state: AgentState) -> Dict[str, Any]:
         return {}
 
@@ -170,14 +184,17 @@ def build_supervisor_graph(db: Session, user: User):
         route_supervisor,
         {
             "query_agent_node": "query_agent_node",
+            "scheduling_agent_node": "scheduling_agent_node",
             "end_node": "end_node",
         },
     )
 
     workflow.add_edge("query_agent_node", "end_node")
+    workflow.add_edge("scheduling_agent_node", "end_node")
     workflow.add_edge("end_node", END)
 
     return workflow.compile()
+
 
 
 def execute_supervisor(
@@ -212,9 +229,12 @@ def execute_supervisor(
             "selected_agent": final_state.get("selected_agent"),
             "tool_calls": final_state.get("tool_calls", []),
             "sources": final_state.get("sources", []),
+            "proposal": final_state.get("proposal"),
+            "action_type": final_state.get("action_type"),
             "success": True,
             "error": None,
         }
+
 
     except Exception as exc:
         return {

@@ -74,13 +74,13 @@ def test_chat_student_query_success(student_token):
     assert isinstance(data["sources"], list)
 
 
-def test_chat_unsupported_scheduling_response(admin_token):
+def test_chat_scheduling_scope_clarification(admin_token):
     headers = {"Authorization": f"Bearer {admin_token}"}
     resp = client.post("/agents/chat", headers=headers, json={"message": "Generate new semester timetable"})
     assert resp.status_code == 200
     data = resp.json()
-    assert data["intent"] == "TIMETABLE_GENERATION"
-    assert "not enabled in Stage 9A" in data["reply"]
+    assert data["intent"] in ("TIMETABLE_GENERATION", "SCOPE_RESOLUTION")
+    assert "Academic Scope Clarification Needed" in data["reply"] or "Which department" in data["reply"]
 
 
 def test_chat_unsupported_booking_response(faculty_token):
@@ -89,7 +89,8 @@ def test_chat_unsupported_booking_response(faculty_token):
     assert resp.status_code == 200
     data = resp.json()
     assert data["intent"] == "RESOURCE_BOOKING"
-    assert "not enabled in Stage 9A" in data["reply"]
+    assert "not enabled in Stage 9B" in data["reply"]
+
 
 
 def test_chat_compat_endpoint(student_token):

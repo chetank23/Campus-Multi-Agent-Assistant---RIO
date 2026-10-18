@@ -1,0 +1,298 @@
+"""
+agents/tools/scheduling_tools.py
+--------------------------------
+Read-only and diagnostic tools for the Scheduling Agent:
+- resolve_academic_scope: Entity matcher and resolver against PostgreSQL
+- analyze_scheduling_readiness: Pre-flight validator for required solver data
+- explain_solver_diagnostics: Human-readable diagnostic breakdown for infeasible runs
+"""
+
+from __future__ import annotations
+
+import re
+from typing import Any, Dict, List, Optional
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+
+from backend.models.academic import Department, Program, Semester, Section, AcademicYear, Batch
+from backend.models.courses import Course, CourseAssignment
+from backend.models.space_time import Room, TimeSlot, FacultyAvailability
+from backend.schemas.timetable_generation import GenerationScope
+from backend.services.timetable_input_loader import validate_and_load_input
+
+
+def resolve_academic_scope_data(
+    db: Session,
+    query_text: str,
+    department_id: Optional[int] = None,
+    program_id: Optional[int] = None,
+    semester_id: Optional[int] = None,
+    academic_year_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Resolves natural-language text into a typed GenerationScope.
+    Matches department name/code, program name, semester number, and academic year.
+    Returns:
+    - resolved: bool
+    - scope: dict (GenerationScope dict) or None
+    - display: dict of human readable names
+    - missing_parameters: list of missing fields
+    - ambiguities: list of questions to ask
+    """
+    text = query_text.lower()
+
+    # 1. Academic Year
+    if not academic_year_id:
+        # Default to the most active/latest academic year
+        ay = db.query(AcademicYear).order_by(AcademicYear.id.desc()).first()
+        if ay:
+            academic_year_id = ay.id
+
+    ay_obj = db.query(AcademicYear).filter(AcademicYear.id == academic_year_id).first() if academic_year_id else None
+
+    # 2. Department
+    dept_obj = None
+    if department_id:
+        dept_obj = db.query(Department).filter(Department.id == department_id).first()
+    else:
+        # Search in DB
+        all_depts = db.query(Department).all()
+        for d in all_depts:
+            code_pattern = r"\b" + re.escape(d.department_code.lower()) + r"\b"
+            name_pattern = r"\b" + re.escape(d.name.lower()) + r"\b"
+            if re.search(code_pattern, text) or re.search(name_pattern, text):
+                dept_obj = d
+                break
+            # Common synonyms
+            if "computer science" in text or "cse" in text or "cs" in text:
+                if d.department_code.upper() in ["CS", "CSE"]:
+                    dept_obj = d
+                    break
+            elif "mechanical" in text or "mech" in text:
+                if d.department_code.upper() in ["ME", "MECH"]:
+                    dept_obj = d
+                    break
+            elif "electrical" in text or "eee" in text or "ee" in text:
+                if d.department_code.upper() in ["EE", "EEE"]:
+                    dept_obj = d
+                    break
+
+    # 3. Program
+    prog_obj = None
+    if program_id:
+        prog_obj = db.query(Program).filter(Program.id == program_id).first()
+    elif dept_obj:
+        dept_progs = db.query(Program).filter(Program.department_id == dept_obj.id).all()
+        if len(dept_progs) == 1:
+            prog_obj = dept_progs[0]
+        elif len(dept_progs) > 1:
+            # Check for B.Tech vs M.Tech
+            for p in dept_progs:
+                if ("b.tech" in text or "btech" in text) and "b.tech" in p.program_name.lower():
+                    prog_obj = p
+                    break
+            if not prog_obj:
+                # Default to primary program if unambiguous
+                prog_obj = dept_progs[0]
+
+    # 4. Semester
+    sem_obj = None
+    if semester_id:
+        sem_obj = db.query(Semester).filter(Semester.id == semester_id).first()
+    else:
+        # Try to extract semester number from query: "semester 5", "sem 5", "5th semester", "semester 1", "sem 1"
+        sem_match = re.search(r"\b(?:semester|sem)\s*(\d+)\b", text)
+        if not sem_match:
+            sem_match = re.search(r"\b(\d+)(?:st|nd|rd|th)\s*(?:semester|sem)\b", text)
+        
+        target_num = int(sem_match.group(1)) if sem_match else None
+        
+        if target_num is not None:
+            # Look up semester with this number in the active academic year
+            sem_query = db.query(Semester)
+            if academic_year_id:
+                sem_query = sem_query.filter(Semester.academic_year_id == academic_year_id)
+            sem_query = sem_query.filter(Semester.semester_number == target_num)
+            sem_obj = sem_query.first()
+        else:
+            # If no number specified, check if "current semester" is requested
+            if "current" in text or "active" in text:
+                # Get the first active semester in the academic year
+                sem_obj = db.query(Semester).filter(Semester.academic_year_id == academic_year_id).first()
+
+    # Assess completeness
+    missing = []
+    if not ay_obj:
+        missing.append("Academic Year")
+    if not dept_obj:
+        missing.append("Department")
+    if not prog_obj:
+        missing.append("Program")
+    if not sem_obj:
+        missing.append("Semester")
+
+    if missing:
+        # Construct helpful clarification message
+        clarifications = []
+        if "Department" in missing:
+            clarifications.append("Which department should this timetable be generated for? (e.g. Computer Science, Mechanical, Electrical)")
+        if "Semester" in missing:
+            clarifications.append("Which semester number would you like to schedule? (e.g. Semester 1, Semester 5)")
+
+        return {
+            "resolved": False,
+            "scope": None,
+            "display": {},
+            "missing_parameters": missing,
+            "clarification_prompt": " ".join(clarifications),
+        }
+
+    # Verify sections exist for this exact scope
+    sections = db.query(Section).filter(
+        Section.department_id == dept_obj.id,
+        Section.program_id == prog_obj.id,
+        Section.semester_id == sem_obj.id,
+    ).all()
+
+    scope_dict = {
+        "academic_year_id": ay_obj.id,
+        "department_id": dept_obj.id,
+        "program_id": prog_obj.id,
+        "semester_id": sem_obj.id,
+        "section_ids": [s.id for s in sections] if sections else None,
+    }
+
+    display_dict = {
+        "academic_year": ay_obj.name,
+        "department": f"{dept_obj.name} ({dept_obj.department_code})",
+        "program": prog_obj.program_name,
+        "semester": f"Semester {sem_obj.semester_number}",
+        "sections_count": str(len(sections)),
+        "section_names": ", ".join(s.section_name for s in sections) if sections else "None",
+    }
+
+    return {
+        "resolved": True,
+        "scope": scope_dict,
+        "display": display_dict,
+        "missing_parameters": [],
+        "clarification_prompt": None,
+    }
+
+
+def analyze_scheduling_readiness_data(db: Session, scope_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Performs pre-flight data readiness analysis for the provided GenerationScope.
+    Returns:
+    - status: READY | READY_WITH_WARNINGS | BLOCKED
+    - findings: list of diagnostic findings
+    - summary_metrics: counts of loaded entities
+    - can_proceed: bool
+    """
+    try:
+        scope = GenerationScope(**scope_dict)
+    except Exception as exc:
+        return {
+            "status": "BLOCKED",
+            "can_proceed": False,
+            "findings": [f"Invalid scope parameters: {str(exc)}"],
+            "summary_metrics": {},
+        }
+
+    findings: List[str] = []
+    status_str = "READY"
+
+    # 1. Verify sections
+    sections = db.query(Section).filter(
+        Section.department_id == scope.department_id,
+        Section.program_id == scope.program_id,
+        Section.semester_id == scope.semester_id,
+    ).all()
+    section_ids = [s.id for s in sections]
+    if not sections:
+        findings.append("❌ BLOCKED: No academic sections found for this Department, Program, and Semester.")
+        return {
+            "status": "BLOCKED",
+            "can_proceed": False,
+            "findings": findings,
+            "summary_metrics": {"sections": 0},
+        }
+
+    batches = db.query(Batch).filter(Batch.section_id.in_(section_ids)).all()
+    batch_ids = [b.id for b in batches]
+
+    # 2. Verify course assignments
+    assignments = db.query(CourseAssignment).filter(
+        (CourseAssignment.section_id.in_(section_ids)) | (CourseAssignment.batch_id.in_(batch_ids))
+    ).all()
+    if not assignments:
+        findings.append("❌ BLOCKED: No course assignments configured for sections in this scope.")
+        return {
+            "status": "BLOCKED",
+            "can_proceed": False,
+            "findings": findings,
+            "summary_metrics": {"sections": len(sections), "assignments": 0},
+        }
+
+    course_ids = list(set(a.course_id for a in assignments if a.course_id))
+    faculty_ids = list(set(a.faculty_id for a in assignments if a.faculty_id))
+    courses = db.query(Course).filter(Course.id.in_(course_ids)).all()
+
+    # 3. Check time slots
+    slots = db.query(TimeSlot).all()
+    if not slots:
+        findings.append("❌ BLOCKED: No time slots defined in the campus space/time register.")
+        return {
+            "status": "BLOCKED",
+            "can_proceed": False,
+            "findings": findings,
+            "summary_metrics": {"sections": len(sections), "slots": 0},
+        }
+
+    # 4. Check rooms and capacities
+    rooms = db.query(Room).filter(Room.status == "ACTIVE").all()
+    if not rooms:
+        findings.append("❌ BLOCKED: No active rooms available for scheduling.")
+        return {
+            "status": "BLOCKED",
+            "can_proceed": False,
+            "findings": findings,
+            "summary_metrics": {"sections": len(sections), "rooms": 0},
+        }
+
+    # 5. Check faculty availability
+    availabilities = db.query(FacultyAvailability).filter(FacultyAvailability.faculty_id.in_(faculty_ids)).all()
+    if not availabilities:
+        findings.append("⚠️ WARNING: No explicit faculty availability preferences registered. Solver will assume standard open availability.")
+        status_str = "READY_WITH_WARNINGS"
+
+    # 6. Check lab requirements
+    lab_courses = [c for c in courses if c.requires_lab or c.course_type == "LAB"]
+    lab_rooms = [r for r in rooms if r.room_type == "LAB"]
+    if lab_courses and not lab_rooms:
+        findings.append("❌ BLOCKED: Courses require laboratory sessions, but no active LAB rooms are registered.")
+        return {
+            "status": "BLOCKED",
+            "can_proceed": False,
+            "findings": findings,
+            "summary_metrics": {"sections": len(sections), "lab_rooms": 0},
+        }
+
+    findings.append(f"✅ Verified {len(sections)} sections and {len(batches)} batches.")
+    findings.append(f"✅ Verified {len(courses)} active courses with {len(assignments)} teaching allocations across {len(faculty_ids)} faculty.")
+    findings.append(f"✅ Verified {len(rooms)} active campus rooms ({len(lab_rooms)} labs) and {len(slots)} weekly time slots.")
+
+    return {
+        "status": status_str,
+        "can_proceed": True,
+        "findings": findings,
+        "summary_metrics": {
+            "sections": len(sections),
+            "batches": len(batches),
+            "courses": len(courses),
+            "assignments": len(assignments),
+            "faculty": len(faculty_ids),
+            "rooms": len(rooms),
+            "slots": len(slots),
+        },
+    }

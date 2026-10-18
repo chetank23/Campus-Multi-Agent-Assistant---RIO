@@ -26,7 +26,10 @@ class AgentState(TypedDict, total=False):
     tool_calls: List[Dict[str, Any]]
     tool_results: List[Dict[str, Any]]
     final_response: Optional[str]
+    proposal: Optional[Dict[str, Any]]
+    action_type: Optional[str]
     error: Optional[str]
+    sources: Optional[List[str]]
 
 
 # ── Pydantic Schemas for API Contracts ────────────────────────────────────────
@@ -51,5 +54,7 @@ class ChatMessageResponse(BaseModel):
     selected_agent: Optional[str] = None
     tool_calls: List[Dict[str, Any]] = Field(default_factory=list)
     sources: List[str] = Field(default_factory=list)
+    proposal: Optional[Dict[str, Any]] = None
+    action_type: Optional[str] = None
     success: bool = True
     error: Optional[str] = None
