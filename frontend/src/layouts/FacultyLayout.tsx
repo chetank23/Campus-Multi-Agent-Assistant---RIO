@@ -31,6 +31,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { apiGetMe } from '@/api/auth';
 import { getFacultyMyTimetable } from '@/api/timetable';
 import { SignOutConfirmDialog } from '@/components/common';
+import { CampusAssistantDrawer } from '@/components/chat';
 
 export const FacultyLayout: React.FC = () => {
   const { user: ctxUser, logout } = useAuth();
@@ -314,6 +315,8 @@ export const FacultyLayout: React.FC = () => {
         onConfirm={handleLogoutConfirm}
         onCancel={() => setShowSignOutConfirm(false)}
       />
+
+      <CampusAssistantDrawer />
     </div>
   );
 };

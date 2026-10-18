@@ -1,0 +1,46 @@
+/**
+ * frontend/src/api/chat.ts
+ * ------------------------
+ * Client interface for the RIO-MJP Multi-Agent Campus Assistant.
+ */
+
+import { apiClient } from './client';
+
+export interface ChatMessageRequest {
+  message: string;
+}
+
+export interface ChatToolCall {
+  tool: string;
+  args: Record<string, unknown>;
+}
+
+export interface ChatMessageResponse {
+  reply: string;
+  intent?: string;
+  selected_agent?: string;
+  tool_calls: ChatToolCall[];
+  sources: string[];
+  success: boolean;
+  error?: string | null;
+}
+
+export interface ChatHistoryMessage {
+  id: string;
+  sender: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  intent?: string;
+  sources?: string[];
+  error?: string | null;
+}
+
+/**
+ * Sends a message to the authenticated AI Agent Supervisor endpoint.
+ */
+export async function sendChatMessage(message: string): Promise<ChatMessageResponse> {
+  const response = await apiClient.post<ChatMessageResponse>('/agents/chat', {
+    message: message.trim(),
+  });
+  return response.data;
+}

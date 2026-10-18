@@ -12,6 +12,7 @@ import { Outlet } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthProvider';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
+import { CampusAssistantDrawer } from '@/components/chat';
 
 export function AppShell({ title }: { title?: string }) {
   const { user } = useAuth();
@@ -35,6 +36,7 @@ export function AppShell({ title }: { title?: string }) {
           <Outlet />
         </main>
       </div>
+      <CampusAssistantDrawer />
     </div>
   );
 }

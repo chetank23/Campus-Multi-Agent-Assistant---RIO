@@ -23,3 +23,7 @@ PyJWT
 Faker
 httpx>=0.27.0
 pytest>=8.0.0
+
+# AI & Multi-Agent Architecture
+langgraph>=1.2.0
+anthropic>=0.40.0
