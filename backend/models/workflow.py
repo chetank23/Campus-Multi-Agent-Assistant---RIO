@@ -23,6 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from backend.utils.datetime_utils import utc_now
 from .base import Base
 
 if TYPE_CHECKING:
@@ -54,7 +55,7 @@ class ChangeRequest(Base):
         Integer, ForeignKey("users.id", name="fk_cr_reviewed_by"), nullable=True
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=datetime.datetime.utcnow, server_default=func.now()
+        DateTime, default=utc_now, server_default=func.now()
     )
 
     requester: Mapped[Optional["User"]] = relationship(
@@ -79,7 +80,7 @@ class Notification(Base):
         Boolean, default=False, server_default="FALSE"
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=datetime.datetime.utcnow, server_default=func.now()
+        DateTime, default=utc_now, server_default=func.now()
     )
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="notifications")
@@ -99,7 +100,7 @@ class AuditLog(Base):
     old_value: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     new_value: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     timestamp: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=datetime.datetime.utcnow, server_default=func.now()
+        DateTime, default=utc_now, server_default=func.now()
     )
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="audit_logs")

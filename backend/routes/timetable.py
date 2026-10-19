@@ -47,7 +47,7 @@ def generate_timetable(
                 detail=gen_res.message,
             )
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "message": gen_res.message,
                 "diagnostics": gen_res.diagnostics,

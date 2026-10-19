@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from backend.utils.datetime_utils import utc_now
 from .base import Base
 
 if TYPE_CHECKING:
@@ -42,7 +43,7 @@ class User(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="TRUE")
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, server_default=func.now()
+        DateTime, default=utc_now, server_default=func.now()
     )
 
     # Relationships (back-populated from other models)

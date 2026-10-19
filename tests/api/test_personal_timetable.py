@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime
 
+from backend.utils.datetime_utils import utc_now
 from backend.main import app
 from backend.config import engine
 from backend.models.identity import User
@@ -108,7 +109,7 @@ def test_timetables(faculty_users, student_users):
         pub_version = TimetableVersion(
             status="PUBLISHED",
             version_number="V-PUB-1",
-            published_at=datetime.utcnow(),
+            published_at=utc_now(),
         )
         db.add(pub_version)
         db.flush()

@@ -26,6 +26,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from backend.utils.datetime_utils import utc_now
 from .base import Base
 
 if TYPE_CHECKING:
@@ -68,7 +69,7 @@ class TimetableVersion(Base):
         Integer, ForeignKey("users.id", name="fk_tv_approved_by"), nullable=True
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=datetime.datetime.utcnow, server_default=func.now()
+        DateTime, default=utc_now, server_default=func.now()
     )
     published_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
     reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
