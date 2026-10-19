@@ -79,12 +79,17 @@ def classify_intent(message: str) -> str:
         "timetable", "schedule", "class", "classes", "lecture", "timing", "when is",
         "ongoing", "upcoming", "next class", "faculty", "professor", "teacher",
         "teach", "teaching", "who is", "who teaches", "dr.", "dr ", "prof",
-        "course", "subject", "credits", "syllabus", "room", "lab",
+        "course", "subject", "credits", "syllabus", "room", "rooms", "classroom", "classrooms", "lab", "labs",
         "auditorium", "seminar", "capacity", "where is", "holiday", "exam", "vacation",
         "academic calendar", "events", "department schedule", "calendar"
     ]
-    if any(q in msg for q in query_patterns):
-        return "QUERY_AGENT"
+    for q in query_patterns:
+        if " " in q or "." in q:
+            if q in msg:
+                return "QUERY_AGENT"
+        else:
+            if re.search(r"\b" + re.escape(q) + r"\b", msg):
+                return "QUERY_AGENT"
 
     # Greetings and general campus inquiries
     if re.search(r"\b(hi|hello|hey|help|good morning|good afternoon|who are you|what can you do)\b", msg):
