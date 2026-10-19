@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple, cast
 from langgraph.graph import StateGraph, END
 from sqlalchemy.orm import Session
 
@@ -243,7 +243,7 @@ def build_supervisor_graph(db: Session, user: User):
     """
     Constructs and compiles the LangGraph StateGraph for the request.
     """
-    workflow = StateGraph(AgentState)
+    workflow = StateGraph(cast(Any, AgentState))
 
     # 1. Add Nodes
     workflow.add_node("supervisor", supervisor_node)

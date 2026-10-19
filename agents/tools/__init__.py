@@ -19,7 +19,7 @@ from agents.tools.campus_tools import (
 from agents.tools.department_tools import get_department_timetable_data
 
 # Tool registry with documentation for LLM tool binding
-QUERY_TOOL_DEFINITIONS = [
+QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "name": "get_student_timetable",
         "description": "Retrieves the official published timetable for the authenticated student, with course codes, timings, rooms, and faculty names.",

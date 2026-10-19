@@ -7,8 +7,14 @@ as specified in PROJECT_SPECIFICATION.md Section 8.1.
 
 from __future__ import annotations
 
+import sys
 from typing import Any, Dict, List, Optional
-from typing_extensions import TypedDict
+
+if sys.version_info >= (3, 12):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
+
 from pydantic import BaseModel, Field
 
 

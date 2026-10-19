@@ -11,7 +11,7 @@ from __future__ import annotations
 import datetime
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 from sqlalchemy.orm import Session
 
 from backend.models.identity import User
@@ -326,7 +326,7 @@ def run_query_agent(
                 {
                     "name": str(t["name"]),
                     "description": str(t["description"]),
-                    "input_schema": dict(t["parameters"]),
+                    "input_schema": cast(dict[str, Any], t.get("parameters", {})),
                 }
                 for t in allowed_tools
             ]
