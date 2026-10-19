@@ -93,7 +93,34 @@ def check_resource_conflicts(
         )
         return False, conflicts
 
-    # 2. Approved bookings overlap check
+    # 2. Global Resource Lock Policy:
+    # A resource with an active booking (PENDING or APPROVED) is globally locked and unavailable
+    # for all new bookings and availability inquiries, regardless of purpose, date, or time.
+    # It becomes eligible again only when the active booking is CANCELLED or REJECTED.
+    active_booking_query = db.query(ResourceBooking).filter(
+        ResourceBooking.resource_id == resource_id,
+        ResourceBooking.status.in_(["PENDING", "APPROVED"]),
+    )
+    if exclude_booking_id is not None:
+        active_booking_query = active_booking_query.filter(ResourceBooking.id != exclude_booking_id)
+
+    active_booking = active_booking_query.first()
+    if active_booking:
+        conflicts.append(
+            ConflictDetail(
+                conflict_type="ACTIVE_BOOKING_LOCK",
+                description=(
+                    f"Resource already booked. {resource.name} has an active booking and is not available "
+                    f"for another booking. Please select another resource."
+                ),
+                conflicting_id=active_booking.id,
+                start_time=active_booking.start_time,
+                end_time=active_booking.end_time,
+            )
+        )
+        return False, conflicts
+
+    # 3. Approved bookings overlap check (retained for interval sanity)
     # Interval overlap: existing_start < requested_end AND requested_start < existing_end
     booking_query = db.query(ResourceBooking).filter(
         ResourceBooking.resource_id == resource_id,
@@ -230,10 +257,13 @@ def create_booking_request(
     Submits a booking request. Enforces interval validation and conflict checks.
     If a conflict exists, raises HTTP 409 with structured explanation and alternatives.
     """
-    query = db.query(Resource).filter(Resource.id == booking_in.resource_id)
-    if initial_status == "APPROVED":
-        query = query.with_for_update()
-    resource = query.first()
+    # Serialize concurrent booking requests on the target resource
+    resource = (
+        db.query(Resource)
+        .filter(Resource.id == booking_in.resource_id)
+        .with_for_update()
+        .first()
+    )
     if not resource:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

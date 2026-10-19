@@ -116,6 +116,29 @@ class ResourceProposalStore:
             proposal.consumed = True
             return True, proposal, ""
 
+    def get_latest_pending_proposal(self, user_id: int) -> Optional[ResourceProposal]:
+        """Returns the most recent unconsumed, active proposal created by user_id."""
+        with self._lock:
+            self._purge_expired()
+            now = time.time()
+            user_props = [
+                p for p in self._proposals.values()
+                if p.user_id == user_id and not p.consumed and now <= p.expires_at
+            ]
+            if not user_props:
+                return None
+            user_props.sort(key=lambda p: p.created_at, reverse=True)
+            return user_props[0]
+
+    def discard_proposal(self, proposal_id: str, user_id: int) -> bool:
+        """Discards an active proposal if owned by user_id."""
+        with self._lock:
+            p = self._proposals.get(proposal_id)
+            if p and p.user_id == user_id and not p.consumed:
+                del self._proposals[proposal_id]
+                return True
+            return False
+
     def _purge_expired(self):
         now = time.time()
         expired_keys = [k for k, v in self._proposals.items() if now > v.expires_at]

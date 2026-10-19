@@ -71,8 +71,16 @@ def discover_resources_data(
 
     resources = query.order_by(Resource.id).limit(limit).all()
 
+    active_locks = set(
+        row[0]
+        for row in db.query(ResourceBooking.resource_id)
+        .filter(ResourceBooking.status.in_(["PENDING", "APPROVED"]))
+        .all()
+    )
+
     results = []
     for r in resources:
+        is_locked = r.id in active_locks
         results.append({
             "id": r.id,
             "name": r.name,
@@ -80,6 +88,8 @@ def discover_resources_data(
             "location": r.location,
             "capacity": r.capacity,
             "status": r.status,
+            "is_locked": is_locked,
+            "availability_status": "LOCKED" if is_locked else "AVAILABLE",
         })
 
     return {

@@ -105,7 +105,7 @@ class AlternativeResource(BaseModel):
 
 
 class ConflictDetail(BaseModel):
-    conflict_type: Literal["EXISTING_BOOKING", "PUBLISHED_TIMETABLE", "RESOURCE_INACTIVE"]
+    conflict_type: Literal["EXISTING_BOOKING", "PUBLISHED_TIMETABLE", "RESOURCE_INACTIVE", "ACTIVE_BOOKING_LOCK"]
     description: str
     conflicting_id: Optional[int] = None
     start_time: Optional[datetime.time] = None

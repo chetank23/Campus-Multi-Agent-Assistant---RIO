@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from backend.models.identity import User
 from agents.state.state import AgentState
 from agents.tools import QUERY_TOOL_DEFINITIONS, execute_tool
+from agents.common.formatter import sanitize_plain_english
 
 
 def _extract_intent_and_tool_call(message: str, user: User) -> Tuple[str, Dict[str, Any]]:
@@ -132,27 +133,25 @@ def format_grounded_response(
     sources: List[str] = []
 
     if "error" in tool_result:
-        return f"⚠️ {tool_result['error']}", sources
+        return sanitize_plain_english(f"Error: {tool_result['error']}"), sources
 
     if tool_name == "get_student_timetable":
         sources.append("Official Published Timetable")
         entries = tool_result.get("entries", [])
         if not entries:
             msg = tool_result.get("message", "No classes found for your section in the active published timetable.")
-            return f"ℹ️ {msg}", sources
+            return sanitize_plain_english(msg), sources
 
         lines = [
-            f"### 📅 Published Class Schedule for {tool_result.get('student_name', 'Student')}",
-            f"**Section:** {tool_result.get('section', 'N/A')} | **Batch:** {tool_result.get('batch', 'All')}",
+            f"Published Class Schedule for {tool_result.get('student_name', 'Student')}",
+            f"Section: {tool_result.get('section', 'N/A')} | Batch: {tool_result.get('batch', 'All')}",
             "",
-            "| Day | Time | Course | Room | Faculty | Status |",
-            "| :--- | :--- | :--- | :--- | :--- | :--- |",
         ]
         for e in entries:
             lines.append(
-                f"| {e['day']} | {e['start_time']} - {e['end_time']} | {e['course_code']} ({e['course_title']}) | {e['room']} | {e['faculty_name']} | `{e['status']}` |"
+                f"- {e['day']} {e['start_time']} - {e['end_time']}: {e['course_code']} ({e['course_title']}), Room: {e['room']}, Faculty: {e['faculty_name']} (Status: {e['status']})"
             )
-        return "\n".join(lines), sources
+        return sanitize_plain_english("\n".join(lines)), sources
 
     elif tool_name == "get_class_status":
         sources.append("Live Timetable Tracker")
@@ -161,127 +160,121 @@ def format_grounded_response(
         classes = tool_result.get("classes", [])
 
         lines = [
-            f"### ⏱️ Real-time Class Status ({tool_result.get('day', 'Today')}, {tool_result.get('current_time', '')})",
+            f"Real-time Class Status ({tool_result.get('day', 'Today')}, {tool_result.get('current_time', '')})",
             "",
         ]
         if ongoing:
             lines.append(
-                f"🟢 **ONGOING CLASS NOW:** **{ongoing['course_code']}** ({ongoing['course_title']}) in **Room {ongoing['room']}** by **{ongoing['faculty']}** ({ongoing['start_time']} - {ongoing['end_time']})"
+                f"Ongoing class now: {ongoing['course_code']} ({ongoing['course_title']}) in Room {ongoing['room']} by {ongoing['faculty']} ({ongoing['start_time']} - {ongoing['end_time']})"
             )
         else:
-            lines.append("⚪ **No class is currently in session right now.**")
+            lines.append("No class is currently in session.")
 
         if next_c:
             lines.append(
-                f"🟡 **NEXT UPCOMING CLASS:** **{next_c['course_code']}** ({next_c['course_title']}) in **Room {next_c['room']}** by **{next_c['faculty']}** at **{next_c['start_time']}**"
+                f"Next upcoming class: {next_c['course_code']} ({next_c['course_title']}) in Room {next_c['room']} by {next_c['faculty']} at {next_c['start_time']}"
             )
         else:
-            lines.append("🏁 **No further classes scheduled for today.**")
+            lines.append("No further classes scheduled for today.")
 
         if classes:
-            lines.append("\n**Today's Schedule:**")
+            lines.append("\nToday's Schedule:")
             for c in classes:
-                status_emoji = "🟢" if c["class_status"] == "ONGOING" else ("🟡" if c["class_status"] == "UPCOMING" else "⚪")
                 lines.append(
-                    f"- {status_emoji} `{c['start_time']} - {c['end_time']}`: **{c['course_code']}** ({c['course_title']}) in Room {c['room']} — *{c['class_status']}*"
+                    f"- {c['start_time']} - {c['end_time']}: {c['course_code']} ({c['course_title']}) in Room {c['room']} (Status: {c['class_status']})"
                 )
 
-        return "\n".join(lines), sources
+        return sanitize_plain_english("\n".join(lines)), sources
 
     elif tool_name == "get_faculty_schedule":
         sources.append("Faculty Teaching Roster")
         entries = tool_result.get("entries", [])
         if not entries:
             msg = tool_result.get("message", "No scheduled classes found in the active published timetable.")
-            return f"ℹ️ {msg}", sources
+            return sanitize_plain_english(msg), sources
 
         lines = [
-            f"### 👨‍🏫 Teaching Schedule for {tool_result.get('faculty_name', 'Faculty Member')}",
-            f"**Designation:** {tool_result.get('designation', 'Faculty')} | **Total Slots:** {tool_result.get('total_teaching_slots', len(entries))}",
+            f"Teaching Schedule for {tool_result.get('faculty_name', 'Faculty Member')}",
+            f"Designation: {tool_result.get('designation', 'Faculty')} | Total Slots: {tool_result.get('total_teaching_slots', len(entries))}",
             "",
-            "| Day | Time | Course | Section | Room | Status |",
-            "| :--- | :--- | :--- | :--- | :--- | :--- |",
         ]
         for e in entries:
             lines.append(
-                f"| {e['day']} | {e['start_time']} - {e['end_time']} | {e['course_code']} ({e['course_title']}) | {e['section']} | {e['room']} | `{e['status']}` |"
+                f"- {e['day']} {e['start_time']} - {e['end_time']}: {e['course_code']} ({e['course_title']}), Section: {e['section']}, Room: {e['room']} (Status: {e['status']})"
             )
-        return "\n".join(lines), sources
+        return sanitize_plain_english("\n".join(lines)), sources
 
     elif tool_name == "get_faculty_profile":
         sources.append("Campus Academic Directory")
         results = tool_result.get("results", [])
         if not results:
-            return tool_result.get("message", "No matching faculty found."), sources
+            return sanitize_plain_english(tool_result.get("message", "No matching faculty found.")), sources
 
-        lines = ["### 👤 Faculty Directory Results\n"]
+        lines = ["Faculty Directory Results:\n"]
         for f in results:
-            lines.append(f"#### {f['name']} ({f['designation']})")
-            lines.append(f"- **Department:** {f['department']}")
-            lines.append(f"- **Faculty ID:** {f['faculty_id']}")
-            lines.append(f"- **Specialization:** {f['specialization']}")
-            lines.append(f"- **Areas of Interest:** {f['areas_of_interest']}")
+            lines.append(f"{f['name']} ({f['designation']})")
+            lines.append(f"- Department: {f['department']}")
+            lines.append(f"- Faculty ID: {f['faculty_id']}")
+            lines.append(f"- Specialization: {f['specialization']}")
+            lines.append(f"- Areas of Interest: {f['areas_of_interest']}")
             if f.get("contact_number"):
-                lines.append(f"- **Contact:** {f['contact_number']}")
+                lines.append(f"- Contact: {f['contact_number']}")
             lines.append("")
-        return "\n".join(lines), sources
+        return sanitize_plain_english("\n".join(lines)), sources
 
     elif tool_name == "get_course_details":
         sources.append("University Course Catalog")
         results = tool_result.get("results", [])
         if not results:
-            return tool_result.get("message", "No course found matching query."), sources
+            return sanitize_plain_english(tool_result.get("message", "No course found matching query.")), sources
 
-        lines = ["### 📚 Course Information\n"]
+        lines = ["Course Information:\n"]
         for c in results:
             elective_tag = " (Elective)" if c["is_elective"] else " (Core)"
-            lines.append(f"- **{c['code']} — {c['title']}**{elective_tag}")
-            lines.append(f"  - **Credits:** {c['credits']} | **Department:** {c['department']}")
-        return "\n".join(lines), sources
+            lines.append(f"- {c['code']} - {c['title']}{elective_tag}")
+            lines.append(f"  Credits: {c['credits']} | Department: {c['department']}")
+        return sanitize_plain_english("\n".join(lines)), sources
 
     elif tool_name == "get_room_or_lab_details":
         sources.append("Campus Facilities Register")
         results = tool_result.get("results", [])
         if not results:
-            return tool_result.get("message", "No facility found."), sources
+            return sanitize_plain_english(tool_result.get("message", "No facility found.")), sources
 
-        lines = ["### 🏛️ Room & Lab Details\n"]
+        lines = ["Room and Lab Details:\n"]
         for r in results:
             active_badge = "Active" if r["is_active"] else "Inactive"
-            lines.append(f"- **Room {r['room_number']}** ({r['room_type']}) — *{active_badge}*")
-            lines.append(f"  - **Building:** {r['building']} | **Capacity:** {r['capacity']} seats")
-        return "\n".join(lines), sources
+            lines.append(f"- Room {r['room_number']} ({r['room_type']}) - Status: {active_badge}")
+            lines.append(f"  Building: {r['building']} | Capacity: {r['capacity']} seats")
+        return sanitize_plain_english("\n".join(lines)), sources
 
     elif tool_name == "get_academic_calendar":
         sources.append("Official Academic Calendar")
         events = tool_result.get("events", [])
         if not events:
-            return tool_result.get("message", "No scheduled events found."), sources
+            return sanitize_plain_english(tool_result.get("message", "No scheduled events found.")), sources
 
-        lines = ["### 📆 Academic Calendar & University Events\n"]
+        lines = ["Academic Calendar and University Events:\n"]
         for ev in events:
-            type_tag = f"`{ev['event_type']}`"
-            lines.append(f"- **{ev['date']}** {type_tag}: {ev['description']}")
-        return "\n".join(lines), sources
+            lines.append(f"- {ev['date']} ({ev['event_type']}): {ev['description']}")
+        return sanitize_plain_english("\n".join(lines)), sources
 
     elif tool_name == "get_department_timetable":
         sources.append("Department Schedule Register")
         entries = tool_result.get("entries", [])
         if not entries:
-            return tool_result.get("message", "No department schedule found."), sources
+            return sanitize_plain_english(tool_result.get("message", "No department schedule found.")), sources
 
         lines = [
-            f"### 🏢 Schedule for {tool_result.get('department_name', 'Department')}",
-            f"**Total Classes Listed:** {len(entries)}",
+            f"Schedule for {tool_result.get('department_name', 'Department')}",
+            f"Total Classes Listed: {len(entries)}",
             "",
-            "| Day | Time | Course | Section | Room | Faculty |",
-            "| :--- | :--- | :--- | :--- | :--- | :--- |",
         ]
         for e in entries[:25]:
             lines.append(
-                f"| {e['day']} | {e['start_time']} - {e['end_time']} | {e['course']} | {e['section']} | {e['room']} | {e['faculty']} |"
+                f"- {e['day']} {e['start_time']} - {e['end_time']}: {e['course']}, Section: {e['section']}, Room: {e['room']}, Faculty: {e['faculty']}"
             )
-        return "\n".join(lines), sources
+        return sanitize_plain_english("\n".join(lines)), sources
 
     elif tool_name == "get_campus_room_inventory":
         sources.append("Campus Facilities Register")
@@ -289,16 +282,15 @@ def format_grounded_response(
         breakdown = tool_result.get("breakdown", [])
         note = tool_result.get("availability_note", "")
 
-        lines = ["### Campus Room Inventory (Active Facilities)\n"]
-        lines.append(f"**Total Active Rooms:** {total}\n")
+        lines = ["Campus Room Inventory (Active Facilities)\n"]
+        lines.append(f"Total Active Rooms: {total}\n")
+        lines.append("Breakdown by Room Type:")
         if breakdown:
-            lines.append("| Room Type | Count |")
-            lines.append("| :--- | ---: |")
             for b in breakdown:
-                lines.append(f"| {b['room_type'].replace('_', ' ').title()} | {b['count']} |")
+                lines.append(f"- {b['room_type'].replace('_', ' ').title()}: {b['count']}")
         lines.append("")
-        lines.append(f"> **Note:** {note}")
-        return "\n".join(lines), sources
+        lines.append(f"Note: {note}")
+        return sanitize_plain_english("\n".join(lines)), sources
 
     return "No information could be generated for this query.", sources
 

@@ -19,6 +19,9 @@ from agents.state.state import AgentState
 from agents.query_agent.agent import run_query_agent
 from agents.scheduling_agent.agent import run_scheduling_agent
 from agents.resource_agent.agent import run_resource_agent
+from agents.scheduling_agent.proposal_store import proposal_store
+from agents.resource_agent.proposal_store import resource_proposal_store
+from agents.common.formatter import sanitize_plain_english
 
 
 def classify_intent(message: str) -> str:
@@ -91,6 +94,16 @@ def classify_intent(message: str) -> str:
             if re.search(r"\b" + re.escape(q) + r"\b", msg):
                 return "QUERY_AGENT"
 
+    # Follow-up intent checks
+    if re.search(r"^(?:yes|confirm|proceed|confirm it|approve it|do it)$", msg):
+        return "FOLLOW_UP_CONFIRM"
+
+    if re.search(r"^(?:no|cancel|discard|never mind|stop)$", msg):
+        return "FOLLOW_UP_CANCEL"
+
+    if re.search(r"\b(?:change the time|change time|another time|different time|show me another option|another option|other options)\b", msg):
+        return "FOLLOW_UP_MODIFY"
+
     # Greetings and general campus inquiries
     if re.search(r"\b(hi|hello|hey|help|good morning|good afternoon|who are you|what can you do)\b", msg):
         return "CAMPUS_GREETING"
@@ -101,9 +114,70 @@ def classify_intent(message: str) -> str:
 def supervisor_node(state: AgentState) -> AgentState:
     """
     Supervisor entry node: evaluates intent, validates scope, and sets target route.
+    Interprets follow-up messages against active proposal context.
     """
     message = state.get("message", "")
+    user_id = state.get("user_id")
     intent = classify_intent(message)
+
+    # Handle follow-up confirmation: "yes", "confirm", "proceed", "confirm it"
+    if intent == "FOLLOW_UP_CONFIRM":
+        if user_id:
+            res_prop = resource_proposal_store.get_latest_pending_proposal(user_id)
+            if res_prop:
+                state["message"] = f"confirm {res_prop.proposal_id}"
+                return {
+                    "intent": "RESOURCE_BOOKING",
+                    "selected_agent": "resource_agent",
+                    "message": f"confirm {res_prop.proposal_id}",
+                }
+            sched_prop = proposal_store.get_latest_pending_proposal(user_id)
+            if sched_prop:
+                state["message"] = f"confirm {sched_prop.proposal_id}"
+                return {
+                    "intent": "TIMETABLE_GENERATION",
+                    "selected_agent": "scheduling_agent",
+                    "message": f"confirm {sched_prop.proposal_id}",
+                }
+
+        return {
+            "intent": "CLARIFICATION_REQUIRED",
+            "selected_agent": None,
+            "final_response": "There is no pending proposal awaiting your confirmation. Please state the action or schedule you wish to request.",
+        }
+
+    # Handle follow-up cancellation: "no", "cancel", "never mind"
+    if intent == "FOLLOW_UP_CANCEL":
+        discarded = False
+        if user_id:
+            res_prop = resource_proposal_store.get_latest_pending_proposal(user_id)
+            if res_prop:
+                resource_proposal_store.discard_proposal(res_prop.proposal_id, user_id)
+                discarded = True
+            sched_prop = proposal_store.get_latest_pending_proposal(user_id)
+            if sched_prop:
+                proposal_store.discard_proposal(sched_prop.proposal_id, user_id)
+                discarded = True
+
+        if discarded:
+            return {
+                "intent": "PROPOSAL_DISCARDED",
+                "selected_agent": None,
+                "final_response": "The pending proposal has been discarded. Please let me know what else you would like to do.",
+            }
+        return {
+            "intent": "ACKNOWLEDGEMENT",
+            "selected_agent": None,
+            "final_response": "Understood. Please let me know if you need assistance with timetables, facilities, or campus directory records.",
+        }
+
+    # Handle follow-up modification: "change the time", "show me another option"
+    if intent == "FOLLOW_UP_MODIFY":
+        return {
+            "intent": "CLARIFICATION_REQUIRED",
+            "selected_agent": None,
+            "final_response": "Please specify the preferred date and time interval you would like to check.",
+        }
 
     if intent == "TIMETABLE_GENERATION":
         return {
@@ -122,17 +196,14 @@ def supervisor_node(state: AgentState) -> AgentState:
             "intent": intent,
             "selected_agent": None,
             "final_response": (
-                "👋 Hello! I am the **RIO Campus Assistant**.\n\n"
-                "I can help you with verified campus operations, including:\n"
-                "- 📅 **Your Published Schedule**: *'What classes do I have on Monday?'*\n"
-                "- ⏱️ **Class Status**: *'What is my next class?'*\n"
-                "- 🏛️ **Resource Booking**: *'Book Seminar Hall A tomorrow 2pm to 4pm'* or *'Find seminar halls'*\n"
-                "- 🤖 **Timetable Generation**: *'Generate a timetable for CSE Semester 1'* (Admin only)\n"
-                "- 📍 **Campus Facilities**: *'Where is Room 101?'*\n"
-                "- 📚 **Course Catalog**: *'What are the credits for CS101?'*\n"
-                "- 👨‍🏫 **Faculty Directory**: *'Who is teaching Dr. Allison Hill?'*\n"
-                "- 📆 **University Calendar**: *'When are the upcoming holidays?'*\n\n"
-                "How can I assist you today?"
+                "Hello. I am the RIO Campus Assistant.\n\n"
+                "I can help you with:\n"
+                "- Your published class timetable and real-time class status.\n"
+                "- Campus facility availability, resource discovery, and booking requests.\n"
+                "- Faculty directory profiles, course catalog details, and room locations.\n"
+                "- University academic calendar events and examination schedules.\n"
+                "- Academic timetable generation and optimization (Administrators only).\n\n"
+                "How may I assist you today?"
             ),
         }
 
@@ -147,9 +218,9 @@ def supervisor_node(state: AgentState) -> AgentState:
             "intent": "UNKNOWN",
             "selected_agent": None,
             "final_response": (
-                "🤔 I could not find a matching campus service for your request.\n\n"
-                "You can ask me about your published timetable, real-time class status, faculty profiles, "
-                "classroom locations, course credits, resource bookings and facility availability, university calendar events, or timetable generation (Admin only)."
+                "I could not find a matching campus service for your request.\n\n"
+                "You can ask about your published timetable, faculty profiles, room locations, course details, "
+                "resource bookings, facility availability, calendar events, or timetable generation (Admin only)."
             ),
         }
 
@@ -246,8 +317,9 @@ def execute_supervisor(
         app = build_supervisor_graph(db=db, user=user)
         final_state = app.invoke(initial_state)
 
+        raw_reply = final_state.get("final_response") or "No response could be generated."
         return {
-            "reply": final_state.get("final_response") or "No response could be generated.",
+            "reply": sanitize_plain_english(raw_reply),
             "intent": final_state.get("intent"),
             "selected_agent": final_state.get("selected_agent"),
             "tool_calls": final_state.get("tool_calls", []),
@@ -258,11 +330,10 @@ def execute_supervisor(
             "error": None,
         }
 
-
     except Exception as exc:
         return {
             "reply": (
-                "⚠️ The Campus Assistant encountered a temporary internal error while processing your request. "
+                "The Campus Assistant encountered a temporary internal error while processing your request. "
                 "Please try again or contact system support."
             ),
             "intent": "ERROR",

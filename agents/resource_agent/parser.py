@@ -245,11 +245,11 @@ def extract_resource_details(text: str) -> Dict[str, Any]:
     # Detect Named Resource Candidates (e.g. "Seminar Hall A", "CSE Lab 1", "Auditorium 1", "Room 101")
     # Negative lookahead ensures prepositions like 'on', 'at', 'from' are not captured as name suffixes
     name_patterns = [
-        r"\b(seminar\s+hall\s+(?!(?:on|at|from|for|in|with|by|to)\b)[a-zA-Z0-9_-]+)\b",
-        r"\b(cse\s+lab\s+(?!(?:on|at|from|for|in|with|by|to)\b)[a-zA-Z0-9_-]+)\b",
-        r"\b(lab\s+(?!(?:on|at|from|for|in|with|by|to)\b)[a-zA-Z0-9_-]+)\b",
-        r"\b(auditorium\s+(?!(?:on|at|from|for|in|with|by|to)\b)[a-zA-Z0-9_-]+)\b",
-        r"\b(room\s+(?!(?:on|at|from|for|in|with|by|to)\b)[a-zA-Z0-9_-]+)\b",
+        r"\b(seminar\s+hall\s+(?!(?:on|at|from|for|in|with|by|to|available|free|booked|open|vacant|needed|wanted)\b)[a-zA-Z0-9_-]+)\b",
+        r"\b(cse\s+lab\s+(?!(?:on|at|from|for|in|with|by|to|available|free|booked|open|vacant|needed|wanted)\b)[a-zA-Z0-9_-]+)\b",
+        r"\b(lab\s+(?!(?:on|at|from|for|in|with|by|to|available|free|booked|open|vacant|needed|wanted)\b)[a-zA-Z0-9_-]+)\b",
+        r"\b(auditorium\s+(?!(?:on|at|from|for|in|with|by|to|available|free|booked|open|vacant|needed|wanted)\b)[a-zA-Z0-9_-]+)\b",
+        r"\b(room\s+(?!(?:on|at|from|for|in|with|by|to|available|free|booked|open|vacant|needed|wanted)\b)[a-zA-Z0-9_-]+)\b",
         r"\b(main\s+auditorium)\b",
         r"\b(portable\s+projector\s+[0-9]+)\b",
     ]

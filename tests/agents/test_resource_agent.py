@@ -245,14 +245,28 @@ def test_booking_proposal_creation_and_confirmation():
         confirm_res = run_resource_agent(state=confirm_state, db=db, user=faculty_user)
         assert confirm_res["success"] is True
         assert confirm_res["action_type"] == "BOOKING_CREATED"
-        assert "Submitted Successfully" in confirm_res["final_response"]
-        assert "PENDING" in confirm_res["final_response"]
+        assert "submitted successfully" in confirm_res["final_response"].lower()
+        assert "pending" in confirm_res["final_response"].lower()
 
         # 4. Attempting replay with the same proposal should fail
         replay_res = run_resource_agent(state=confirm_state, db=db, user=faculty_user)
         assert replay_res["success"] is False
         assert replay_res["action_type"] == "CONFIRMATION_REJECTED"
         assert "already been confirmed" in replay_res["final_response"]
+
+        # 5. Cleanup created booking to release global lock
+        created_booking = (
+            db.query(ResourceBooking)
+            .filter(
+                ResourceBooking.resource_id == res_entity.id,
+                ResourceBooking.requested_by == faculty_user.id,
+                ResourceBooking.status == "PENDING",
+            )
+            .first()
+        )
+        if created_booking:
+            created_booking.status = "CANCELLED"
+            db.commit()
 
 
 # ── 7. Conflict Detection & Alternative Suggestions ───────────────────────────
@@ -289,8 +303,12 @@ def test_resource_conflict_detection_and_alternatives():
         res = run_resource_agent(state=state, db=db, user=user)
 
         assert res["action_type"] == "RESOURCE_UNAVAILABLE"
-        assert "Conflict Detected" in res["final_response"]
-        assert "Overlaps with approved reservation" in res["final_response"]
+        assert "Resource already booked" in res["final_response"]
+        assert "Please select another resource" in res["final_response"]
+
+        # Clean up existing booking to release global lock
+        db.delete(existing_booking)
+        db.commit()
 
 
 # ── 8. User Bookings & Cancellation ───────────────────────────────────────────
@@ -392,7 +410,21 @@ def test_resource_agent_no_booking_write_on_informational_query():
     with Session(engine) as db:
         user = db.query(User).filter(User.role == "FACULTY").first()
         assert user is not None
-        res_entity = db.query(Resource).filter(Resource.status == "ACTIVE").first()
+        active_locked_ids = [
+            b[0]
+            for b in db.query(ResourceBooking.resource_id)
+            .filter(ResourceBooking.status.in_(["PENDING", "APPROVED"]))
+            .all()
+        ]
+        res_query = db.query(Resource).filter(Resource.status == "ACTIVE")
+        if active_locked_ids:
+            res_query = res_query.filter(~Resource.id.in_(active_locked_ids))
+        res_entity = res_query.first()
+        if not res_entity:
+            res_entity = Resource(name="Available Test Lab", resource_type="LAB", capacity=30, status="ACTIVE")
+            db.add(res_entity)
+            db.commit()
+            db.refresh(res_entity)
         assert res_entity is not None
 
         initial_count = db.query(ResourceBooking).filter(ResourceBooking.resource_id == res_entity.id).count()

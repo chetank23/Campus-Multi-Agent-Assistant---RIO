@@ -414,7 +414,7 @@ def test_conflict_detection_approved_booking_overlap(faculty_token, admin_token)
         },
     )
     assert resp_a.status_code == 409
-    assert "EXISTING_BOOKING" in resp_a.text
+    assert "Resource already booked" in resp_a.text or "ACTIVE_BOOKING_LOCK" in resp_a.text
 
     # 3. Overlapping attempt B: ends inside (09:00 to 10:30) -> 409 Conflict
     resp_b = client.post(
@@ -458,8 +458,9 @@ def test_conflict_detection_approved_booking_overlap(faculty_token, admin_token)
     )
     assert resp_d.status_code == 409
 
-    # 6. Adjacent permitted A: immediately before (08:00 to 10:00) -> 201 Created (allowed!)
-    resp_before = client.post(
+    # 6. Global Resource Lock Policy: adjacent or other-interval booking fails with 409 Conflict
+    # while active lock (APPROVED) is in effect
+    resp_adj = client.post(
         "/resources/bookings",
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
@@ -470,9 +471,16 @@ def test_conflict_detection_approved_booking_overlap(faculty_token, admin_token)
             "purpose": "Early morning setup (adjacent before)",
         },
     )
-    assert resp_before.status_code == 201
+    assert resp_adj.status_code == 409
+    assert "already booked" in resp_adj.text.lower() or "ACTIVE_BOOKING_LOCK" in resp_adj.text
 
-    # 7. Adjacent permitted B: immediately after (12:00 to 14:00) -> 201 Created (allowed!)
+    # 7. Cancel b1 -> Lock is released -> New booking succeeds with 201 Created
+    cancel_resp = client.post(
+        f"/resources/bookings/{b1['id']}/cancel",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert cancel_resp.status_code == 200
+
     resp_after = client.post(
         "/resources/bookings",
         headers={"Authorization": f"Bearer {faculty_token}"},
@@ -481,7 +489,7 @@ def test_conflict_detection_approved_booking_overlap(faculty_token, admin_token)
             "date": "2026-11-20",
             "start_time": "12:00:00",
             "end_time": "14:00:00",
-            "purpose": "Afternoon lab (adjacent after)",
+            "purpose": "Afternoon lab (after lock released)",
         },
     )
     assert resp_after.status_code == 201
@@ -489,8 +497,10 @@ def test_conflict_detection_approved_booking_overlap(faculty_token, admin_token)
 
 def test_competing_pending_requests_approval_race(faculty_token, faculty2_token, admin_token):
     """
-    Two pending requests submitted for the same time window.
-    Both can exist as PENDING, but once one is APPROVED, approving the other must fail with 409 Conflict.
+    Stage 11 Global Resource Lock Policy:
+    A PENDING booking on a resource establishes an active lock.
+    A second request for the same resource is blocked at creation time with 409 Conflict.
+    Rejection or cancellation of the pending booking releases the lock.
     """
     res_resp = client.post(
         "/resources",
@@ -499,8 +509,8 @@ def test_competing_pending_requests_approval_race(faculty_token, faculty2_token,
     )
     res_id = res_resp.json()["id"]
 
-    # Requester 1 submits PENDING
-    req1 = client.post(
+    # Requester 1 submits PENDING -> succeeds (201 Created)
+    req1_resp = client.post(
         "/resources/bookings",
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
@@ -510,10 +520,12 @@ def test_competing_pending_requests_approval_race(faculty_token, faculty2_token,
             "end_time": "16:00:00",
             "purpose": "Optics Experiment",
         },
-    ).json()
+    )
+    assert req1_resp.status_code == 201
+    req1 = req1_resp.json()
 
-    # Requester 2 submits competing PENDING
-    req2 = client.post(
+    # Requester 2 attempts competing request on locked resource -> 409 Conflict
+    req2_resp = client.post(
         "/resources/bookings",
         headers={"Authorization": f"Bearer {faculty2_token}"},
         json={
@@ -523,22 +535,31 @@ def test_competing_pending_requests_approval_race(faculty_token, faculty2_token,
             "end_time": "17:00:00",
             "purpose": "Laser Interferometry",
         },
-    ).json()
-
-    # Admin approves req1 -> success
-    appr1 = client.post(
-        f"/resources/bookings/{req1['id']}/approve",
-        headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert appr1.status_code == 200
+    assert req2_resp.status_code == 409
+    assert "already booked" in req2_resp.text.lower() or "ACTIVE_BOOKING_LOCK" in req2_resp.text
 
-    # Admin attempts to approve req2 -> re-check fails with 409 Conflict!
-    appr2 = client.post(
-        f"/resources/bookings/{req2['id']}/approve",
+    # Rejection of req1 releases the lock
+    rej = client.post(
+        f"/resources/bookings/{req1['id']}/reject",
         headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reason": "Schedule re-allocation"},
     )
-    assert appr2.status_code == 409
-    assert "conflict detected" in appr2.json()["detail"]["message"].lower()
+    assert rej.status_code == 200
+
+    # Now Requester 2 can successfully book the resource
+    req2_retry = client.post(
+        "/resources/bookings",
+        headers={"Authorization": f"Bearer {faculty2_token}"},
+        json={
+            "resource_id": res_id,
+            "date": "2026-11-25",
+            "start_time": "15:00:00",
+            "end_time": "17:00:00",
+            "purpose": "Laser Interferometry",
+        },
+    )
+    assert req2_retry.status_code == 201
 
 
 def test_published_timetable_conflict_detection(admin_token, faculty_token):
@@ -742,64 +763,52 @@ def test_true_concurrent_competing_booking_approvals(admin_token, faculty_token,
 
     test_date = "2026-12-05"
 
-    # 2. Submit Request 1 (14:00 - 16:00)
-    req1 = client.post(
-        "/resources/bookings",
-        headers={"Authorization": f"Bearer {faculty_token}"},
-        json={
-            "resource_id": res_id,
-            "date": test_date,
-            "start_time": "14:00:00",
-            "end_time": "16:00:00",
-            "purpose": "Concurrent Test Job 1",
-        },
-    ).json()
-
-    # 3. Submit competing Request 2 (15:00 - 17:00, overlapping by 1 hour)
-    req2 = client.post(
-        "/resources/bookings",
-        headers={"Authorization": f"Bearer {faculty2_token}"},
-        json={
-            "resource_id": res_id,
-            "date": test_date,
-            "start_time": "15:00:00",
-            "end_time": "17:00:00",
-            "purpose": "Concurrent Test Job 2",
-        },
-    ).json()
-
-    req1_id = req1["id"]
-    req2_id = req2["id"]
-
-    # 4. Concurrently attempt approval from two separate worker threads
-    def approve_worker(booking_id: int):
+    # 2. Concurrently submit two competing booking requests from two separate threads.
+    # Row-level locking on the parent Resource serializes both attempts.
+    # Exactly one must succeed (200) creating the active PENDING lock, and the competing request must receive 409 Conflict.
+    def submit_worker(token: str, purpose: str):
         thread_client = TestClient(app)
         return thread_client.post(
-            f"/resources/bookings/{booking_id}/approve",
-            headers={"Authorization": f"Bearer {admin_token}"},
+            "/resources/bookings",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "resource_id": res_id,
+                "date": test_date,
+                "start_time": "14:00:00",
+                "end_time": "16:00:00",
+                "purpose": purpose,
+            },
         )
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        future1 = executor.submit(approve_worker, req1_id)
-        future2 = executor.submit(approve_worker, req2_id)
+        future1 = executor.submit(submit_worker, faculty_token, "Concurrent Test Job 1")
+        future2 = executor.submit(submit_worker, faculty2_token, "Concurrent Test Job 2")
         resp1 = future1.result()
         resp2 = future2.result()
 
     status_codes = [resp1.status_code, resp2.status_code]
-    assert 200 in status_codes, f"Expected one approval to succeed, got: {status_codes}"
-    assert 409 in status_codes, f"Expected one approval to fail with conflict, got: {status_codes}"
+    assert 201 in status_codes, f"Expected one submission to succeed with 201 Created, got: {status_codes}"
+    assert 409 in status_codes, f"Expected competing submission to fail with 409 Conflict, got: {status_codes}"
 
-    # 5. Verify database integrity: exactly ONE booking is APPROVED
+    # Extract the winning booking ID
+    winning_resp = resp1 if resp1.status_code == 201 else resp2
+    conflict_resp = resp2 if resp1.status_code == 201 else resp1
+    assert "Resource already booked" in conflict_resp.text or "ACTIVE_BOOKING_LOCK" in conflict_resp.text
+
+    winning_booking_id = winning_resp.json()["id"]
+
+    # 3. Approve the winning booking
+    appr_resp = client.post(
+        f"/resources/bookings/{winning_booking_id}/approve",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert appr_resp.status_code == 200
+
+    # 4. Verify database integrity: exactly ONE booking exists in DB and is APPROVED
     with Session(engine) as db:
-        approved_count = (
-            db.query(ResourceBooking)
-            .filter(
-                ResourceBooking.id.in_([req1_id, req2_id]),
-                ResourceBooking.status == "APPROVED",
-            )
-            .count()
-        )
-        assert approved_count == 1, f"Expected exactly 1 approved booking, found {approved_count} (double-booking occurred!)"
+        bookings = db.query(ResourceBooking).filter(ResourceBooking.resource_id == res_id).all()
+        assert len(bookings) == 1, f"Expected exactly 1 booking record, found {len(bookings)}"
+        assert bookings[0].status == "APPROVED"
 
 
 def test_response_privacy_protection(admin_token, faculty_token, faculty2_token):
