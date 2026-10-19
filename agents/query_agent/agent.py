@@ -324,15 +324,17 @@ def run_query_agent(
             import anthropic
             client = anthropic.Anthropic(api_key=api_key)
 
+            from anthropic.types import ToolParam
+
             # Filter tools permitted for user's role
             allowed_tools = [
                 t for t in QUERY_TOOL_DEFINITIONS if user.role in t["allowed_roles"]
             ]
-            anthropic_tools = [
+            anthropic_tools: list[ToolParam] = [
                 {
-                    "name": t["name"],
-                    "description": t["description"],
-                    "input_schema": t["parameters"],
+                    "name": str(t["name"]),
+                    "description": str(t["description"]),
+                    "input_schema": dict(t["parameters"]),
                 }
                 for t in allowed_tools
             ]

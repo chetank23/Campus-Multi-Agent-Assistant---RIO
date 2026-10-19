@@ -107,12 +107,14 @@ def check_resource_conflicts(
 
     overlapping_bookings = booking_query.all()
     for b in overlapping_bookings:
+        b_st_str = b.start_time.strftime("%H:%M") if b.start_time else "N/A"
+        b_et_str = b.end_time.strftime("%H:%M") if b.end_time else "N/A"
         conflicts.append(
             ConflictDetail(
                 conflict_type="EXISTING_BOOKING",
                 description=(
                     f"Overlaps with approved reservation #{b.id} "
-                    f"({b.start_time.strftime('%H:%M')} - {b.end_time.strftime('%H:%M')})"
+                    f"({b_st_str} - {b_et_str})"
                 ),
                 conflicting_id=b.id,
                 start_time=b.start_time,
@@ -187,8 +189,9 @@ def find_alternative_resources(
     )
 
     # Sort candidates by capacity closeness
-    if target.capacity:
-        candidates.sort(key=lambda r: abs((r.capacity or 0) - target.capacity))
+    if target.capacity is not None:
+        target_cap = target.capacity
+        candidates.sort(key=lambda r: abs((r.capacity or 0) - target_cap))
 
     alternatives: List[AlternativeResource] = []
     for cand in candidates:
@@ -344,10 +347,27 @@ def approve_booking_request(
         .first()
     )
 
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Resource booking #{booking_id} not found",
+        )
+
     if booking.status != "PENDING":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot approve booking #{booking_id} because its status is '{booking.status}' (expected 'PENDING').",
+        )
+
+    if (
+        booking.resource_id is None
+        or booking.date is None
+        or booking.start_time is None
+        or booking.end_time is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot approve booking #{booking_id}: incomplete booking schedule data.",
         )
 
     # 4. Re-check conflicts atomically while holding lock on the parent Resource

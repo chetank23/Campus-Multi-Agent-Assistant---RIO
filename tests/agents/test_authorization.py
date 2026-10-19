@@ -21,6 +21,7 @@ from agents.tools import execute_tool
 def test_student_cannot_access_faculty_teaching_schedule():
     with Session(engine) as db:
         student_user = db.query(User).filter(User.role == "STUDENT").first()
+        assert student_user is not None
         res = execute_tool(
             tool_name="get_faculty_schedule",
             tool_args={},
@@ -34,6 +35,7 @@ def test_student_cannot_access_faculty_teaching_schedule():
 def test_student_cannot_access_department_timetable():
     with Session(engine) as db:
         student_user = db.query(User).filter(User.role == "STUDENT").first()
+        assert student_user is not None
         res = execute_tool(
             tool_name="get_department_timetable",
             tool_args={},
@@ -48,6 +50,7 @@ def test_faculty_restricted_to_own_department_timetable():
     with Session(engine) as db:
         faculty_user = db.query(User).filter(User.role == "FACULTY", User.department_id.isnot(None)).first()
         assert faculty_user is not None
+        assert faculty_user.department_id is not None
 
         # Requesting a different department must be rejected
         other_dept_id = faculty_user.department_id + 999
@@ -65,6 +68,8 @@ def test_student_viewer_masks_faculty_private_contact():
     with Session(engine) as db:
         student_user = db.query(User).filter(User.role == "STUDENT").first()
         admin_user = db.query(User).filter(User.role == "ADMIN").first()
+        assert student_user is not None
+        assert admin_user is not None
 
         # Student lookup
         student_res = execute_tool(
@@ -93,6 +98,7 @@ def test_student_viewer_masks_faculty_private_contact():
 def test_password_hash_and_tokens_never_leaked():
     with Session(engine) as db:
         user = db.query(User).filter(User.role == "STUDENT").first()
+        assert user is not None
         res = execute_tool(
             tool_name="get_faculty_profile",
             tool_args={"search_query": "a"},

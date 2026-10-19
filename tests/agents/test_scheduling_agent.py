@@ -22,6 +22,7 @@ from agents.tools.scheduling_tools import (
     resolve_academic_scope_data,
     analyze_scheduling_readiness_data,
 )
+from agents.state.state import AgentState
 
 
 def test_proposal_store_lifecycle_and_idempotency():
@@ -79,7 +80,7 @@ def test_proposal_store_expiry():
 def test_scheduling_agent_rejects_non_admin():
     from backend.models.identity import User
     fake_student = User(id=5, email="student@reva.edu.in", name="Student", password_hash="dummy", role="STUDENT")
-    state = {
+    state: AgentState = {
         "user_id": 5,
         "role": "STUDENT",
         "department_id": 1,
@@ -127,7 +128,7 @@ def test_readiness_analysis_blocked_on_invalid_scope():
 
 def test_strategy_comparison_query():
     fake_admin = User(id=1, email="admin@reva.edu.in", name="Admin", password_hash="dummy", role="ADMIN")
-    state = {
+    state: AgentState = {
         "user_id": 1,
         "role": "ADMIN",
         "department_id": None,
@@ -144,7 +145,7 @@ def test_strategy_comparison_query():
 
 def test_confirmation_invalid_proposal_id():
     fake_admin = User(id=1, email="admin@reva.edu.in", name="Admin", password_hash="dummy", role="ADMIN")
-    state = {
+    state: AgentState = {
         "user_id": 1,
         "role": "ADMIN",
         "department_id": None,

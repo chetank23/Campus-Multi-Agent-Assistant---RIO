@@ -52,6 +52,17 @@ def _enrich_booking_response(
     Helper to populate user and resource metadata on booking responses.
     Protects user privacy by masking personal email addresses for non-admin third parties.
     """
+    if (
+        booking.resource_id is None
+        or booking.date is None
+        or booking.start_time is None
+        or booking.end_time is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Resource booking #{booking.id} contains incomplete schedule data.",
+        )
+
     res = db.query(Resource).filter(Resource.id == booking.resource_id).first()
     requester = db.query(User).filter(User.id == booking.requested_by).first() if booking.requested_by else None
     approver = db.query(User).filter(User.id == booking.approved_by).first() if booking.approved_by else None
@@ -59,6 +70,16 @@ def _enrich_booking_response(
     # Privacy protection: only ADMIN or the requester can see personal email
     is_owner_or_admin = viewer is None or viewer.role == "ADMIN" or (viewer.id == booking.requested_by)
     requester_email = requester.email if (requester and is_owner_or_admin) else None
+
+    raw_status = (booking.status or "PENDING").upper()
+    if raw_status == "APPROVED":
+        status_val: BookingStatus = "APPROVED"
+    elif raw_status == "REJECTED":
+        status_val: BookingStatus = "REJECTED"
+    elif raw_status == "CANCELLED":
+        status_val: BookingStatus = "CANCELLED"
+    else:
+        status_val: BookingStatus = "PENDING"
 
     return ResourceBookingResponse(
         id=booking.id,
@@ -68,7 +89,7 @@ def _enrich_booking_response(
         start_time=booking.start_time,
         end_time=booking.end_time,
         purpose=booking.purpose,
-        status=booking.status,
+        status=status_val,
         approved_by=booking.approved_by,
         resource_name=res.name if res else f"Resource #{booking.resource_id}",
         resource_type=res.resource_type if res else None,

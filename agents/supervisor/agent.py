@@ -93,7 +93,7 @@ def classify_intent(message: str) -> str:
     return "UNKNOWN"
 
 
-def supervisor_node(state: AgentState) -> Dict[str, Any]:
+def supervisor_node(state: AgentState) -> AgentState:
     """
     Supervisor entry node: evaluates intent, validates scope, and sets target route.
     """

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Stage 3a Part B â€” Full endpoint verification script.
 Runs against a live server at http://localhost:8000.
 """
@@ -125,6 +125,7 @@ with open(sample_csv_path, "rb") as f:
     r = requests.post(f"{BASE}/rooms/import", files={"file": ("sample_rooms.csv", f, "text/csv")})
 
 check("POST /rooms/import â†’ 200", r.status_code == 200, f"status={r.status_code}")
+valid_rows = []
 if r.ok:
     body = r.json()
     valid_rows = body.get("valid_rows", [])

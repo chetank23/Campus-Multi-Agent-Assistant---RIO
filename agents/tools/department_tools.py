@@ -63,7 +63,10 @@ def get_department_timetable_data(
 
     if not published_version:
         return {
+            "department_name": dept_record.name if dept_record else f"Department #{target_dept_id}",
+            "department_code": dept_record.department_code if dept_record else "N/A",
             "message": "No published timetable active.",
+            "total_entries": 0,
             "entries": [],
         }
 
@@ -104,7 +107,7 @@ def get_department_timetable_data(
 
     return {
         "department_name": dept_record.name if dept_record else f"Department #{target_dept_id}",
-        "department_code": dept_record.code if dept_record else "N/A",
+        "department_code": dept_record.department_code if dept_record else "N/A",
         "total_entries": len(formatted),
         "entries": formatted,
     }

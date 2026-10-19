@@ -32,8 +32,12 @@ def test_generate_timetable_valid_scope(admin_token):
         department = db.query(Department).first()
         program = db.query(Program).first()
         
-        if not all([ac_year, semester, department, program]):
+        if not (ac_year and semester and department and program):
             pytest.skip("Missing seed data")
+        assert ac_year is not None
+        assert semester is not None
+        assert department is not None
+        assert program is not None
 
     response = client.post(
         "/timetable/generate",
@@ -99,6 +103,12 @@ def test_generate_timetable_invalid_sections(admin_token):
         semester = db.query(Semester).first()
         department = db.query(Department).first()
         program = db.query(Program).first()
+        if not (ac_year and semester and department and program):
+            pytest.skip("Missing seed data")
+        assert ac_year is not None
+        assert semester is not None
+        assert department is not None
+        assert program is not None
 
     response = client.post(
         "/timetable/generate",
@@ -125,8 +135,12 @@ def test_generate_timetable_infeasible(admin_token):
         semester = db.query(Semester).first()
         department = db.query(Department).first()
         program = db.query(Program).first()
-        if not all([ac_year, semester, department, program]):
+        if not (ac_year and semester and department and program):
             pytest.skip("Missing seed data")
+        assert ac_year is not None
+        assert semester is not None
+        assert department is not None
+        assert program is not None
 
     with patch('backend.routes.timetable.TimetableSolver.solve') as mock_solve:
         from backend.optimizer.timetable_solver import SolverResult

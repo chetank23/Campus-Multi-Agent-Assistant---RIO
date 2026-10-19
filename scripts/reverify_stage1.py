@@ -155,6 +155,7 @@ try:
         row = conn.execute(text(
             "SELECT current_database(), current_user, version()"
         )).fetchone()
+        assert row is not None
         check("connects successfully", True)
         check("connected to campus_ai", row[0] == "campus_ai", f"got: {row[0]}")
         check("connected as campus_user", row[1] == "campus_user", f"got: {row[1]}")

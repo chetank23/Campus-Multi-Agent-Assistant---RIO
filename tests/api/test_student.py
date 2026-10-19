@@ -17,8 +17,8 @@ engine = create_engine(DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def override_get_db():
+    db = TestingSessionLocal()
     try:
-        db = TestingSessionLocal()
         yield db
     finally:
         db.close()
@@ -115,6 +115,11 @@ def test_create_student(test_student, auth_headers):
     sem = db.query(Semester).first()
     sec = db.query(Section).first()
     batch = db.query(Batch).first()
+    assert dept is not None
+    assert prog is not None
+    assert sem is not None
+    assert sec is not None
+    assert batch is not None
     
     from passlib.context import CryptContext
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

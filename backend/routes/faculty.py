@@ -179,8 +179,10 @@ def create_faculty(
     db.commit()
     db.refresh(db_fac)
     # Re-fetch with joined user for the response
-    db_fac = db.query(Faculty).options(joinedload(Faculty.user)).filter(Faculty.id == db_fac.id).first()
-    return _to_response(db_fac)
+    refetched = db.query(Faculty).options(joinedload(Faculty.user)).filter(Faculty.id == db_fac.id).first()
+    if not refetched:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve created faculty")
+    return _to_response(refetched)
 
 @router.put("/{faculty_id}", response_model=FacultyResponse)
 def update_faculty(
@@ -197,8 +199,10 @@ def update_faculty(
     for key, value in faculty.model_dump(exclude_unset=True).items():
         setattr(db_fac, key, value)
     db.commit()
-    db_fac = db.query(Faculty).options(joinedload(Faculty.user)).filter(Faculty.id == faculty_id).first()
-    return _to_response(db_fac)
+    refetched = db.query(Faculty).options(joinedload(Faculty.user)).filter(Faculty.id == faculty_id).first()
+    if not refetched:
+        raise HTTPException(status_code=404, detail="Faculty not found")
+    return _to_response(refetched)
 
 @router.delete("/{faculty_id}")
 def delete_faculty(

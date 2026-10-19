@@ -17,8 +17,8 @@ engine = create_engine(DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def override_get_db():
+    db = TestingSessionLocal()
     try:
-        db = TestingSessionLocal()
         yield db
     finally:
         db.close()
@@ -68,6 +68,7 @@ def test_create_semester(test_semester, auth_headers):
     db = TestingSessionLocal()
     ay = db.query(AcademicYear).first()
     db.close()
+    assert ay is not None
     response = client_raise.post(
         "/semesters/",
         json={

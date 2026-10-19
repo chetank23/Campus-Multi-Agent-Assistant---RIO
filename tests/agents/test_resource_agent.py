@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from backend.config import engine
 from backend.models.identity import User
 from backend.models.resources import Resource, ResourceBooking
+from agents.state.state import AgentState
 from agents.resource_agent.proposal_store import (
     ResourceProposalStore,
     resource_proposal_store,
@@ -149,7 +150,7 @@ def test_parser_dates_and_times():
 
 def test_resource_agent_rejects_non_admin_approval():
     student_user = User(id=3, email="student@reva.edu.in", name="Student User", role="STUDENT")
-    state = {
+    state: AgentState = {
         "user_id": 3,
         "role": "STUDENT",
         "message": "Approve booking #12",
@@ -163,7 +164,7 @@ def test_resource_agent_rejects_non_admin_approval():
 
 def test_resource_agent_admin_approval_guidance():
     admin_user = User(id=1, email="admin@reva.edu.in", name="Admin User", role="ADMIN")
-    state = {
+    state: AgentState = {
         "user_id": 1,
         "role": "ADMIN",
         "message": "Approve booking #12",
@@ -181,7 +182,7 @@ def test_resource_agent_asks_clarification():
     user = User(id=2, email="faculty@reva.edu.in", name="Faculty User", role="FACULTY")
 
     # Missing date and time
-    state = {"user_id": 2, "role": "FACULTY", "message": "Book Seminar Hall A"}
+    state: AgentState = {"user_id": 2, "role": "FACULTY", "message": "Book Seminar Hall A"}
     with Session(engine) as db:
         res = run_resource_agent(state=state, db=db, user=user)
 
@@ -190,7 +191,7 @@ def test_resource_agent_asks_clarification():
     assert "time interval" in res["final_response"].lower()
 
     # Invalid time interval (end <= start)
-    state_invalid = {"user_id": 2, "role": "FACULTY", "message": "Book Seminar Hall A tomorrow from 4pm to 2pm"}
+    state_invalid: AgentState = {"user_id": 2, "role": "FACULTY", "message": "Book Seminar Hall A tomorrow from 4pm to 2pm"}
     with Session(engine) as db:
         res2 = run_resource_agent(state=state_invalid, db=db, user=user)
 
@@ -202,7 +203,7 @@ def test_resource_agent_asks_clarification():
 
 def test_resource_discovery():
     user = User(id=2, email="faculty@reva.edu.in", name="Faculty User", role="FACULTY")
-    state = {"user_id": 2, "role": "FACULTY", "message": "Find seminar halls"}
+    state: AgentState = {"user_id": 2, "role": "FACULTY", "message": "Find seminar halls"}
     with Session(engine) as db:
         res = run_resource_agent(state=state, db=db, user=user)
 
@@ -225,7 +226,7 @@ def test_booking_proposal_creation_and_confirmation():
 
         # 2. Ask to book facility
         msg = f"Book {res_entity.name} on {target_date.isoformat()} from 15:00 to 17:00 for Research Workshop"
-        state = {"user_id": faculty_user.id, "role": faculty_user.role, "message": msg}
+        state: AgentState = {"user_id": faculty_user.id, "role": faculty_user.role, "message": msg}
 
         res = run_resource_agent(state=state, db=db, user=faculty_user)
         assert res["success"] is True
@@ -236,7 +237,7 @@ def test_booking_proposal_creation_and_confirmation():
         assert proposal_id.startswith("res_prop_")
 
         # 3. Confirm proposal
-        confirm_state = {
+        confirm_state: AgentState = {
             "user_id": faculty_user.id,
             "role": faculty_user.role,
             "message": f"confirm {proposal_id}",
@@ -264,11 +265,12 @@ def test_resource_conflict_detection_and_alternatives():
 
         test_date = datetime.date.today() + datetime.timedelta(days=14)
         user = db.query(User).filter(User.role == "FACULTY").first()
+        assert user is not None
 
         # Create an APPROVED booking directly to simulate existing occupancy
         existing_booking = ResourceBooking(
             resource_id=res_entity.id,
-            requested_by=user.id if user else 1,
+            requested_by=user.id,
             date=test_date,
             start_time=datetime.time(10, 0),
             end_time=datetime.time(12, 0),
@@ -279,8 +281,8 @@ def test_resource_conflict_detection_and_alternatives():
         db.commit()
 
         # Now ask availability for an overlapping interval: 11:00 to 13:00
-        state = {
-            "user_id": user.id if user else 1,
+        state: AgentState = {
+            "user_id": user.id,
             "role": "FACULTY",
             "message": f"Check availability for {res_entity.name} on {test_date.isoformat()} from 11:00 to 13:00",
         }
@@ -296,7 +298,9 @@ def test_resource_conflict_detection_and_alternatives():
 def test_user_booking_history_and_cancellation():
     with Session(engine) as db:
         user = db.query(User).filter(User.role == "FACULTY").first()
+        assert user is not None
         res_entity = db.query(Resource).filter(Resource.status == "ACTIVE").first()
+        assert res_entity is not None
 
         # Create a pending booking for this user
         booking = ResourceBooking(
@@ -313,19 +317,19 @@ def test_user_booking_history_and_cancellation():
         db.refresh(booking)
 
         # 1. Inspect "my bookings"
-        state_list = {"user_id": user.id, "role": user.role, "message": "show my bookings"}
+        state_list: AgentState = {"user_id": user.id, "role": user.role, "message": "show my bookings"}
         list_res = run_resource_agent(state=state_list, db=db, user=user)
         assert list_res["action_type"] == "BOOKINGS_LIST"
         assert f"#{booking.id}" in list_res["final_response"]
 
         # 2. Inspect specific booking details
-        state_detail = {"user_id": user.id, "role": user.role, "message": f"status of booking #{booking.id}"}
+        state_detail: AgentState = {"user_id": user.id, "role": user.role, "message": f"status of booking #{booking.id}"}
         detail_res = run_resource_agent(state=state_detail, db=db, user=user)
         assert detail_res["action_type"] == "BOOKING_DETAILS"
         assert "PENDING" in detail_res["final_response"]
 
         # 3. Cancel the booking
-        state_cancel = {"user_id": user.id, "role": user.role, "message": f"cancel booking #{booking.id}"}
+        state_cancel: AgentState = {"user_id": user.id, "role": user.role, "message": f"cancel booking #{booking.id}"}
         cancel_res = run_resource_agent(state=state_cancel, db=db, user=user)
         assert cancel_res["action_type"] == "BOOKING_CANCELLED"
         assert "CANCELLED" in cancel_res["final_response"]
@@ -333,3 +337,137 @@ def test_user_booking_history_and_cancellation():
         # Verify DB state
         db.refresh(booking)
         assert booking.status == "CANCELLED"
+
+
+# ── 9. Dedicated Nullability & Incomplete Interval Regression Tests ───────────
+
+def test_resource_agent_missing_date_only():
+    user = User(id=2, email="faculty@reva.edu.in", name="Faculty User", role="FACULTY")
+    # Date missing, interval provided
+    state: AgentState = {"user_id": 2, "role": "FACULTY", "message": "Book Seminar Hall A from 2:00 PM to 4:00 PM"}
+    with Session(engine) as db:
+        res = run_resource_agent(state=state, db=db, user=user)
+
+    assert res["action_type"] == "CLARIFICATION_NEEDED"
+    assert "booking date" in res["final_response"].lower()
+    assert res.get("proposal") is None
+
+
+def test_resource_agent_missing_time_interval_only():
+    user = User(id=2, email="faculty@reva.edu.in", name="Faculty User", role="FACULTY")
+    # Date provided, interval missing
+    state: AgentState = {"user_id": 2, "role": "FACULTY", "message": "Book Seminar Hall A tomorrow for Research Meeting"}
+    with Session(engine) as db:
+        res = run_resource_agent(state=state, db=db, user=user)
+
+    assert res["action_type"] == "CLARIFICATION_NEEDED"
+    assert "time interval" in res["final_response"].lower()
+    assert res.get("proposal") is None
+
+
+def test_resource_agent_missing_resource_only():
+    user = User(id=2, email="faculty@reva.edu.in", name="Faculty User", role="FACULTY")
+    # Date and interval provided, resource missing
+    state: AgentState = {"user_id": 2, "role": "FACULTY", "message": "Book tomorrow from 2:00 PM to 4:00 PM for Team Sync"}
+    with Session(engine) as db:
+        res = run_resource_agent(state=state, db=db, user=user)
+
+    assert res["action_type"] == "CLARIFICATION_NEEDED"
+    assert "specific facility" in res["final_response"].lower()
+    assert res.get("proposal") is None
+
+
+def test_resource_agent_equal_start_and_end_interval_rejected():
+    user = User(id=2, email="faculty@reva.edu.in", name="Faculty User", role="FACULTY")
+    state: AgentState = {"user_id": 2, "role": "FACULTY", "message": "Book Seminar Hall A tomorrow from 14:00 to 14:00"}
+    with Session(engine) as db:
+        res = run_resource_agent(state=state, db=db, user=user)
+
+    assert res["action_type"] == "CLARIFICATION_NEEDED"
+    assert "end time must be after the start time" in res["final_response"].lower()
+    assert res.get("proposal") is None
+
+
+def test_resource_agent_no_booking_write_on_informational_query():
+    with Session(engine) as db:
+        user = db.query(User).filter(User.role == "FACULTY").first()
+        assert user is not None
+        res_entity = db.query(Resource).filter(Resource.status == "ACTIVE").first()
+        assert res_entity is not None
+
+        initial_count = db.query(ResourceBooking).filter(ResourceBooking.resource_id == res_entity.id).count()
+
+        check_date = datetime.date.today() + datetime.timedelta(days=30)
+        state: AgentState = {
+            "user_id": user.id,
+            "role": "FACULTY",
+            "message": f"Is {res_entity.name} available on {check_date.isoformat()} from 10:00 to 12:00?",
+        }
+        res = run_resource_agent(state=state, db=db, user=user)
+
+        assert res["action_type"] == "AVAILABILITY_CONFIRMED"
+        assert res.get("proposal") is None
+
+        # Verify DB writes did NOT happen
+        current_count = db.query(ResourceBooking).filter(ResourceBooking.resource_id == res_entity.id).count()
+        assert current_count == initial_count
+
+
+def test_resource_agent_confirmation_with_corrupted_interval():
+    with Session(engine) as db:
+        user = db.query(User).filter(User.role == "FACULTY").first()
+        assert user is not None
+
+        # Create proposal with invalid end_time <= start_time
+        prop = resource_proposal_store.create_proposal(
+            user_id=user.id,
+            role=user.role,
+            resource_id=1,
+            resource_name="Seminar Hall A",
+            resource_type="SEMINAR_HALL",
+            date="2026-11-20",
+            start_time="16:00:00",
+            end_time="14:00:00",  # Reversed!
+            purpose="Invalid Session",
+        )
+
+        state: AgentState = {
+            "user_id": user.id,
+            "role": user.role,
+            "message": f"confirm {prop.proposal_id}",
+        }
+        res = run_resource_agent(state=state, db=db, user=user)
+
+        assert res["success"] is False
+        assert res["action_type"] == "CONFIRMATION_REJECTED"
+        assert "invalid" in res["final_response"].lower()
+
+
+def test_resource_agent_confirmation_with_corrupted_date_format():
+    with Session(engine) as db:
+        user = db.query(User).filter(User.role == "FACULTY").first()
+        assert user is not None
+
+        # Create proposal with non-ISO date string
+        prop = resource_proposal_store.create_proposal(
+            user_id=user.id,
+            role=user.role,
+            resource_id=1,
+            resource_name="Seminar Hall A",
+            resource_type="SEMINAR_HALL",
+            date="not-an-iso-date",
+            start_time="14:00:00",
+            end_time="16:00:00",
+            purpose="Corrupted Date Session",
+        )
+
+        state: AgentState = {
+            "user_id": user.id,
+            "role": user.role,
+            "message": f"confirm {prop.proposal_id}",
+        }
+        res = run_resource_agent(state=state, db=db, user=user)
+
+        assert res["success"] is False
+        assert res["action_type"] == "CONFIRMATION_REJECTED"
+        assert "invalid date or time format" in res["final_response"].lower()

@@ -357,12 +357,24 @@ def execute_tool(
         elif tool_name == "check_resource_availability":
             from agents.tools.resource_tools import check_resource_availability_data
             import datetime
-            d = datetime.date.fromisoformat(tool_args["date"]) if isinstance(tool_args.get("date"), str) else tool_args.get("date")
-            st = datetime.time.fromisoformat(tool_args["start_time"]) if isinstance(tool_args.get("start_time"), str) else tool_args.get("start_time")
-            et = datetime.time.fromisoformat(tool_args["end_time"]) if isinstance(tool_args.get("end_time"), str) else tool_args.get("end_time")
+            raw_date = tool_args.get("date")
+            raw_st = tool_args.get("start_time")
+            raw_et = tool_args.get("end_time")
+            if not raw_date or not raw_st or not raw_et:
+                return {"error": "Missing required date or time interval."}
+            try:
+                d = datetime.date.fromisoformat(raw_date) if isinstance(raw_date, str) else raw_date
+                st = datetime.time.fromisoformat(raw_st) if isinstance(raw_st, str) else raw_st
+                et = datetime.time.fromisoformat(raw_et) if isinstance(raw_et, str) else raw_et
+            except (ValueError, TypeError) as parse_err:
+                return {"error": f"Invalid date or time format: {parse_err}"}
+
+            if not isinstance(d, datetime.date) or not isinstance(st, datetime.time) or not isinstance(et, datetime.time):
+                return {"error": "Invalid date or time parameters."}
+
             return check_resource_availability_data(
                 db=db,
-                resource_id=tool_args["resource_id"],
+                resource_id=int(tool_args["resource_id"]),
                 date=d,
                 start_time=st,
                 end_time=et,

@@ -292,6 +292,7 @@ def test_booking_approval_lifecycle_and_audit(faculty_token, admin_token):
         )
         assert audit is not None
         assert audit.user_id == 1
+        assert audit.new_value is not None
         assert audit.new_value["status"] == "APPROVED"
 
 
@@ -609,6 +610,7 @@ def test_published_timetable_conflict_detection(admin_token, faculty_token):
     # Now publish the timetable version
     with Session(engine) as db:
         v = db.query(TimetableVersion).filter(TimetableVersion.id == draft_version_id).first()
+        assert v is not None
         v.status = "PUBLISHED"
         db.commit()
 
@@ -846,3 +848,51 @@ def test_response_privacy_protection(admin_token, faculty_token, faculty2_token)
     admin_view = next((b for b in admin_list if b["id"] == b_id), None)
     assert admin_view is not None
     assert admin_view["requester_email"] is not None
+
+
+def test_unknown_booking_operations_return_404(admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    non_existent_id = 999999
+
+    # Approve unknown booking returns 404
+    resp_appr = client.post(f"/resources/bookings/{non_existent_id}/approve", headers=headers)
+    assert resp_appr.status_code == 404
+    assert f"#{non_existent_id} not found" in resp_appr.json()["detail"]
+
+    # Reject unknown booking returns 404
+    resp_rej = client.post(f"/resources/bookings/{non_existent_id}/reject", headers=headers)
+    assert resp_rej.status_code == 404
+    assert f"#{non_existent_id} not found" in resp_rej.json()["detail"]
+
+    # Cancel unknown booking returns 404
+    resp_can = client.post(f"/resources/bookings/{non_existent_id}/cancel", headers=headers)
+    assert resp_can.status_code == 404
+    assert f"#{non_existent_id} not found" in resp_can.json()["detail"]
+
+
+def test_incomplete_booking_approval_fails_safely(admin_token):
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    with Session(engine) as db:
+        try:
+            res = db.query(Resource).filter(Resource.status == "ACTIVE").first()
+            assert res is not None
+            bad_booking = ResourceBooking(
+                resource_id=res.id,
+                requested_by=1,
+                date=None,
+                start_time=None,
+                end_time=None,
+                purpose="Incomplete booking test",
+                status="PENDING",
+            )
+            db.add(bad_booking)
+            db.commit()
+            db.refresh(bad_booking)
+            bad_id = bad_booking.id
+
+            resp = client.post(f"/resources/bookings/{bad_id}/approve", headers=headers)
+            assert resp.status_code == 400
+            assert "incomplete booking schedule data" in resp.json()["detail"]
+        finally:
+            db.query(ResourceBooking).filter(ResourceBooking.purpose == "Incomplete booking test").delete()
+            db.commit()

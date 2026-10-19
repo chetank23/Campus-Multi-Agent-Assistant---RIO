@@ -17,8 +17,8 @@ engine = create_engine(DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def override_get_db():
+    db = TestingSessionLocal()
     try:
-        db = TestingSessionLocal()
         yield db
     finally:
         db.close()
@@ -88,6 +88,9 @@ def test_create_section(test_section, auth_headers):
     prog = db.query(Program).first()
     sem = db.query(Semester).first()
     db.close()
+    assert dept is not None
+    assert prog is not None
+    assert sem is not None
     response = client_raise.post(
         "/sections/",
         json={

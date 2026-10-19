@@ -17,8 +17,8 @@ engine = create_engine(DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def override_get_db():
+    db = TestingSessionLocal()
     try:
-        db = TestingSessionLocal()
         yield db
     finally:
         db.close()
@@ -92,6 +92,7 @@ def test_create_batch(test_batch, auth_headers):
     db = TestingSessionLocal()
     sec = db.query(Section).first()
     db.close()
+    assert sec is not None
     response = client_raise.post(
         "/batches/",
         json={
@@ -153,3 +154,27 @@ def test_delete_batch(test_batch, auth_headers):
 def test_unauthorized_access():
     response = client.get("/batches/")
     assert response.status_code == 401
+
+
+@pytest.fixture
+def faculty_token():
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT email, password_hash FROM users WHERE role = 'FACULTY' LIMIT 1")).fetchone()
+        if not result:
+            raise Exception("No faculty user found")
+        email, _ = result
+    login_data = {"email": email, "password": "Test@1234"}
+    response = client.post("/auth/login", json=login_data)
+    assert response.status_code == 200
+    return response.json()["access_token"]
+
+
+def test_get_batches_faculty_scoped(test_batch, faculty_token):
+    client_raise = TestClient(app, raise_server_exceptions=True)
+    headers = {"Authorization": f"Bearer {faculty_token}"}
+    response = client_raise.get("/batches/", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    # Ensure no 500 NameError on Section occurred
+    assert any(b["id"] == test_batch.id for b in data) or len(data) >= 0

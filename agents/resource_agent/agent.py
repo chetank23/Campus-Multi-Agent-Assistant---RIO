@@ -79,9 +79,31 @@ def run_resource_agent(
             }
 
         # Authoritative freshness check: Revalidate availability right before writing
-        d = datetime.date.fromisoformat(proposal.date)
-        st = datetime.time.fromisoformat(proposal.start_time)
-        et = datetime.time.fromisoformat(proposal.end_time)
+        try:
+            d = datetime.date.fromisoformat(proposal.date)
+            st = datetime.time.fromisoformat(proposal.start_time)
+            et = datetime.time.fromisoformat(proposal.end_time)
+        except (ValueError, TypeError) as format_err:
+            return {
+                "intent": "RESOURCE_BOOKING",
+                "selected_agent": "resource_agent",
+                "action_type": "CONFIRMATION_REJECTED",
+                "final_response": f"⚠️ **Booking Confirmation Blocked**: Proposal contains invalid date or time format ({format_err}).",
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+
+        if et <= st:
+            return {
+                "intent": "RESOURCE_BOOKING",
+                "selected_agent": "resource_agent",
+                "action_type": "CONFIRMATION_REJECTED",
+                "final_response": "⚠️ **Booking Confirmation Blocked**: Proposal time interval is invalid (end time is before or equal to start time).",
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
 
         fresh_avail = check_resource_availability_data(
             db=db,
@@ -439,15 +461,15 @@ def run_resource_agent(
                 res_details["resource_type"] = r.resource_type
                 break
 
-    missing_elements = []
+    missing_elements: List[str] = []
     if not res_details.get("resource_name") and not res_details.get("resource_type") and not res_details.get("resource_id"):
         missing_elements.append("the specific facility or resource type (e.g., Seminar Hall A, CSE Lab 1)")
-    if not req_date:
+    if req_date is None:
         missing_elements.append("the booking date (e.g., 'tomorrow' or '2026-10-25')")
-    if not req_start or not req_end:
+    if req_start is None or req_end is None:
         missing_elements.append("the time interval (e.g., '2:00 PM to 4:00 PM')")
 
-    if missing_elements:
+    if missing_elements or req_date is None or req_start is None or req_end is None:
         prompt = "To check availability or prepare a booking proposal, please provide:\n" + "\n".join(f"- {m}" for m in missing_elements)
         return {
             "intent": "RESOURCE_BOOKING",
@@ -459,7 +481,12 @@ def run_resource_agent(
             "success": True,
         }
 
-    if req_end <= req_start:
+    # At this point, req_date, req_start, and req_end are strictly narrowed to non-None instances
+    valid_date: datetime.date = req_date
+    valid_start: datetime.time = req_start
+    valid_end: datetime.time = req_end
+
+    if valid_end <= valid_start:
         return {
             "intent": "RESOURCE_BOOKING",
             "selected_agent": "resource_agent",
@@ -517,18 +544,18 @@ def run_resource_agent(
         "tool": "check_resource_availability",
         "args": {
             "resource_id": target_res.id,
-            "date": str(req_date),
-            "start_time": str(req_start),
-            "end_time": str(req_end),
+            "date": valid_date.isoformat(),
+            "start_time": valid_start.isoformat(),
+            "end_time": valid_end.isoformat(),
         },
     })
 
     avail_info = check_resource_availability_data(
         db=db,
         resource_id=target_res.id,
-        date=req_date,
-        start_time=req_start,
-        end_time=req_end,
+        date=valid_date,
+        start_time=valid_start,
+        end_time=valid_end,
     )
 
     # If UNAVAILABLE: Explain conflicts honestly and suggest alternatives
@@ -542,14 +569,14 @@ def run_resource_agent(
 
         reply = (
             f"❌ **Facility Unavailable: Conflict Detected**\n\n"
-            f"**{target_res.name}** cannot be booked on **`{req_date}`** from **`{req_start.strftime('%H:%M')} – {req_end.strftime('%H:%M')}`** due to existing commitments:\n\n"
+            f"**{target_res.name}** cannot be booked on **`{valid_date.isoformat()}`** from **`{valid_start.strftime('%H:%M')} – {valid_end.strftime('%H:%M')}`** due to existing commitments:\n\n"
             f"{conflict_items}\n\n"
         )
         if alt_items:
             reply += (
                 f"💡 **Recommended Available Alternatives for this Time Slot**:\n"
                 + "\n".join(alt_items) + "\n\n"
-                f"To reserve one of these, say: *'Book {avail_info['alternatives'][0]['name']} on {req_date} from {req_start.strftime('%H:%M')} to {req_end.strftime('%H:%M')}'*."
+                f"To reserve one of these, say: *'Book {avail_info['alternatives'][0]['name']} on {valid_date.isoformat()} from {valid_start.strftime('%H:%M')} to {valid_end.strftime('%H:%M')}'*."
             )
         else:
             reply += "No matching alternative resources of the same type are free during this exact interval. Consider choosing another time window."
@@ -564,20 +591,20 @@ def run_resource_agent(
             "success": True,
         }
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # 10. Facility is Available!
-    # ──────────────────────────────────────────────────────────────────────────
-    is_pure_check = any(k in msg_lower for k in ["is it free", "is it available", "check availability", "check if", "can i use"]) and not any(k in msg_lower for k in ["book", "reserve", "schedule a booking"])
+    is_pure_check = (
+        any(k in msg_lower for k in ["is it free", "is it available", "check availability", "check if", "can i use", "availability"])
+        or bool(re.search(r"\bis\b.+\b(?:available|free)\b", msg_lower))
+    ) and not any(k in msg_lower for k in ["book", "reserve", "schedule a booking"])
 
     if is_pure_check:
         reply = (
             f"✅ **Facility Is Available!**\n\n"
-            f"**{target_res.name}** ({target_res.resource_type}) is completely free on **`{req_date}`** "
-            f"from **`{req_start.strftime('%H:%M')} to {req_end.strftime('%H:%M')}`** with **zero conflicts**.\n\n"
+            f"**{target_res.name}** ({target_res.resource_type}) is completely free on **`{valid_date.isoformat()}`** "
+            f"from **`{valid_start.strftime('%H:%M')} to {valid_end.strftime('%H:%M')}`** with **zero conflicts**.\n\n"
             f"- **Location**: {target_res.location or 'Main Campus'}\n"
             f"- **Capacity**: {target_res.capacity or 'Standard'} seats\n\n"
             f"💡 **Ready to book?** Simply ask:\n"
-            f"*'Book {target_res.name} on {req_date} from {req_start.strftime('%H:%M')} to {req_end.strftime('%H:%M')} for [Your Purpose]'*."
+            f"*'Book {target_res.name} on {valid_date.isoformat()} from {valid_start.strftime('%H:%M')} to {valid_end.strftime('%H:%M')} for [Your Purpose]'*."
         )
         return {
             "intent": "RESOURCE_AVAILABILITY",
@@ -602,9 +629,9 @@ def run_resource_agent(
         resource_type=target_res.resource_type or "EQUIPMENT",
         location=target_res.location,
         capacity=target_res.capacity,
-        date=str(req_date),
-        start_time=str(req_start),
-        end_time=str(req_end),
+        date=valid_date.isoformat(),
+        start_time=valid_start.isoformat(),
+        end_time=valid_end.isoformat(),
         purpose=purpose,
     )
 

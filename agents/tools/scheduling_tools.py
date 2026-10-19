@@ -88,7 +88,8 @@ def resolve_academic_scope_data(
         elif len(dept_progs) > 1:
             # Check for B.Tech vs M.Tech
             for p in dept_progs:
-                if ("b.tech" in text or "btech" in text) and "b.tech" in p.program_name.lower():
+                p_name = p.program_name.lower() if p.program_name else ""
+                if ("b.tech" in text or "btech" in text) and "b.tech" in p_name:
                     prog_obj = p
                     break
             if not prog_obj:
@@ -131,7 +132,7 @@ def resolve_academic_scope_data(
     if not sem_obj:
         missing.append("Semester")
 
-    if missing:
+    if missing or ay_obj is None or dept_obj is None or prog_obj is None or sem_obj is None:
         # Construct helpful clarification message
         clarifications = []
         if "Department" in missing:
@@ -147,28 +148,34 @@ def resolve_academic_scope_data(
             "clarification_prompt": " ".join(clarifications),
         }
 
+    valid_ay: AcademicYear = ay_obj
+    valid_dept: Department = dept_obj
+    valid_prog: Program = prog_obj
+    valid_sem: Semester = sem_obj
+
     # Verify sections exist for this exact scope
     sections = db.query(Section).filter(
-        Section.department_id == dept_obj.id,
-        Section.program_id == prog_obj.id,
-        Section.semester_id == sem_obj.id,
+        Section.department_id == valid_dept.id,
+        Section.program_id == valid_prog.id,
+        Section.semester_id == valid_sem.id,
     ).all()
 
     scope_dict = {
-        "academic_year_id": ay_obj.id,
-        "department_id": dept_obj.id,
-        "program_id": prog_obj.id,
-        "semester_id": sem_obj.id,
+        "academic_year_id": valid_ay.id,
+        "department_id": valid_dept.id,
+        "program_id": valid_prog.id,
+        "semester_id": valid_sem.id,
         "section_ids": [s.id for s in sections] if sections else None,
     }
 
+    sec_names = [s.section_name for s in sections if s.section_name]
     display_dict = {
-        "academic_year": ay_obj.name,
-        "department": f"{dept_obj.name} ({dept_obj.department_code})",
-        "program": prog_obj.program_name,
-        "semester": f"Semester {sem_obj.semester_number}",
+        "academic_year": valid_ay.name,
+        "department": f"{valid_dept.name} ({valid_dept.department_code})",
+        "program": valid_prog.program_name,
+        "semester": f"Semester {valid_sem.semester_number}",
         "sections_count": str(len(sections)),
-        "section_names": ", ".join(s.section_name for s in sections) if sections else "None",
+        "section_names": ", ".join(sec_names) if sec_names else "None",
     }
 
     return {

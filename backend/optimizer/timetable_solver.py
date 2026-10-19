@@ -124,7 +124,7 @@ class TimetableSolver:
                 for r_id in eligible_rooms:
                     for t_id in eligible_slots:
                         var_name = f"x_a{a.id}_{h_type}_r{r_id}_t{t_id}"
-                        v = self.model.NewBoolVar(var_name)
+                        v = self.model.new_bool_var(var_name)
                         self.x[(a.id, h_type, r_id, t_id)] = v
                         var_list.append(v)
                         
@@ -140,22 +140,22 @@ class TimetableSolver:
         
         # A. Required Course Hours
         for a, h_type, req_hours, var_list in self.assignment_vars:
-            self.model.AddExactlyOne(var_list) if req_hours == 1 else self.model.Add(sum(var_list) == req_hours)
+            self.model.add_exactly_one(var_list) if req_hours == 1 else self.model.add(sum(var_list) == req_hours)
             
         # B. Faculty Conflict (<= 1 per slot)
         for (f_id, t_id), vars_in_slot in f_t_vars.items():
             if len(vars_in_slot) > 1:
-                self.model.AddAtMostOne(vars_in_slot)
+                self.model.add_at_most_one(vars_in_slot)
                 
         # C. Section Conflict (<= 1 per slot)
         for (sec_id, t_id), vars_in_slot in s_t_vars.items():
             if len(vars_in_slot) > 1:
-                self.model.AddAtMostOne(vars_in_slot)
+                self.model.add_at_most_one(vars_in_slot)
                 
         # D. Room Conflict (<= 1 per slot)
         for (r_id, t_id), vars_in_slot in r_t_vars.items():
             if len(vars_in_slot) > 1:
-                self.model.AddAtMostOne(vars_in_slot)
+                self.model.add_at_most_one(vars_in_slot)
                 
         # E. Elective Group Conflict (<= 1 course per elective group per slot per section)
         # Note: We group assignments by (elective_group, section, slot)
@@ -186,7 +186,7 @@ class TimetableSolver:
                             
             for (sec_id, t_id), vars_in_slot in eg_s_t_vars.items():
                 if len(vars_in_slot) > 1:
-                    self.model.AddAtMostOne(vars_in_slot)
+                    self.model.add_at_most_one(vars_in_slot)
                 
         self._build_soft_constraints()
             
@@ -266,10 +266,10 @@ class TimetableSolver:
                               if t == t_id and next(a for a in self.assignments if a.id == a_id).faculty_id == f_id]
                     if v_list:
                         # Faculty is teaching if sum(v_list) > 0
-                        is_teaching = self.model.NewBoolVar(f"f_{f_id}_{day}_{t_id}_teaching")
+                        is_teaching = self.model.new_bool_var(f"f_{f_id}_{day}_{t_id}_teaching")
                         # Add constraint: is_teaching == 1 iff sum(v_list) == 1
                         # Since constraints say faculty can teach at most 1 class per slot, sum is 0 or 1.
-                        self.model.Add(sum(v_list) == is_teaching)
+                        self.model.add(sum(v_list) == is_teaching)
                         f_teaching_slots.append((t_id, is_teaching))
                 
                 if not f_teaching_slots:
@@ -279,42 +279,42 @@ class TimetableSolver:
                 daily_workloads.append(total_teaching)
                 
                 # Active day boolean
-                is_active_day = self.model.NewBoolVar(f"f_{f_id}_{day}_active")
-                self.model.AddMaxEquality(is_active_day, [var for _, var in f_teaching_slots])
+                is_active_day = self.model.new_bool_var(f"f_{f_id}_{day}_active")
+                self.model.add_max_equality(is_active_day, [var for _, var in f_teaching_slots])
                 
                 # Find min and max active slot indices
                 # Let's map t_id to an index 0, 1, 2... for the day
-                first_slot_idx = self.model.NewIntVar(0, len(day_t_ids), f"f_{f_id}_{day}_first")
-                last_slot_idx = self.model.NewIntVar(0, len(day_t_ids), f"f_{f_id}_{day}_last")
+                first_slot_idx = self.model.new_int_var(0, len(day_t_ids), f"f_{f_id}_{day}_first")
+                last_slot_idx = self.model.new_int_var(0, len(day_t_ids), f"f_{f_id}_{day}_last")
                 
                 # If not active, we want first_slot_idx = 0 and last_slot_idx = 0.
                 # If active, first_slot_idx = min(i where is_teaching[i] == 1)
                 
                 for i, (t_id, var) in enumerate(f_teaching_slots):
                     # if var == 1, then first_slot_idx <= i, last_slot_idx >= i
-                    self.model.Add(first_slot_idx <= i).OnlyEnforceIf(var)
-                    self.model.Add(last_slot_idx >= i).OnlyEnforceIf(var)
+                    self.model.add(first_slot_idx <= i).only_enforce_if(var)
+                    self.model.add(last_slot_idx >= i).only_enforce_if(var)
                 
                 # To prevent gaps from being falsely minimized when active by pushing first up and last down,
                 # CP-SAT minimizes the objective, so the gap will naturally shrink to its valid boundary.
                 # However, if is_active_day == 0, we must force them to 0 so gap is 0.
-                self.model.Add(first_slot_idx == 0).OnlyEnforceIf(is_active_day.Not())
-                self.model.Add(last_slot_idx == 0).OnlyEnforceIf(is_active_day.Not())
+                self.model.add(first_slot_idx == 0).only_enforce_if(is_active_day.Not())
+                self.model.add(last_slot_idx == 0).only_enforce_if(is_active_day.Not())
                 
                 # Also, when active, gap = (last - first + 1) - total
                 # To avoid (0 - 0 + 1) = 1 when inactive, we multiply the +1 by is_active_day.
                 gap_expr = last_slot_idx - first_slot_idx + is_active_day - total_teaching
                 
-                gap_var = self.model.NewIntVar(0, len(day_t_ids), f"f_{f_id}_{day}_gap")
-                self.model.Add(gap_var == gap_expr)
+                gap_var = self.model.new_int_var(0, len(day_t_ids), f"f_{f_id}_{day}_gap")
+                self.model.add(gap_var == gap_expr)
                 
                 objective_terms.append(gap_var * W_FACULTY_GAP)
             
             if daily_workloads:
-                max_workload = self.model.NewIntVar(0, 100, f"f_{f_id}_max_w")
-                min_workload = self.model.NewIntVar(0, 100, f"f_{f_id}_min_w")
-                self.model.AddMaxEquality(max_workload, daily_workloads)
-                self.model.AddMinEquality(min_workload, daily_workloads)
+                max_workload = self.model.new_int_var(0, 100, f"f_{f_id}_max_w")
+                min_workload = self.model.new_int_var(0, 100, f"f_{f_id}_min_w")
+                self.model.add_max_equality(max_workload, daily_workloads)
+                self.model.add_min_equality(min_workload, daily_workloads)
                 objective_terms.append((max_workload - min_workload) * W_WORKLOAD_BALANCE)
 
         # 4. Student Gap Penalty & 5. Unnecessary Room Change Penalty
@@ -347,53 +347,53 @@ class TimetableSolver:
                                     room_vars.setdefault(r_id, []).append(v)
                                 
                     if v_list:
-                        is_teaching = self.model.NewBoolVar(f"s_{s_id}_{day}_{t_id}_teaching")
-                        self.model.AddMaxEquality(is_teaching, v_list)
+                        is_teaching = self.model.new_bool_var(f"s_{s_id}_{day}_{t_id}_teaching")
+                        self.model.add_max_equality(is_teaching, v_list)
                         s_teaching_slots.append((t_id, is_teaching))
                 
                 if not s_teaching_slots:
                     continue
                     
                 total_teaching = sum(var for _, var in s_teaching_slots)
-                is_active_day = self.model.NewBoolVar(f"s_{s_id}_{day}_active")
-                self.model.AddMaxEquality(is_active_day, [var for _, var in s_teaching_slots])
+                is_active_day = self.model.new_bool_var(f"s_{s_id}_{day}_active")
+                self.model.add_max_equality(is_active_day, [var for _, var in s_teaching_slots])
                 
                 # Gap calculation
-                first_slot_idx = self.model.NewIntVar(0, len(day_t_ids), f"s_{s_id}_{day}_first")
-                last_slot_idx = self.model.NewIntVar(0, len(day_t_ids), f"s_{s_id}_{day}_last")
+                first_slot_idx = self.model.new_int_var(0, len(day_t_ids), f"s_{s_id}_{day}_first")
+                last_slot_idx = self.model.new_int_var(0, len(day_t_ids), f"s_{s_id}_{day}_last")
                 
                 for i, (t_id, var) in enumerate(s_teaching_slots):
-                    self.model.Add(first_slot_idx <= i).OnlyEnforceIf(var)
-                    self.model.Add(last_slot_idx >= i).OnlyEnforceIf(var)
+                    self.model.add(first_slot_idx <= i).only_enforce_if(var)
+                    self.model.add(last_slot_idx >= i).only_enforce_if(var)
                     
-                self.model.Add(first_slot_idx == 0).OnlyEnforceIf(is_active_day.Not())
-                self.model.Add(last_slot_idx == 0).OnlyEnforceIf(is_active_day.Not())
+                self.model.add(first_slot_idx == 0).only_enforce_if(is_active_day.Not())
+                self.model.add(last_slot_idx == 0).only_enforce_if(is_active_day.Not())
                 
                 gap_expr = last_slot_idx - first_slot_idx + is_active_day - total_teaching
-                gap_var = self.model.NewIntVar(0, len(day_t_ids), f"s_{s_id}_{day}_gap")
-                self.model.Add(gap_var == gap_expr)
+                gap_var = self.model.new_int_var(0, len(day_t_ids), f"s_{s_id}_{day}_gap")
+                self.model.add(gap_var == gap_expr)
                 
                 objective_terms.append(gap_var * W_STUDENT_GAP)
                 
                 # Room changes: count distinct rooms used today
                 rooms_used = []
                 for r_id, v_list in room_vars.items():
-                    r_used = self.model.NewBoolVar(f"s_{s_id}_{day}_r_{r_id}_used")
-                    self.model.AddMaxEquality(r_used, v_list)
+                    r_used = self.model.new_bool_var(f"s_{s_id}_{day}_r_{r_id}_used")
+                    self.model.add_max_equality(r_used, v_list)
                     rooms_used.append(r_used)
                     
                 total_rooms_used = sum(rooms_used)
                 
                 # Penalty is total_rooms_used - 1 (if active day)
-                room_change_penalty = self.model.NewIntVar(0, len(self.rooms), f"s_{s_id}_{day}_room_change")
+                room_change_penalty = self.model.new_int_var(0, len(self.rooms), f"s_{s_id}_{day}_room_change")
                 # When active, penalty = total_rooms_used - 1
                 # When inactive, total_rooms_used is 0, we want penalty = 0.
-                self.model.Add(room_change_penalty == total_rooms_used - is_active_day)
+                self.model.add(room_change_penalty == total_rooms_used - is_active_day)
                 
                 objective_terms.append(room_change_penalty * W_ROOM_CHANGE)
 
         if objective_terms:
-            self.model.Minimize(sum(objective_terms))
+            self.model.minimize(sum(objective_terms))
 
     def _diagnose_infeasibility(self) -> list[str]:
         diagnostics = []
@@ -462,13 +462,13 @@ class TimetableSolver:
         solver.parameters.max_time_in_seconds = self.time_limit
         solver.parameters.num_search_workers = 8
         
-        status = solver.Solve(self.model)
+        status = solver.solve(self.model)
         solve_time = time.time() - start_time
         
         if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             entries = []
             for (a_id, h_type, r_id, t_id), v in self.x.items():
-                if solver.Value(v) == 1:
+                if solver.value(v) == 1:
                     entries.append(TimetableEntryResult(
                         course_assignment_id=a_id,
                         room_id=r_id,

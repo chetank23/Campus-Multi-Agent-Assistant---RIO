@@ -17,8 +17,8 @@ engine = create_engine(DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def override_get_db():
+    db = TestingSessionLocal()
     try:
-        db = TestingSessionLocal()
         yield db
     finally:
         db.close()
@@ -78,11 +78,13 @@ def test_faculty_contact_number_field(auth_headers):
 def test_section_class_teacher_assignment(auth_headers):
     db = TestingSessionLocal()
     dept = db.query(Department).first()
+    assert dept is not None
     prog = db.query(Program).first()
+    assert prog is not None
     sem = db.query(Semester).first()
+    assert sem is not None
     fac = db.query(Faculty).filter(Faculty.department_id == dept.id).first()
-
-    assert dept and prog and sem and fac
+    assert fac is not None
 
     # Create Section with class_teacher_id
     sec_data = {

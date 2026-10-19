@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from backend.database import get_db
-from backend.models.academic import Batch
+from backend.models.academic import Batch, Section
 from backend.models.identity import User
 from backend.schemas.batch import BatchCreate, BatchUpdate, BatchResponse
 from backend.dependencies import get_current_user, require_role, require_department_scope
@@ -41,7 +41,7 @@ def get_batch(
         return batch
     elif current_user.role == "FACULTY":
         # check via section department
-        if batch.section.department_id != current_user.department_id:
+        if not batch.section or batch.section.department_id != current_user.department_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Out of department scope")
         return batch
     else:  # STUDENT

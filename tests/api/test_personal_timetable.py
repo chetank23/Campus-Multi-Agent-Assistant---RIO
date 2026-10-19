@@ -42,6 +42,8 @@ def faculty_users():
         assert len(faculties) >= 2, "Need at least 2 faculty members in test database"
         user1 = db.query(User).filter(User.id == faculties[0].user_id).first()
         user2 = db.query(User).filter(User.id == faculties[1].user_id).first()
+        assert user1 is not None
+        assert user2 is not None
         return {
             "fac1": {"faculty_id": faculties[0].id, "user_id": user1.id, "email": user1.email},
             "fac2": {"faculty_id": faculties[1].id, "user_id": user2.id, "email": user2.email},
@@ -62,6 +64,8 @@ def student_users():
         assert len(students) >= 2, "Need at least 2 students in test database"
         user1 = db.query(User).filter(User.id == students[0].user_id).first()
         user2 = db.query(User).filter(User.id == students[1].user_id).first()
+        assert user1 is not None
+        assert user2 is not None
         return {
             "stu1": {
                 "student_id": students[0].id,
@@ -89,6 +93,8 @@ def test_timetables(faculty_users, student_users):
         # Get reference entities
         course = db.query(Course).first()
         room = db.query(Room).first()
+        assert course is not None
+        assert room is not None
         slots = db.query(TimeSlot).filter(TimeSlot.slot_type == "CLASS").limit(4).all()
         sections = db.query(Section).limit(2).all()
         assert len(slots) >= 2, "Need at least 2 class slots"

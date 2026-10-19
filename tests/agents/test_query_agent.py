@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy.orm import Session
 from backend.config import engine
 from backend.models.identity import User
+from backend.models.academic import Department
 from agents.tools import execute_tool, QUERY_TOOL_DEFINITIONS
 from agents.query_agent.agent import format_grounded_response, _extract_intent_and_tool_call
 
@@ -29,6 +30,7 @@ def test_tool_definitions_structure():
 def test_query_course_details_grounding():
     with Session(engine) as db:
         user = db.query(User).filter(User.role == "STUDENT").first()
+        assert user is not None
         res = execute_tool(
             tool_name="get_course_details",
             tool_args={"query_str": "CS"},
@@ -46,6 +48,7 @@ def test_query_course_details_grounding():
 def test_query_course_details_not_found():
     with Session(engine) as db:
         user = db.query(User).filter(User.role == "STUDENT").first()
+        assert user is not None
         res = execute_tool(
             tool_name="get_course_details",
             tool_args={"query_str": "NON_EXISTENT_COURSE_XYZ_999"},
@@ -68,6 +71,7 @@ def test_query_course_details_not_found():
 def test_query_room_details():
     with Session(engine) as db:
         user = db.query(User).filter(User.role == "STUDENT").first()
+        assert user is not None
         res = execute_tool(
             tool_name="get_room_or_lab_details",
             tool_args={"room_query": "1"},
@@ -80,6 +84,7 @@ def test_query_room_details():
 def test_query_academic_calendar():
     with Session(engine) as db:
         user = db.query(User).filter(User.role == "STUDENT").first()
+        assert user is not None
         res = execute_tool(
             tool_name="get_academic_calendar",
             tool_args={},
@@ -92,6 +97,7 @@ def test_query_academic_calendar():
 def test_query_campus_room_inventory():
     with Session(engine) as db:
         user = db.query(User).filter(User.role == "ADMIN").first()
+        assert user is not None
         res = execute_tool(
             tool_name="get_campus_room_inventory",
             tool_args={},
@@ -111,6 +117,7 @@ def test_no_arbitrary_sql_execution():
     """
     with Session(engine) as db:
         user = db.query(User).filter(User.role == "STUDENT").first()
+        assert user is not None
         malicious_input = "'; DROP TABLE users CASCADE; --"
         res = execute_tool(
             tool_name="get_course_details",
@@ -123,3 +130,29 @@ def test_no_arbitrary_sql_execution():
         # Verify users table is completely intact
         users_count = db.query(User).count()
         assert users_count > 0, "Users table was unexpectedly compromised!"
+
+
+def test_get_department_timetable_output_structure():
+    """
+    Validates get_department_timetable returns correct department_name,
+    authoritative department_code, and formatted entries.
+    """
+    with Session(engine) as db:
+        user = db.query(User).filter(User.role == "ADMIN").first()
+        assert user is not None
+        dept = db.query(Department).first()
+        assert dept is not None
+
+        res = execute_tool(
+            tool_name="get_department_timetable",
+            tool_args={"department_id": dept.id},
+            user=user,
+            db=db,
+        )
+        assert "error" not in res
+        assert "department_name" in res
+        assert "department_code" in res
+        assert res["department_code"] == dept.department_code
+        assert "total_entries" in res
+        assert "entries" in res
+        assert isinstance(res["entries"], list)

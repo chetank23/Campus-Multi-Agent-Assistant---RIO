@@ -3,6 +3,20 @@ from pydantic import BaseModel, ConfigDict
 
 # Course
 class CourseBase(BaseModel):
+    course_code: str
+    course_name: str
+    department_id: int
+    course_type: str
+    credits: Optional[int] = None
+    lecture_hours: Optional[int] = None
+    tutorial_hours: Optional[int] = None
+    practical_hours: Optional[int] = None
+    requires_lab: Optional[bool] = False
+
+class CourseCreate(CourseBase):
+    pass
+
+class CourseUpdate(BaseModel):
     course_code: Optional[str] = None
     course_name: Optional[str] = None
     department_id: Optional[int] = None
@@ -11,16 +25,7 @@ class CourseBase(BaseModel):
     lecture_hours: Optional[int] = None
     tutorial_hours: Optional[int] = None
     practical_hours: Optional[int] = None
-    requires_lab: Optional[bool] = False
-
-class CourseCreate(CourseBase):
-    course_code: str
-    course_name: str
-    department_id: int
-    course_type: str
-
-class CourseUpdate(CourseBase):
-    pass
+    requires_lab: Optional[bool] = None
 
 class CourseResponse(CourseBase):
     id: int
@@ -28,19 +33,19 @@ class CourseResponse(CourseBase):
 
 # CourseAssignment
 class CourseAssignmentBase(BaseModel):
-    course_id: Optional[int] = None
-    faculty_id: Optional[int] = None
-    section_id: Optional[int] = None
-    batch_id: Optional[int] = None
-
-class CourseAssignmentCreate(CourseAssignmentBase):
     course_id: int
     faculty_id: int
     section_id: Optional[int] = None
     batch_id: Optional[int] = None
 
-class CourseAssignmentUpdate(CourseAssignmentBase):
+class CourseAssignmentCreate(CourseAssignmentBase):
     pass
+
+class CourseAssignmentUpdate(BaseModel):
+    course_id: Optional[int] = None
+    faculty_id: Optional[int] = None
+    section_id: Optional[int] = None
+    batch_id: Optional[int] = None
 
 class CourseAssignmentResponse(CourseAssignmentBase):
     id: int
@@ -48,17 +53,17 @@ class CourseAssignmentResponse(CourseAssignmentBase):
 
 # ElectiveGroup
 class ElectiveGroupBase(BaseModel):
-    name: Optional[str] = None
-    semester_id: Optional[int] = None
-    department_id: Optional[int] = None
-
-class ElectiveGroupCreate(ElectiveGroupBase):
     name: str
     semester_id: int
     department_id: int
 
-class ElectiveGroupUpdate(ElectiveGroupBase):
+class ElectiveGroupCreate(ElectiveGroupBase):
     pass
+
+class ElectiveGroupUpdate(BaseModel):
+    name: Optional[str] = None
+    semester_id: Optional[int] = None
+    department_id: Optional[int] = None
 
 class ElectiveGroupResponse(ElectiveGroupBase):
     id: int
@@ -66,15 +71,15 @@ class ElectiveGroupResponse(ElectiveGroupBase):
 
 # ElectiveGroupCourse
 class ElectiveGroupCourseBase(BaseModel):
-    group_id: Optional[int] = None
-    course_id: Optional[int] = None
-
-class ElectiveGroupCourseCreate(ElectiveGroupCourseBase):
     group_id: int
     course_id: int
 
-class ElectiveGroupCourseUpdate(ElectiveGroupCourseBase):
+class ElectiveGroupCourseCreate(ElectiveGroupCourseBase):
     pass
+
+class ElectiveGroupCourseUpdate(BaseModel):
+    group_id: Optional[int] = None
+    course_id: Optional[int] = None
 
 class ElectiveGroupCourseResponse(ElectiveGroupCourseBase):
     id: int

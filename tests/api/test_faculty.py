@@ -18,8 +18,8 @@ engine = create_engine(DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def override_get_db():
+    db = TestingSessionLocal()
     try:
-        db = TestingSessionLocal()
         yield db
     finally:
         db.close()
@@ -97,6 +97,7 @@ def test_create_faculty(test_faculty, auth_headers):
     client_raise = TestClient(app, raise_server_exceptions=True)
     db = TestingSessionLocal()
     dept = db.query(Department).filter(Department.department_code == "TEST_FAC_DEPT").first()
+    assert dept is not None
     dept_id = dept.id
     
     from passlib.context import CryptContext
@@ -186,3 +187,14 @@ def test_delete_faculty(test_faculty, auth_headers):
 def test_unauthorized_access():
     response = client.get("/faculty/")
     assert response.status_code == 401
+
+
+def test_update_unknown_faculty_returns_404(auth_headers):
+    client_raise = TestClient(app, raise_server_exceptions=True)
+    response = client_raise.put(
+        "/faculty/999999",
+        json={"faculty_id": "UNKNOWN", "designation": "Professor"},
+        headers=auth_headers
+    )
+    assert response.status_code == 404
+    assert "Faculty not found" in response.json()["detail"]
