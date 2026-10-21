@@ -1,9 +1,20 @@
 /**
  * components/chat/CampusAssistantDrawer.tsx
  * -----------------------------------------
- * Slide-over drawer and floating launcher for the RIO-MJP Multi-Agent Campus Assistant.
- * Fully integrated across Admin, Faculty, and Student portals.
- * Answers are strictly grounded in verified campus databases.
+ * Shared compact, rounded floating AI Chat Assistant for RIO-MJP.
+ * Uniformly mounted across ADMIN, FACULTY, and STUDENT portals.
+ *
+ * Visual design matches visual reference:
+ * - Floating rounded panel (~590px wide on desktop) on the right of the viewport
+ * - Large rounded corners (rounded-[28px]), soft shadow, subtle cool-grey border
+ * - Dimmed, slightly blurred background with underlying dashboard visible
+ * - Clean white card header with blue robot avatar, Agent badge, portal context, and reset/close controls
+ * - Role-aware horizontal suggestion chips
+ * - Left-aligned assistant messages in white cards with robot avatar and green source badges
+ * - Right-aligned user messages in blue bubbles with user avatar and double-check timestamps
+ * - Red alert styling for error states
+ * - Interactive proposal cards for facility bookings and timetable generation
+ * - Fixed bottom input bar with rounded pill field, attachment icon, and blue send button
  */
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -13,14 +24,19 @@ import {
   Send,
   X,
   RotateCcw,
-  Clock,
   Calendar,
   Building2,
-  ShieldCheck,
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
   Play,
   Settings2,
+  Database,
+  HelpCircle,
+  Paperclip,
+  User,
+  CheckCheck,
+  Clock,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import { sendChatMessage, type ChatHistoryMessage } from '@/api/chat';
@@ -28,7 +44,7 @@ import { sendChatMessage, type ChatHistoryMessage } from '@/api/chat';
 let messageCounter = 0;
 function nextMsgId(prefix: string): string {
   messageCounter += 1;
-  return `${prefix}-${messageCounter}`;
+  return `${prefix}-${messageCounter}-${Date.now()}`;
 }
 
 export const CampusAssistantDrawer: React.FC = () => {
@@ -36,18 +52,35 @@ export const CampusAssistantDrawer: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showAttachNotice, setShowAttachNotice] = useState(false);
+
   const [history, setHistory] = useState<ChatHistoryMessage[]>(() => [
     {
       id: 'welcome',
       sender: 'assistant',
-      content: 'Hello! I am your **RIO Campus Assistant**.\n\nI can answer questions grounded in the official university database, such as your **published class timetable**, **next class status**, **course syllabus details**, **room locations**, or **academic holidays**.' +
-        (user?.role === 'ADMIN' ? '\n\nAs an **Admin**, I can also resolve academic scopes, inspect data readiness, explain optimization strategies, and prepare validated timetable generation proposals.' : ''),
+      content: user ? `Conversation reset. How can I help you today, **${user.name}**?` : 'Conversation reset. How can I help you today?',
       timestamp: new Date(),
-      sources: ['Verified Campus Database'],
+      sources: ['RIO Knowledge Engine'],
     },
   ]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Sync conversation initial greeting when user session changes
+  const [trackedUserId, setTrackedUserId] = useState<number | undefined>(user?.id);
+  if (user && user.id !== trackedUserId) {
+    setTrackedUserId(user.id);
+    setHistory([
+      {
+        id: nextMsgId('user_init'),
+        sender: 'assistant',
+        content: `Conversation reset. How can I help you today, **${user.name}**?`,
+        timestamp: new Date(),
+        sources: ['RIO Knowledge Engine'],
+      },
+    ]);
+  }
 
   // Auto-scroll to bottom of chat
   useEffect(() => {
@@ -91,12 +124,16 @@ export const CampusAssistantDrawer: React.FC = () => {
     } catch (err: any) {
       const errorDetail =
         err.response?.data?.detail || err.message || 'Unable to connect to the Assistant service.';
+      const cleanError = typeof errorDetail === 'object'
+        ? (errorDetail.message || JSON.stringify(errorDetail))
+        : String(errorDetail);
+
       const errorMsg: ChatHistoryMessage = {
         id: nextMsgId('err'),
         sender: 'assistant',
-        content: `⚠️ **Service Temporarily Unavailable**: ${errorDetail}`,
+        content: `Error: ${cleanError}`,
         timestamp: new Date(),
-        error: errorDetail,
+        error: cleanError,
       };
       setHistory((prev) => [...prev, errorMsg]);
     } finally {
@@ -123,143 +160,241 @@ export const CampusAssistantDrawer: React.FC = () => {
     ]);
   };
 
-  // Role-specific quick prompt recommendations
-  const getSuggestions = () => {
+  // Role-specific suggestions based on authenticated role and supported capabilities
+  const getSuggestions = (): { label: string; prompt: string; icon: React.ReactNode }[] => {
     if (user.role === 'STUDENT') {
       return [
-        { label: 'Find seminar halls', icon: <Building2 size={13} /> },
-        { label: 'Show my bookings', icon: <Clock size={13} /> },
-        { label: 'What is my next class?', icon: <Clock size={13} /> },
-        { label: 'Where is Room 101?', icon: <Building2 size={13} /> },
+        { label: 'What is my next class?', prompt: 'What is my next class?', icon: <HelpCircle size={13} /> },
+        { label: 'View my timetable', prompt: 'View my timetable', icon: <Calendar size={13} /> },
+        { label: 'How many classrooms are there?', prompt: 'How many classrooms are there?', icon: <Building2 size={13} /> },
+        { label: 'Show my bookings', prompt: 'Show my bookings', icon: <Clock size={13} /> },
       ];
     } else if (user.role === 'FACULTY') {
       return [
-        { label: 'Find seminar halls', icon: <Building2 size={13} /> },
-        { label: 'Show my bookings', icon: <Clock size={13} /> },
-        { label: 'My teaching schedule today', icon: <Calendar size={13} /> },
-        { label: 'Upcoming university events', icon: <Calendar size={13} /> },
+        { label: 'View my timetable', prompt: 'View my timetable', icon: <Calendar size={13} /> },
+        { label: 'What is my next class?', prompt: 'What is my next class?', icon: <HelpCircle size={13} /> },
+        { label: 'Find a seminar hall', prompt: 'Find a seminar hall', icon: <Building2 size={13} /> },
+        { label: 'Show my bookings', prompt: 'Show my bookings', icon: <Clock size={13} /> },
+      ];
+    } else if (user.role === 'ADMIN') {
+      return [
+        { label: 'Generate timetable', prompt: 'Generate timetable for CSE Semester 1', icon: <Play size={13} /> },
+        { label: 'Check timetable readiness', prompt: 'Check timetable readiness for CSE Semester 1', icon: <CheckCircle2 size={13} /> },
+        { label: 'View pending resource bookings', prompt: 'View pending resource bookings', icon: <Clock size={13} /> },
+        { label: 'Check resource availability', prompt: 'Check resource availability', icon: <Building2 size={13} /> },
+        { label: 'Compare scheduling strategies', prompt: 'Compare scheduling strategies', icon: <Settings2 size={13} /> },
       ];
     } else {
       return [
-        { label: 'Generate timetable for CSE Semester 1', icon: <Play size={13} /> },
-        { label: 'Find seminar halls', icon: <Building2 size={13} /> },
-        { label: 'Compare scheduling strategies', icon: <Settings2 size={13} /> },
-        { label: 'Show my bookings', icon: <Clock size={13} /> },
+        { label: 'Find a seminar hall', prompt: 'Find a seminar hall', icon: <Building2 size={13} /> },
+        { label: 'Show my bookings', prompt: 'Show my bookings', icon: <Clock size={13} /> },
       ];
     }
   };
 
+  // Source icon resolver
+  const getSourceIcon = (src: string) => {
+    const s = src.toLowerCase();
+    if (s.includes('facilities') || s.includes('register') || s.includes('room')) {
+      return <Building2 size={11} className="text-emerald-700 shrink-0" />;
+    }
+    return <Database size={11} className="text-emerald-700 shrink-0" />;
+  };
+
+  // Safe formatting without raw markdown asterisks or headings
+  const renderCleanContent = (text: string) => {
+    // Strip decorative leading hashes (#, ##, ###)
+    let clean = text.replace(/^\s*#{1,6}\s+/gm, '');
+    // Replace markdown bullets (* ) with bullet character
+    clean = clean.replace(/^\s*\*\s+/gm, '• ');
+
+    // Parse **bold** into <strong>
+    const parts = clean.split(/(\*\*[^*]+\*\*)/g);
+    return (
+      <>
+        {parts.map((part, i) => {
+          if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+            return (
+              <strong key={i} className="font-semibold text-slate-900">
+                {part.slice(2, -2)}
+              </strong>
+            );
+          }
+          return <span key={i}>{part}</span>;
+        })}
+      </>
+    );
+  };
+
+  const isErrorMessage = (msg: ChatHistoryMessage) => {
+    return Boolean(
+      msg.error ||
+      msg.content.toLowerCase().startsWith('error:') ||
+      msg.content.startsWith('⚠️')
+    );
+  };
+
   return (
     <>
-      {/* ── Floating Launcher Button ─────────────────────────────────────────── */}
-      <button
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-blue-700 via-indigo-700 to-primary-700 hover:from-blue-800 hover:to-primary-800 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-primary-500/30"
-        title="Open RIO Campus AI Assistant"
-        aria-label="Open Campus AI Assistant"
-      >
-        <span className="relative flex h-3 w-3">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-400"></span>
-        </span>
-        <Sparkles size={18} className="text-cyan-300" />
-        <span className="font-semibold text-sm tracking-wide">Ask RIO AI</span>
-      </button>
+      {/* ── Floating Launcher Button (when closed) ──────────────────────────── */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-blue-500/25 cursor-pointer"
+          title="Open RIO Campus AI Assistant"
+          aria-label="Open Campus AI Assistant"
+        >
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-300 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+          </span>
+          <Sparkles size={17} className="text-blue-100" />
+          <span className="font-semibold text-sm tracking-wide">Ask RIO AI</span>
+        </button>
+      )}
 
-      {/* ── Slide-Over Assistant Drawer ──────────────────────────────────────── */}
+      {/* ── Compact Floating Panel with Dimmed Background ────────────────────── */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/30 backdrop-blur-[2px] transition-opacity">
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-md sm:max-w-lg bg-white shadow-2xl flex flex-col border-l border-slate-200">
-              
-              {/* Header */}
-              <div className="px-5 py-4 bg-[#142542] text-white flex items-center justify-between border-b border-slate-700">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center text-white shadow-sm">
-                    <Bot size={20} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-base text-white leading-tight">
-                        RIO Campus Assistant
-                      </h3>
-                      <span className="px-1.5 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                        Agent 9A
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-300">
-                      Grounded database engine &bull; {user.role} Portal
-                    </p>
-                  </div>
-                </div>
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/20 backdrop-blur-[2px] transition-all flex justify-end items-end sm:items-center p-0 sm:p-4 md:p-6 lg:p-8">
+          {/* Backdrop click to dismiss */}
+          <div
+            className="fixed inset-0"
+            onClick={() => setIsOpen(false)}
+            aria-hidden="true"
+          />
 
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={clearChat}
-                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-                    title="Clear Conversation"
-                    aria-label="Clear chat"
-                  >
-                    <RotateCcw size={16} />
-                  </button>
-                  <button
-                    onClick={() => setIsOpen(false)}
-                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-                    title="Close Assistant"
-                    aria-label="Close drawer"
-                  >
-                    <X size={18} />
-                  </button>
+          {/* Floating Chat Container */}
+          <div
+            className="relative z-10 w-full sm:w-[540px] md:w-[590px] h-[92vh] sm:h-[calc(100vh-64px)] max-h-[840px] bg-white rounded-t-[28px] sm:rounded-[28px] shadow-2xl border border-slate-200/90 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            role="dialog"
+            aria-modal="true"
+            aria-label="RIO Campus Assistant"
+          >
+            {/* Header */}
+            <div className="px-6 py-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <Bot size={22} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-[17px] text-slate-900 leading-tight truncate">
+                      RIO Campus Assistant
+                    </h3>
+                    <span className="px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full bg-blue-100 text-blue-700 shrink-0">
+                      Agent 9A
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">
+                    Grounded database engine &bull; {user.role} Portal
+                  </p>
                 </div>
               </div>
 
-              {/* Suggestions chips */}
-              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200/80 overflow-x-auto no-scrollbar flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-slate-400 whitespace-nowrap uppercase tracking-wider">
-                  Suggestions:
-                </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={clearChat}
+                  className="w-9 h-9 rounded-full border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 hover:bg-slate-50 flex items-center justify-center transition-colors shadow-2xs"
+                  title="Reset Conversation"
+                  aria-label="Reset conversation"
+                >
+                  <RotateCcw size={15} />
+                </button>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="w-9 h-9 rounded-full border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 hover:bg-slate-50 flex items-center justify-center transition-colors shadow-2xs"
+                  title="Close Assistant"
+                  aria-label="Close assistant"
+                >
+                  <X size={17} />
+                </button>
+              </div>
+            </div>
+
+            {/* Suggestions Chips Row */}
+            <div className="px-5 py-2.5 bg-white border-b border-slate-100 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
+                Suggestions:
+              </span>
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
                 {getSuggestions().map((s, idx) => (
                   <button
                     key={idx}
-                    onClick={() => handleSendMessage(s.label)}
+                    type="button"
+                    onClick={() => handleSendMessage(s.prompt)}
                     disabled={isLoading}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-white hover:bg-primary-50 text-slate-700 hover:text-primary-700 border border-slate-200 hover:border-primary-300 whitespace-nowrap transition-all shadow-2xs"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-700 border border-slate-200 hover:border-blue-300 whitespace-nowrap transition-all shadow-2xs shrink-0 active:scale-95 disabled:opacity-50 cursor-pointer"
                   >
-                    {s.icon}
+                    <span className="text-slate-500">{s.icon}</span>
                     <span>{s.label}</span>
                   </button>
                 ))}
               </div>
+            </div>
 
-              {/* Chat Message Scroll Area */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#F8FAFC]">
-                {history.map((msg) => {
-                  const isUser = msg.sender === 'user';
+            {/* Scrollable Message History */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 bg-[#F8FAFC]">
+              {history.map((msg) => {
+                const isUser = msg.sender === 'user';
+                const isErr = isErrorMessage(msg);
+                const timeStr = msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                if (isUser) {
                   return (
-                    <div
-                      key={msg.id}
-                      className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
-                    >
-                      <div
-                        className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-xs ${
-                          isUser
-                            ? 'bg-gradient-to-r from-blue-700 to-indigo-700 text-white rounded-tr-xs'
-                            : 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-xs'
-                        }`}
-                      >
-                        {/* Message content rendering */}
-                        <div className="whitespace-pre-wrap break-words prose prose-slate prose-sm max-w-none">
+                    <div key={msg.id} className="flex items-start justify-end gap-2.5">
+                      <div className="flex flex-col items-end max-w-[80%]">
+                        <div className="bg-blue-600 text-white font-medium text-[13.5px] leading-relaxed px-4 py-2.5 rounded-2xl shadow-2xs">
                           {msg.content}
+                        </div>
+                        <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-1 pr-1 font-medium">
+                          <span>{timeStr}</span>
+                          <CheckCheck size={14} className="text-blue-500" />
+                        </div>
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                        <User size={16} />
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (isErr) {
+                  return (
+                    <div key={msg.id} className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                        <AlertCircle size={18} />
+                      </div>
+                      <div className="flex flex-col max-w-[85%]">
+                        <div className="bg-rose-50 border border-rose-200/90 text-rose-900 font-medium px-4 py-3 rounded-2xl text-[13.5px] shadow-2xs">
+                          {msg.content.replace(/^⚠️\s*/, '')}
+                        </div>
+                        <span className="text-[11px] text-slate-400 mt-1 pl-1">
+                          {timeStr}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={msg.id} className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                      <Bot size={18} />
+                    </div>
+                    <div className="flex flex-col max-w-[85%]">
+                      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 text-[13.5px] leading-relaxed text-slate-800 shadow-2xs space-y-3">
+                        <div className="whitespace-pre-wrap break-words">
+                          {renderCleanContent(msg.content)}
                         </div>
 
                         {/* Proposal Interactive Card */}
-                        {!isUser && msg.proposal && (
+                        {msg.proposal && (
                           <div className="mt-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200/90 shadow-2xs space-y-2.5">
                             {msg.proposal.proposal_id.startsWith('res_prop_') ? (
                               <>
                                 <div className="flex items-center justify-between">
                                   <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                                    <Building2 size={13} className="text-primary-600" />
+                                    <Building2 size={13} className="text-blue-600" />
                                     Facility Booking Proposal
                                   </span>
                                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
@@ -282,7 +417,7 @@ export const CampusAssistantDrawer: React.FC = () => {
                                   </div>
                                   <div>
                                     <span className="font-semibold text-slate-500 block text-[10px] uppercase">Time Interval</span>
-                                    <span className="font-medium text-indigo-700 font-mono text-[11px]">
+                                    <span className="font-medium text-blue-700 font-mono text-[11px]">
                                       {msg.proposal.start_time?.slice(0, 5)} &ndash; {msg.proposal.end_time?.slice(0, 5)}
                                     </span>
                                   </div>
@@ -305,7 +440,7 @@ export const CampusAssistantDrawer: React.FC = () => {
                                 <button
                                   onClick={() => handleSendMessage(`confirm ${msg.proposal?.proposal_id}`)}
                                   disabled={isLoading}
-                                  className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium text-xs rounded-lg shadow-xs hover:shadow-md transition-all duration-150 disabled:opacity-50"
+                                  className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs rounded-lg shadow-2xs hover:shadow-sm transition-all duration-150 disabled:opacity-50"
                                 >
                                   <CheckCircle2 size={14} />
                                   <span>Confirm &amp; Submit Booking</span>
@@ -315,7 +450,7 @@ export const CampusAssistantDrawer: React.FC = () => {
                               <>
                                 <div className="flex items-center justify-between">
                                   <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                                    <Settings2 size={13} className="text-primary-600" />
+                                    <Settings2 size={13} className="text-blue-600" />
                                     Timetable Proposal
                                   </span>
                                   <span
@@ -340,7 +475,7 @@ export const CampusAssistantDrawer: React.FC = () => {
                                   </div>
                                   <div>
                                     <span className="font-semibold text-slate-500 block text-[10px] uppercase">Strategy</span>
-                                    <span className="font-medium text-indigo-700 font-mono text-[11px]">
+                                    <span className="font-medium text-blue-700 font-mono text-[11px]">
                                       {msg.proposal.strategy}
                                     </span>
                                   </div>
@@ -356,7 +491,7 @@ export const CampusAssistantDrawer: React.FC = () => {
                                   <button
                                     onClick={() => handleSendMessage(`confirm ${msg.proposal?.proposal_id}`)}
                                     disabled={isLoading}
-                                    className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium text-xs rounded-lg shadow-xs hover:shadow-md transition-all duration-150 disabled:opacity-50"
+                                    className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs rounded-lg shadow-2xs hover:shadow-sm transition-all duration-150 disabled:opacity-50"
                                   >
                                     <CheckCircle2 size={14} />
                                     <span>Authorize &amp; Generate Timetable</span>
@@ -372,82 +507,107 @@ export const CampusAssistantDrawer: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Source citations for assistant responses */}
-                        {!isUser && msg.sources && msg.sources.length > 0 && (
-                          <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                              Source:
+                        {/* Source Badges */}
+                        {msg.sources && msg.sources.length > 0 && (
+                          <div className="pt-2 border-t border-slate-100 flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                              SOURCE:
                             </span>
                             {msg.sources.map((src, sIdx) => (
                               <span
                                 key={sIdx}
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-medium rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs"
                               >
-                                <ShieldCheck size={10} />
-                                {src}
+                                {getSourceIcon(src)}
+                                <span>{src}</span>
                               </span>
                             ))}
                           </div>
                         )}
                       </div>
 
-                      <span className="text-[10px] text-slate-400 px-1 mt-1">
-                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      <span className="text-[11px] text-slate-400 mt-1 pl-1">
+                        {timeStr}
                       </span>
                     </div>
-                  );
-                })}
+                  </div>
+                );
+              })}
 
-                {isLoading && (
-                  <div className="flex items-start gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
-                      <Bot size={15} />
-                    </div>
-                    <div className="bg-white border border-slate-200/80 rounded-2xl rounded-tl-xs px-4 py-3 shadow-xs">
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                        <span className="flex gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '150ms' }} />
-                          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '300ms' }} />
-                        </span>
-                        <span>Consulting verified campus records&hellip;</span>
-                      </div>
+              {isLoading && (
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                    <Bot size={18} />
+                  </div>
+                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs">
+                    <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                      <span className="flex gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </span>
+                      <span>Consulting verified campus records&hellip;</span>
                     </div>
                   </div>
-                )}
+                </div>
+              )}
 
-                <div ref={messagesEndRef} />
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input Bar */}
+            <div className="p-4 bg-white border-t border-slate-100 shrink-0">
+              <div className="bg-white border border-slate-200/90 rounded-full pl-3.5 pr-1.5 py-1.5 flex items-center gap-2 shadow-2xs focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+                <button
+                  type="button"
+                  onClick={() => setShowAttachNotice((prev) => !prev)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full transition-colors shrink-0 focus:outline-none"
+                  title="Attach reference"
+                  aria-label="Attach file"
+                >
+                  <Paperclip size={18} />
+                </button>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={isLoading}
+                  placeholder="Ask about your timetable, classes, faculty, or campus..."
+                  className="flex-1 min-w-0 text-[13.5px] text-slate-800 placeholder-slate-400 bg-transparent border-0 border-none outline-none ring-0 shadow-none focus:outline-none focus:ring-0 focus:border-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                  style={{
+                    border: 'none',
+                    outline: 'none',
+                    boxShadow: 'none',
+                    background: 'transparent',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage()}
+                  disabled={!inputMessage.trim() || isLoading}
+                  className="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center shadow-sm shrink-0 transition-all active:scale-95 cursor-pointer focus:outline-none"
+                  title="Send Message"
+                  aria-label="Send message"
+                >
+                  <Send size={15} className="translate-x-[-0.5px]" />
+                </button>
               </div>
 
-              {/* Input Area */}
-              <div className="p-3 bg-white border-t border-slate-200">
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    disabled={isLoading}
-                    placeholder="Ask about your timetable, classes, faculty, or campus..."
-                    className="flex-1 px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-600 transition-all text-slate-800 placeholder-slate-400"
-                  />
+              {showAttachNotice && (
+                <div className="mt-2 text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2 flex items-center justify-between">
+                  <span>Query Agent accesses verified university database records directly. File attachments are optional.</span>
                   <button
-                    onClick={() => handleSendMessage()}
-                    disabled={!inputMessage.trim() || isLoading}
-                    className="p-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl shadow-xs transition-colors shrink-0"
-                    title="Send Message"
-                    aria-label="Send message"
+                    onClick={() => setShowAttachNotice(false)}
+                    className="text-slate-400 hover:text-slate-700 font-bold ml-2 text-xs"
                   >
-                    <Send size={16} />
+                    ✕
                   </button>
                 </div>
-                <p className="text-[10px] text-center text-slate-400 mt-2">
-                  Answers are generated by RIO Query Agent using PostgreSQL as the single source of truth.
-                </p>
-              </div>
-
+              )}
             </div>
+
           </div>
         </div>
       )}

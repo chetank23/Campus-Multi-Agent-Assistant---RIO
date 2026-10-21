@@ -356,6 +356,20 @@ def test_resource_agent_booking_proposal_and_security(faculty_token, student_tok
         assert replay_data.get("action_type") == "CONFIRMATION_REJECTED"
         assert "already been confirmed" in replay_data["reply"].lower()
 
+        # Cleanup created booking to release global lock on seed resource
+        with Session(engine) as db:
+            created_b = (
+                db.query(ResourceBooking)
+                .filter(
+                    ResourceBooking.purpose == "Faculty Workshop",
+                    ResourceBooking.status == "PENDING",
+                )
+                .first()
+            )
+            if created_b:
+                created_b.status = "CANCELLED"
+                db.commit()
+
 
 def test_resource_agent_role_guard_on_approval(student_token, faculty_token):
     # Non-admin users cannot approve bookings through chat

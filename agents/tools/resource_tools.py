@@ -180,6 +180,7 @@ def get_user_bookings_data(
     items = []
     for b in bookings:
         res = db.query(Resource).filter(Resource.id == b.resource_id).first()
+        requester = db.query(User).filter(User.id == b.requested_by).first() if b.requested_by else None
         items.append({
             "booking_id": b.id,
             "resource_id": b.resource_id,
@@ -192,6 +193,7 @@ def get_user_bookings_data(
             "status": b.status,
             "purpose": b.purpose,
             "requested_by_id": b.requested_by,
+            "requester_name": requester.name if requester else None,
         })
 
     return {

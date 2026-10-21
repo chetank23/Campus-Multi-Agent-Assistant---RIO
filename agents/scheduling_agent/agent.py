@@ -45,14 +45,20 @@ def run_scheduling_agent(
     tool_calls: List[Dict[str, Any]] = []
     sources: List[str] = ["Academic Master Register", "Campus Facilities Register"]
 
+    is_readiness = (
+        state.get("intent") == "TIMETABLE_READINESS"
+        or bool(re.search(r"\breadiness\b", msg_lower))
+        or bool(re.search(r"\bready\s+(?:to|for)\s+(?:schedule|scheduling|generate|generation)\b", msg_lower))
+    )
+
     # 1. Non-Admin check: Guard rail
     if user.role != "ADMIN":
         return {
-            "intent": "TIMETABLE_GENERATION",
+            "intent": "TIMETABLE_READINESS" if is_readiness else "TIMETABLE_GENERATION",
             "selected_agent": "scheduling_agent",
             "final_response": sanitize_plain_english(
-                "Access Restricted: Only university Administrators are authorized to initiate, "
-                "configure, or generate academic timetables.\n\n"
+                "Access Restricted: Only university Administrators are authorized to evaluate "
+                "timetable scheduling readiness or initiate academic timetables.\n\n"
                 "As a Faculty or Student, you can view your published schedules or submit requests through "
                 "your dedicated portal workspace."
             ),
@@ -192,20 +198,28 @@ def run_scheduling_agent(
             "success": True,
         }
 
-    # 4. Scope Resolution & Readiness Pipeline for Generation Requests
+    # 4. Scope Resolution & Readiness Pipeline
     tool_calls.append({"tool": "resolve_academic_scope", "args": {"query_text": message}})
     scope_res = resolve_academic_scope_data(db=db, query_text=message)
 
     if not scope_res["resolved"]:
         missing_str = ", ".join(scope_res["missing_parameters"])
-        prompt = scope_res["clarification_prompt"] or "Please provide the missing academic parameters."
+        clarifications = []
+        if "Department" in scope_res["missing_parameters"]:
+            clarifications.append("Which academic department would you like to check? (e.g. Computer Science / CSE, Mechanical)")
+        if "Semester" in scope_res["missing_parameters"]:
+            clarifications.append("Which semester number would you like to evaluate? (e.g. Semester 1, Semester 5)")
+        if "Program" in scope_res["missing_parameters"]:
+            clarifications.append("Which degree program should be checked? (e.g. B.Tech Computer Science and Engineering)")
+        prompt = " ".join(clarifications) if clarifications else (scope_res.get("clarification_prompt") or "Please provide the missing academic parameters.")
+        action_verb = "evaluate timetable readiness" if is_readiness else "schedule timetable generation"
         reply = (
             f"Academic Scope Clarification Needed\n\n"
-            f"I could not resolve all required scheduling parameters ({missing_str}).\n\n"
+            f"I could not resolve all required scheduling parameters ({missing_str}) to {action_verb}.\n\n"
             f"{prompt}"
         )
         return {
-            "intent": "SCOPE_RESOLUTION",
+            "intent": "TIMETABLE_READINESS" if is_readiness else "SCOPE_RESOLUTION",
             "selected_agent": "scheduling_agent",
             "action_type": "CLARIFICATION_NEEDED",
             "final_response": sanitize_plain_english(reply),
@@ -220,6 +234,73 @@ def run_scheduling_agent(
     # Analyze Readiness
     tool_calls.append({"tool": "analyze_scheduling_readiness", "args": {"scope": resolved_scope}})
     readiness = analyze_scheduling_readiness_data(db=db, scope_dict=resolved_scope)
+    readiness_status = readiness.get("status", "BLOCKED")
+
+    # Read-only readiness assessment: Report findings directly without generating proposals or tokens
+    if is_readiness:
+        findings_text = "\n".join(f"- {f}" for f in readiness.get("findings", []))
+        dept_name = display_info.get("department", "Unknown Department")
+        sem_name = display_info.get("semester", "Unknown Semester")
+        prog_name = display_info.get("program", "Unknown Program")
+        ay_name = display_info.get("academic_year", "Unknown Year")
+        sec_count = display_info.get("sections_count", "0")
+        sec_names = display_info.get("section_names", "None")
+
+        if readiness_status == "BLOCKED":
+            reply = (
+                f"Timetable Scheduling Readiness: BLOCKED\n\n"
+                f"Academic Scope:\n"
+                f"- Department: {dept_name}\n"
+                f"- Program: {prog_name}\n"
+                f"- Semester: {sem_name}\n"
+                f"- Academic Year: {ay_name}\n"
+                f"- Sections: {sec_count} section(s) ({sec_names})\n\n"
+                f"Readiness Findings and Blockers:\n"
+                f"{findings_text}\n\n"
+                f"Action Required: Resolve the missing prerequisites in the Admin Portal before attempting generation."
+            )
+            action_type = "READINESS_BLOCKED"
+        elif readiness_status == "READY_WITH_WARNINGS":
+            reply = (
+                f"Timetable Scheduling Readiness: READY_WITH_WARNINGS\n\n"
+                f"Academic Scope:\n"
+                f"- Department: {dept_name}\n"
+                f"- Program: {prog_name}\n"
+                f"- Semester: {sem_name}\n"
+                f"- Academic Year: {ay_name}\n"
+                f"- Sections: {sec_count} section(s) ({sec_names})\n\n"
+                f"Readiness Findings:\n"
+                f"{findings_text}\n\n"
+                f"The academic scope meets all mandatory scheduling constraints and can proceed to generation. "
+                f"To generate a timetable, ask: Generate timetable for {dept_name} {sem_name}."
+            )
+            action_type = "READINESS_READY_WITH_WARNINGS"
+        else:
+            reply = (
+                f"Timetable Scheduling Readiness: READY\n\n"
+                f"Academic Scope:\n"
+                f"- Department: {dept_name}\n"
+                f"- Program: {prog_name}\n"
+                f"- Semester: {sem_name}\n"
+                f"- Academic Year: {ay_name}\n"
+                f"- Sections: {sec_count} section(s) ({sec_names})\n\n"
+                f"Readiness Findings:\n"
+                f"{findings_text}\n\n"
+                f"All prerequisites are verified and the scope is fully ready for timetable generation. "
+                f"To generate a timetable, ask: Generate timetable for {dept_name} {sem_name}."
+            )
+            action_type = "READINESS_READY"
+
+        return {
+            "intent": "TIMETABLE_READINESS",
+            "selected_agent": "scheduling_agent",
+            "action_type": action_type,
+            "final_response": sanitize_plain_english(reply),
+            "proposal": None,
+            "tool_calls": tool_calls,
+            "sources": sources,
+            "success": True,
+        }
 
     # Detect requested strategy in message
     selected_strategy = "BALANCED"

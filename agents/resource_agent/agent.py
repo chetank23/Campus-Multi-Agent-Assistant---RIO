@@ -342,6 +342,76 @@ def run_resource_agent(
             "success": True,
         }
 
+    # 5. Pending Bookings vs Personal Bookings
+    is_pending_query = bool(re.search(r"\bpending\b", msg_lower)) and any(
+        k in msg_lower for k in ["booking", "bookings", "request", "requests"]
+    )
+
+    if is_pending_query:
+        # Check if this is a personal pending inquiry ("my pending bookings") vs administrative ("pending bookings")
+        is_personal = "my" in msg_lower or "mine" in msg_lower
+
+        if not is_personal and user.role != "ADMIN":
+            return {
+                "intent": "RESOURCE_QUERY",
+                "selected_agent": "resource_agent",
+                "action_type": "ACCESS_DENIED",
+                "final_response": sanitize_plain_english(
+                    "Access Restricted: Only university Administrators are authorized to review campus-wide pending resource bookings.\n\n"
+                    "As a Faculty member or Student, you can view your own submitted requests by asking 'Show my bookings'."
+                ),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+
+        tool_calls.append({"tool": "get_user_bookings", "args": {"user_id": user.id, "status_filter": "PENDING"}})
+        b_data = get_user_bookings_data(db=db, user=user, status_filter="PENDING")
+
+        if b_data["count"] == 0:
+            return {
+                "intent": "RESOURCE_QUERY",
+                "selected_agent": "resource_agent",
+                "action_type": "BOOKINGS_LIST",
+                "final_response": "There are currently no pending resource booking requests on record.",
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": True,
+            }
+
+        table_rows = []
+        for b in b_data["bookings"]:
+            st = b['start_time'][:5] if b.get('start_time') else 'N/A'
+            et = b['end_time'][:5] if b.get('end_time') else 'N/A'
+            req_info = f" requested by {b['requester_name']}" if b.get('requester_name') else ""
+            purpose_info = f" (Purpose: {b['purpose']})" if b.get('purpose') else ""
+            table_rows.append(
+                f"- Booking #{b['booking_id']}: {b['resource_name']} on {b['date']} ({st} - {et}){req_info} - Status: {b['status']}{purpose_info}"
+            )
+
+        title = "Your Pending Resource Bookings" if is_personal else "Pending Campus Resource Bookings"
+        next_steps = (
+            "To view details or cancel, ask: Status of booking #<id> or Cancel booking #<id>."
+            if is_personal
+            else "To review or approve these requests, navigate to the Admin Approvals Workspace at /admin/approvals, or ask: Status of booking #<id>."
+        )
+
+        reply = (
+            f"{title} ({b_data['count']} found):\n\n"
+            + "\n".join(table_rows) + "\n\n"
+            + next_steps
+        )
+
+        return {
+            "intent": "RESOURCE_QUERY",
+            "selected_agent": "resource_agent",
+            "action_type": "BOOKINGS_LIST",
+            "final_response": sanitize_plain_english(reply),
+            "tool_calls": tool_calls,
+            "sources": ["Resource Booking Register"],
+            "success": True,
+        }
+
     if any(k in msg_lower for k in ["my bookings", "my booking", "show my bookings", "list my bookings", "track my bookings"]):
         tool_calls.append({"tool": "get_user_bookings", "args": {"user_id": user.id}})
         b_data = get_user_bookings_data(db=db, user=user)

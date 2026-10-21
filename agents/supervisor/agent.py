@@ -34,7 +34,20 @@ def classify_intent(message: str) -> str:
     if re.search(r"\b(?:confirm|execute|approve|proceed)\s+res_prop_[a-zA-Z0-9_-]+\b", msg):
         return "RESOURCE_BOOKING"
 
-    # 2. Scheduling / Timetable Generation requests & confirmation
+    # 2. Scheduling Readiness Check (Read-only assessment, Admin only)
+    readiness_patterns = [
+        r"\breadiness\b",
+        r"\bready\s+to\s+(?:schedule|generate)\b",
+        r"\bready\s+for\s+(?:scheduling|generation)\b",
+        r"\bcheck\s+(?:timetable\s+)?readiness\b",
+        r"\bscheduling\s+readiness\b",
+        r"\btimetable\s+readiness\b",
+    ]
+    for pat in readiness_patterns:
+        if re.search(pat, msg):
+            return "TIMETABLE_READINESS"
+
+    # 3. Scheduling / Timetable Generation requests & confirmation
     scheduling_patterns = [
         r"\bgenerate\b.*\btimetable\b",
         r"\bcreate\b.*\btimetable\b",
@@ -57,8 +70,11 @@ def classify_intent(message: str) -> str:
         if re.search(pat, msg):
             return "TIMETABLE_GENERATION"
 
-    # 3. Resource Agent requests (Discovery, Availability, Booking, Status, Cancellation)
+    # 4. Resource Agent requests (Discovery, Availability, Booking, Status, Cancellation, Pending queries)
     resource_patterns = [
+        r"\bpending\s+(?:resource\s+)?(?:bookings?|requests?)\b",
+        r"\b(?:view|show|list|get|check)\s+(?:all\s+)?pending\s+(?:resource\s+)?(?:bookings?|requests?)\b",
+        r"\bstatus\s+of\s+pending\s+bookings?\b",
         r"\bbook\b\s+.*",
         r"\breserve\b\s+.*",
         r"\bbook\b.*\b(hall|room|lab|projector|auditorium|facility|resource)\b",
@@ -179,7 +195,7 @@ def supervisor_node(state: AgentState) -> AgentState:
             "final_response": "Please specify the preferred date and time interval you would like to check.",
         }
 
-    if intent == "TIMETABLE_GENERATION":
+    if intent in ["TIMETABLE_GENERATION", "TIMETABLE_READINESS"]:
         return {
             "intent": intent,
             "selected_agent": "scheduling_agent",

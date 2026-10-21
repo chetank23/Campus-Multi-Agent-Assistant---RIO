@@ -215,9 +215,23 @@ def test_resource_discovery():
 
 def test_booking_proposal_creation_and_confirmation():
     with Session(engine) as db:
-        # 1. Fetch an existing active resource from seeded database
-        res_entity = db.query(Resource).filter(Resource.status == "ACTIVE").first()
-        assert res_entity is not None, "At least one active resource must exist in seeded DB"
+        # 1. Fetch an unlocked active resource from database
+        active_locked_ids = [
+            b[0]
+            for b in db.query(ResourceBooking.resource_id)
+            .filter(ResourceBooking.status.in_(["PENDING", "APPROVED"]))
+            .all()
+        ]
+        res_query = db.query(Resource).filter(Resource.status == "ACTIVE")
+        if active_locked_ids:
+            res_query = res_query.filter(~Resource.id.in_(active_locked_ids))
+        res_entity = res_query.first()
+        if not res_entity:
+            res_entity = Resource(name="Dedicated Proposal Room", resource_type="LAB", capacity=25, status="ACTIVE")
+            db.add(res_entity)
+            db.commit()
+            db.refresh(res_entity)
+        assert res_entity is not None, "At least one active resource must exist in DB"
 
         target_date = datetime.date.today() + datetime.timedelta(days=7)
         faculty_user = db.query(User).filter(User.role == "FACULTY").first()
