@@ -21,6 +21,8 @@ from agents.scheduling_agent.agent import run_scheduling_agent
 from agents.resource_agent.agent import run_resource_agent
 from agents.scheduling_agent.proposal_store import proposal_store
 from agents.resource_agent.proposal_store import resource_proposal_store
+from agents.common.operation_proposal_store import operation_proposal_store
+from agents.action_registry import action_registry
 from agents.common.formatter import sanitize_plain_english
 
 
@@ -30,7 +32,15 @@ def classify_intent(message: str) -> str:
     """
     msg = message.lower().strip()
 
-    # 1. Resource Confirmation token: confirm res_prop_<hex>
+    # 1. Operation & Resource Confirmation tokens
+    m_op = re.search(r"\b(?:confirm|execute|approve|proceed)\s+(op_prop_[a-zA-Z0-9_-]+)\b", msg)
+    if m_op:
+        token = m_op.group(1)
+        prop = operation_proposal_store.get_proposal(token)
+        if prop and "TIMETABLE" in prop.action_name:
+            return "TIMETABLE_GENERATION"
+        return "RESOURCE_BOOKING"
+
     if re.search(r"\b(?:confirm|execute|approve|proceed)\s+res_prop_[a-zA-Z0-9_-]+\b", msg):
         return "RESOURCE_BOOKING"
 
@@ -47,13 +57,14 @@ def classify_intent(message: str) -> str:
         if re.search(pat, msg):
             return "TIMETABLE_READINESS"
 
-    # 3. Scheduling / Timetable Generation requests & confirmation
+    # 3. Scheduling / Timetable Generation & Lifecycle requests
     scheduling_patterns = [
         r"\bgenerate\b.*\btimetable\b",
         r"\bcreate\b.*\btimetable\b",
         r"\brun\b.*\bsolver\b",
         r"\boptimize\b.*\bschedule\b",
         r"\bnew\b.*\btimetable\b",
+        r"\bfinalize\b.*\btimetable\b",
         r"\bpublish\b.*\btimetable\b",
         r"\bauto-generate\b",
         r"\bconfirm\s+prop_[a-zA-Z0-9_-]+\b",
@@ -70,7 +81,16 @@ def classify_intent(message: str) -> str:
         if re.search(pat, msg):
             return "TIMETABLE_GENERATION"
 
-    # 4. Resource Agent requests (Discovery, Availability, Booking, Status, Cancellation, Pending queries)
+    # 4. Room metadata updates
+    room_update_patterns = [
+        r"\b(?:update|change|set|modify)\s+(?:the\s+)?room\b",
+        r"\b(?:update|change|set|modify)\s+(?:room\s+)?[a-zA-Z0-9_-]+\s+(?:capacity|type|name)\b",
+    ]
+    for pat in room_update_patterns:
+        if re.search(pat, msg):
+            return "RESOURCE_BOOKING"
+
+    # 5. Resource Agent requests (Discovery, Availability, Booking, Status, Cancellation, Pending queries)
     resource_patterns = [
         r"\bpending\s+(?:resource\s+)?(?:bookings?|requests?)\b",
         r"\b(?:view|show|list|get|check)\s+(?:all\s+)?pending\s+(?:resource\s+)?(?:bookings?|requests?)\b",
@@ -93,7 +113,42 @@ def classify_intent(message: str) -> str:
         if re.search(pat, msg):
             return "RESOURCE_BOOKING"
 
-    # 4. Informational Queries supported by Query Agent
+    # 6. Unsupported domain operations (e.g., grades, fees, account deletion)
+    unsupported_patterns = [
+        (r"\b(?:change|update|edit|modify|submit|enter|post)\b.*?\b(?:grade|grades|marks|gpa|cgpa)\b", "grade management"),
+        (r"\b(?:pay|payment|refund|waive|process)\b.*?\b(?:fee|fees|tuition|dues)\b", "fee payment and refund processing"),
+        (r"\b(?:delete|drop|remove)\b.*?\b(?:department|departments)\b", "department deletion"),
+        (r"\b(?:delete|drop|remove)\b.*?\b(?:courses?|catalog)\b", "course deletion"),
+        (r"\b(?:reset|change)\b.*?\bpassword\b", "password management"),
+        (r"\b(?:create|delete)\b.*?\buser\s+account\b", "user account creation or deletion"),
+    ]
+    for pat, desc in unsupported_patterns:
+        if re.search(pat, msg):
+            return f"UNSUPPORTED:{desc}"
+
+    # 7. Action registry introspection
+    if re.search(r"\b(?:what\s+actions|list\s+actions|supported\s+actions|what\s+operations|supported\s+operations)\b", msg):
+        return "ACTION_REGISTRY_HELP"
+
+    # 8. Follow-up intent checks
+    if re.search(r"^(?:yes|confirm|proceed|confirm it|approve it|do it|yes proceed|yes, proceed)$", msg):
+        return "FOLLOW_UP_CONFIRM"
+
+    if re.search(r"^(?:no|cancel|cancel that|no, cancel that|discard|never mind|stop|abort)$", msg):
+        return "FOLLOW_UP_CANCEL"
+
+    follow_up_modify_patterns = [
+        r"\b(?:change\s+it\s+to|change\s+to|change\s+(?:the\s+)?date\s+to|switch\s+to|move\s+it\s+to|move\s+to)\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2})\b",
+        r"\b(?:use\s+.*?instead)\b",
+        r"\b(?:show\s+me\s+another\s+option|another\s+option|other\s+options|different\s+option)\b",
+        r"\b(?:change\s+the\s+time|change\s+time|another\s+time|different\s+time)\b",
+        r"\b(?:change\s+room|change\s+facility|different\s+room)\b",
+    ]
+    for pat in follow_up_modify_patterns:
+        if re.search(pat, msg):
+            return "FOLLOW_UP_MODIFY"
+
+    # 9. Informational Queries supported by Query Agent
     query_patterns = [
         "timetable", "schedule", "class", "classes", "lecture", "timing", "when is",
         "ongoing", "upcoming", "next class", "faculty", "professor", "teacher",
@@ -110,17 +165,7 @@ def classify_intent(message: str) -> str:
             if re.search(r"\b" + re.escape(q) + r"\b", msg):
                 return "QUERY_AGENT"
 
-    # Follow-up intent checks
-    if re.search(r"^(?:yes|confirm|proceed|confirm it|approve it|do it)$", msg):
-        return "FOLLOW_UP_CONFIRM"
-
-    if re.search(r"^(?:no|cancel|discard|never mind|stop)$", msg):
-        return "FOLLOW_UP_CANCEL"
-
-    if re.search(r"\b(?:change the time|change time|another time|different time|show me another option|another option|other options)\b", msg):
-        return "FOLLOW_UP_MODIFY"
-
-    # Greetings and general campus inquiries
+    # 10. Greetings and general campus inquiries
     if re.search(r"\b(hi|hello|hey|help|good morning|good afternoon|who are you|what can you do)\b", msg):
         return "CAMPUS_GREETING"
 
@@ -134,11 +179,60 @@ def supervisor_node(state: AgentState) -> AgentState:
     """
     message = state.get("message", "")
     user_id = state.get("user_id")
+    role = state.get("role") or "STUDENT"
     intent = classify_intent(message)
+
+    # Handle unsupported operations directly with honest plain English refusal
+    if intent.startswith("UNSUPPORTED:"):
+        desc = intent.split(":", 1)[1]
+        return {
+            "intent": "UNSUPPORTED_OPERATION",
+            "selected_agent": None,
+            "final_response": (
+                f"I cannot perform {desc} as there is no backend service supporting this operation "
+                "in RIO Campus Assistant. Please contact the academic administration or registrar office directly."
+            ),
+        }
+
+    # Handle action registry help
+    if intent == "ACTION_REGISTRY_HELP":
+        actions = action_registry.get_actions_for_role(role)
+        read_ops = [a.name for a in actions if not a.requires_confirmation]
+        write_ops = [a.name for a in actions if a.requires_confirmation]
+        resp_lines = [
+            f"Here are the supported operations available for your role ({role}):",
+            "",
+            "Query and Read Operations:",
+            *(f"- {name}" for name in read_ops),
+            "",
+            "Action and Update Operations (require confirmation):",
+            *(f"- {name}" for name in write_ops),
+        ]
+        return {
+            "intent": "ACTION_REGISTRY_HELP",
+            "selected_agent": None,
+            "final_response": "\n".join(resp_lines),
+        }
 
     # Handle follow-up confirmation: "yes", "confirm", "proceed", "confirm it"
     if intent == "FOLLOW_UP_CONFIRM":
         if user_id:
+            op_prop = operation_proposal_store.get_latest_pending_proposal(user_id)
+            if op_prop:
+                state["message"] = f"confirm {op_prop.proposal_id}"
+                if "TIMETABLE" in op_prop.action_name:
+                    return {
+                        "intent": "TIMETABLE_GENERATION",
+                        "selected_agent": "scheduling_agent",
+                        "message": f"confirm {op_prop.proposal_id}",
+                    }
+                else:
+                    return {
+                        "intent": "RESOURCE_BOOKING",
+                        "selected_agent": "resource_agent",
+                        "message": f"confirm {op_prop.proposal_id}",
+                    }
+
             res_prop = resource_proposal_store.get_latest_pending_proposal(user_id)
             if res_prop:
                 state["message"] = f"confirm {res_prop.proposal_id}"
@@ -166,6 +260,10 @@ def supervisor_node(state: AgentState) -> AgentState:
     if intent == "FOLLOW_UP_CANCEL":
         discarded = False
         if user_id:
+            op_prop = operation_proposal_store.get_latest_pending_proposal(user_id)
+            if op_prop:
+                operation_proposal_store.discard_proposal(op_prop.proposal_id, user_id)
+                discarded = True
             res_prop = resource_proposal_store.get_latest_pending_proposal(user_id)
             if res_prop:
                 resource_proposal_store.discard_proposal(res_prop.proposal_id, user_id)
@@ -187,12 +285,25 @@ def supervisor_node(state: AgentState) -> AgentState:
             "final_response": "Understood. Please let me know if you need assistance with timetables, facilities, or campus directory records.",
         }
 
-    # Handle follow-up modification: "change the time", "show me another option"
+    # Handle follow-up modification: "change the time", "show me another option", "use room b204 instead", "change it to thursday"
     if intent == "FOLLOW_UP_MODIFY":
+        if re.search(r"^\s*(?:change\s+the\s+time|change\s+time|another\s+time|different\s+time)\s*$", message.lower().strip()):
+            return {
+                "intent": "CLARIFICATION_REQUIRED",
+                "selected_agent": None,
+                "final_response": "Please specify the preferred date and time interval you would like to check.",
+            }
+        if user_id:
+            res_prop = resource_proposal_store.get_latest_pending_proposal(user_id)
+            if res_prop:
+                return {
+                    "intent": "RESOURCE_BOOKING",
+                    "selected_agent": "resource_agent",
+                }
         return {
             "intent": "CLARIFICATION_REQUIRED",
             "selected_agent": None,
-            "final_response": "Please specify the preferred date and time interval you would like to check.",
+            "final_response": "There is no pending booking proposal to modify. Please state the facility or booking you wish to request.",
         }
 
     if intent in ["TIMETABLE_GENERATION", "TIMETABLE_READINESS"]:

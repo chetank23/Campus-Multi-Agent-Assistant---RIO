@@ -40,6 +40,18 @@ def create_academic_calendar(
     db.add(db_ac)
     db.commit()
     db.refresh(db_ac)
+
+    # Broadcast notification to campus
+    from backend.services.notification_service import broadcast_announcement
+    event_label = db_ac.description or db_ac.event_type or "Academic Event"
+    broadcast_announcement(
+        db=db,
+        admin_user_id=current_user.id,
+        title=f"Academic Calendar: {event_label}",
+        message=f"New academic calendar event on {db_ac.date}: {event_label} ({db_ac.event_type}).",
+        target_role="ALL",
+    )
+
     return db_ac
 
 @router.put("/{ac_id}", response_model=AcademicCalendarResponse)

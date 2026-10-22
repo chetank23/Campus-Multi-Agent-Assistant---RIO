@@ -17,7 +17,6 @@ import {
   LayoutGrid,
   CalendarDays,
   Search,
-  Bell,
   Menu,
   X,
   LogOut,
@@ -28,6 +27,7 @@ import { apiGetMe } from '@/api/auth';
 import { getStudentMyTimetable } from '@/api/timetable';
 import { SignOutConfirmDialog } from '@/components/common';
 import { CampusAssistantDrawer } from '@/components/chat';
+import { NotificationBellDropdown } from '@/components/notifications/NotificationBellDropdown';
 
 export const StudentLayout: React.FC = () => {
   const { user: ctxUser, logout } = useAuth();
@@ -274,16 +274,12 @@ export const StudentLayout: React.FC = () => {
                   <Search size={16} />
                 </button>
 
-                {/* Notifications button */}
-                <button
-                  type="button"
-                  title="Notifications"
-                  aria-label="Notifications"
-                  className="w-10 h-10 rounded-full border border-[#E5ECF5] text-[#71819A] hover:text-[#17243B] hover:bg-[#F1F6FF] flex items-center justify-center transition-colors shadow-xs relative"
-                >
-                  <Bell size={16} />
-                  <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-[#4B83D1]" />
-                </button>
+                {/* Notification Bell Dropdown */}
+                <NotificationBellDropdown
+                  buttonClassName="w-10 h-10 rounded-full border border-[#E5ECF5] text-[#71819A] hover:text-[#17243B] hover:bg-[#F1F6FF] flex items-center justify-center transition-colors shadow-xs relative"
+                  badgeClassName="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-[#4B83D1] text-white text-[9px] font-bold rounded-full flex items-center justify-center ring-2 ring-white shadow-xs"
+                  iconSize={16}
+                />
 
                 {/* Student Avatar */}
                 <div className="flex items-center gap-2.5 pl-1">

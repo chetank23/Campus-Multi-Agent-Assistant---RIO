@@ -29,6 +29,12 @@ from backend.schemas.resources import (
     ResourceCreate,
     ResourceUpdate,
 )
+from backend.services.notification_service import (
+    notify_booking_approved,
+    notify_booking_cancelled,
+    notify_booking_rejected,
+    notify_booking_submitted,
+)
 
 
 def find_matching_room(db: Session, resource: Resource) -> Optional[Room]:
@@ -327,6 +333,7 @@ def create_booking_request(
     db.add(audit)
     db.commit()
     db.refresh(booking)
+    notify_booking_submitted(db=db, booking_id=booking.id)
     return booking
 
 
@@ -444,6 +451,7 @@ def approve_booking_request(
     db.add(audit)
     db.commit()
     db.refresh(booking)
+    notify_booking_approved(db=db, booking_id=booking.id)
     return booking
 
 
@@ -490,6 +498,7 @@ def reject_booking_request(
     db.add(audit)
     db.commit()
     db.refresh(booking)
+    notify_booking_rejected(db=db, booking_id=booking.id, reason=reason)
     return booking
 
 
@@ -544,6 +553,7 @@ def cancel_booking_request(
     db.add(audit)
     db.commit()
     db.refresh(booking)
+    notify_booking_cancelled(db=db, booking_id=booking.id, cancelled_by_user_id=current_user_id, reason=reason)
     return booking
 
 

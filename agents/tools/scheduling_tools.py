@@ -9,16 +9,21 @@ Read-only and diagnostic tools for the Scheduling Agent:
 
 from __future__ import annotations
 
+import datetime
 import re
 from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
+from backend.models.identity import User
 from backend.models.academic import Department, Program, Semester, Section, AcademicYear, Batch
 from backend.models.courses import Course, CourseAssignment
 from backend.models.space_time import Room, TimeSlot, FacultyAvailability
+from backend.models.timetable import TimetableVersion
+from backend.models.workflow import AuditLog
 from backend.schemas.timetable_generation import GenerationScope
 from backend.services.timetable_input_loader import validate_and_load_input
+from backend.services.notification_service import notify_timetable_published
 
 
 def resolve_academic_scope_data(
@@ -109,12 +114,16 @@ def resolve_academic_scope_data(
         target_num = int(sem_match.group(1)) if sem_match else None
         
         if target_num is not None:
-            # Look up semester with this number in the active academic year
-            sem_query = db.query(Semester)
+            # Look up semester with this number
+            sem_query = db.query(Semester).filter(Semester.semester_number == target_num)
+            sem_in_ay = None
             if academic_year_id:
-                sem_query = sem_query.filter(Semester.academic_year_id == academic_year_id)
-            sem_query = sem_query.filter(Semester.semester_number == target_num)
-            sem_obj = sem_query.first()
+                sem_in_ay = sem_query.filter(Semester.academic_year_id == academic_year_id).first()
+                sem_obj = sem_in_ay or sem_query.first()
+            else:
+                sem_obj = sem_query.first()
+            if sem_obj and (not ay_obj or (sem_in_ay is None and sem_obj.academic_year_id)):
+                ay_obj = db.query(AcademicYear).filter(AcademicYear.id == sem_obj.academic_year_id).first()
         else:
             # If no number specified, check if "current semester" is requested
             if "current" in text or "active" in text:
@@ -302,4 +311,153 @@ def analyze_scheduling_readiness_data(db: Session, scope_dict: Dict[str, Any]) -
             "rooms": len(rooms),
             "slots": len(slots),
         },
+    }
+
+
+def execute_finalize_timetable_data(
+    db: Session,
+    version_id: int,
+    user: User,
+) -> Dict[str, Any]:
+    """
+    Executes authoritative timetable version finalization.
+    Enforces ADMIN role check, version status validation (must be VALIDATED),
+    audit logging, and persistence verification.
+    """
+    if user.role != "ADMIN":
+        return {
+            "success": False,
+            "error": "Access denied: Only university Administrators possess the authority to finalize timetable versions.",
+        }
+
+    version = db.query(TimetableVersion).filter(TimetableVersion.id == version_id).first()
+    if not version:
+        return {
+            "success": False,
+            "error": f"Timetable version #{version_id} was not found.",
+        }
+
+    if version.status == "FINALIZED":
+        return {
+            "success": True,
+            "version_id": version.id,
+            "version_number": version.version_number,
+            "status": "FINALIZED",
+            "message": f"Timetable version #{version.id} (v{version.version_number}) is already finalized.",
+        }
+
+    if version.status != "VALIDATED":
+        return {
+            "success": False,
+            "error": (
+                f"Cannot finalize timetable version #{version_id} because its current status is '{version.status}'. "
+                f"Timetables must pass constraint validation (status VALIDATED) before they can be finalized."
+            ),
+        }
+
+    old_status = version.status
+    version.status = "FINALIZED"
+
+    audit = AuditLog(
+        user_id=user.id,
+        action="TIMETABLE_FINALIZED",
+        entity_type="TimetableVersion",
+        entity_id=version.id,
+        old_value={"status": old_status},
+        new_value={"status": "FINALIZED"},
+    )
+    db.add(audit)
+    db.commit()
+
+    # Persistence verification
+    refetched = db.query(TimetableVersion).filter(TimetableVersion.id == version_id).first()
+    if not refetched or refetched.status != "FINALIZED":
+        return {
+            "success": False,
+            "error": "Persistence verification failed: Timetable version status was not confirmed as FINALIZED in the database.",
+        }
+
+    return {
+        "success": True,
+        "version_id": refetched.id,
+        "version_number": refetched.version_number,
+        "status": refetched.status,
+    }
+
+
+def execute_publish_timetable_data(
+    db: Session,
+    version_id: int,
+    user: User,
+) -> Dict[str, Any]:
+    """
+    Executes authoritative timetable version publication.
+    Enforces ADMIN role check, version status validation (must be FINALIZED),
+    audit logging, and persistence verification.
+    """
+    if user.role != "ADMIN":
+        return {
+            "success": False,
+            "error": "Access denied: Only university Administrators possess the authority to publish timetable versions.",
+        }
+
+    version = db.query(TimetableVersion).filter(TimetableVersion.id == version_id).first()
+    if not version:
+        return {
+            "success": False,
+            "error": f"Timetable version #{version_id} was not found.",
+        }
+
+    if version.status == "PUBLISHED":
+        return {
+            "success": True,
+            "version_id": version.id,
+            "version_number": version.version_number,
+            "status": "PUBLISHED",
+            "published_at": str(version.published_at),
+            "message": f"Timetable version #{version.id} (v{version.version_number}) is already published and active campus-wide.",
+        }
+
+    if version.status != "FINALIZED":
+        return {
+            "success": False,
+            "error": (
+                f"Cannot publish timetable version #{version_id} because its current status is '{version.status}'. "
+                f"Versions must be finalized (status FINALIZED) by an Administrator before campus publication."
+            ),
+        }
+
+    old_status = version.status
+    now = datetime.datetime.now(datetime.UTC)
+    version.status = "PUBLISHED"
+    version.published_at = now
+
+    audit = AuditLog(
+        user_id=user.id,
+        action="TIMETABLE_PUBLISHED",
+        entity_type="TimetableVersion",
+        entity_id=version.id,
+        old_value={"status": old_status},
+        new_value={"status": "PUBLISHED", "published_at": now.isoformat()},
+    )
+    db.add(audit)
+    db.commit()
+
+    # Persistence verification
+    refetched = db.query(TimetableVersion).filter(TimetableVersion.id == version_id).first()
+    if not refetched or refetched.status != "PUBLISHED" or not refetched.published_at:
+        return {
+            "success": False,
+            "error": "Persistence verification failed: Timetable version status was not confirmed as PUBLISHED in the database.",
+        }
+
+    # Trigger authoritative publication notifications
+    notify_timetable_published(db=db, version_id=refetched.id)
+
+    return {
+        "success": True,
+        "version_id": refetched.id,
+        "version_number": refetched.version_number,
+        "status": refetched.status,
+        "published_at": str(refetched.published_at),
     }

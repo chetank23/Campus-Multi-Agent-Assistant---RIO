@@ -390,7 +390,70 @@ export const CampusAssistantDrawer: React.FC = () => {
                         {/* Proposal Interactive Card */}
                         {msg.proposal && (
                           <div className="mt-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200/90 shadow-2xs space-y-2.5">
-                            {msg.proposal.proposal_id.startsWith('res_prop_') ? (
+                            {msg.proposal.proposal_id.startsWith('op_prop_') ? (
+                              <>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Settings2 size={13} className="text-amber-600" />
+                                    {msg.proposal.action_name ? msg.proposal.action_name.replace(/_/g, ' ') : 'Action Proposal'}
+                                  </span>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                                    Pending Authorization
+                                  </span>
+                                </div>
+
+                                <div className="space-y-2 text-xs text-slate-600 bg-white p-2.5 rounded-lg border border-slate-100">
+                                  <div className="flex justify-between items-center">
+                                    <span className="font-semibold text-slate-500 text-[10px] uppercase">Target Entity</span>
+                                    <span className="font-medium text-slate-800">
+                                      {msg.proposal.target_entity_type} #{msg.proposal.target_entity_id}
+                                    </span>
+                                  </div>
+
+                                  {msg.proposal.parameters && Object.keys(msg.proposal.parameters).length > 0 && (
+                                    <div className="pt-1.5 border-t border-slate-100">
+                                      <span className="font-semibold text-slate-500 block text-[10px] uppercase mb-1">Parameters</span>
+                                      <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                                        {Object.entries(msg.proposal.parameters).map(([k, v]) => (
+                                          <div key={k} className="bg-slate-50 px-2 py-1 rounded">
+                                            <span className="text-slate-500 capitalize">{k.replace(/_/g, ' ')}: </span>
+                                            <span className="font-semibold text-slate-700">{String(v)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {msg.proposal.consequences && (
+                                    <div className="pt-1.5 border-t border-slate-100">
+                                      <span className="font-semibold text-slate-500 block text-[10px] uppercase">Consequences</span>
+                                      <span className="text-amber-800 text-[11px] font-medium">
+                                        {msg.proposal.consequences}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-2 pt-1">
+                                  <button
+                                    onClick={() => handleSendMessage(`confirm ${msg.proposal?.proposal_id}`)}
+                                    disabled={isLoading}
+                                    className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs rounded-lg shadow-2xs hover:shadow-sm transition-all duration-150 disabled:opacity-50"
+                                  >
+                                    <CheckCircle2 size={14} />
+                                    <span>Confirm &amp; Execute</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleSendMessage('cancel')}
+                                    disabled={isLoading}
+                                    className="flex items-center justify-center gap-1 py-2 px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium text-xs rounded-lg transition-all duration-150 disabled:opacity-50"
+                                  >
+                                    <X size={14} />
+                                    <span>Cancel</span>
+                                  </button>
+                                </div>
+                              </>
+                            ) : msg.proposal.proposal_id.startsWith('res_prop_') ? (
                               <>
                                 <div className="flex items-center justify-between">
                                   <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -437,14 +500,24 @@ export const CampusAssistantDrawer: React.FC = () => {
                                   )}
                                 </div>
 
-                                <button
-                                  onClick={() => handleSendMessage(`confirm ${msg.proposal?.proposal_id}`)}
-                                  disabled={isLoading}
-                                  className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs rounded-lg shadow-2xs hover:shadow-sm transition-all duration-150 disabled:opacity-50"
-                                >
-                                  <CheckCircle2 size={14} />
-                                  <span>Confirm &amp; Submit Booking</span>
-                                </button>
+                                <div className="flex items-center gap-2 pt-1">
+                                  <button
+                                    onClick={() => handleSendMessage(`confirm ${msg.proposal?.proposal_id}`)}
+                                    disabled={isLoading}
+                                    className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs rounded-lg shadow-2xs hover:shadow-sm transition-all duration-150 disabled:opacity-50"
+                                  >
+                                    <CheckCircle2 size={14} />
+                                    <span>Confirm &amp; Submit Booking</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleSendMessage('cancel')}
+                                    disabled={isLoading}
+                                    className="flex items-center justify-center gap-1 py-2 px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium text-xs rounded-lg transition-all duration-150 disabled:opacity-50"
+                                  >
+                                    <X size={14} />
+                                    <span>Cancel</span>
+                                  </button>
+                                </div>
                               </>
                             ) : (
                               <>
@@ -488,14 +561,24 @@ export const CampusAssistantDrawer: React.FC = () => {
                                 </div>
 
                                 {msg.proposal.readiness_status !== 'BLOCKED' ? (
-                                  <button
-                                    onClick={() => handleSendMessage(`confirm ${msg.proposal?.proposal_id}`)}
-                                    disabled={isLoading}
-                                    className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs rounded-lg shadow-2xs hover:shadow-sm transition-all duration-150 disabled:opacity-50"
-                                  >
-                                    <CheckCircle2 size={14} />
-                                    <span>Authorize &amp; Generate Timetable</span>
-                                  </button>
+                                  <div className="flex items-center gap-2 pt-1">
+                                    <button
+                                      onClick={() => handleSendMessage(`confirm ${msg.proposal?.proposal_id}`)}
+                                      disabled={isLoading}
+                                      className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs rounded-lg shadow-2xs hover:shadow-sm transition-all duration-150 disabled:opacity-50"
+                                    >
+                                      <CheckCircle2 size={14} />
+                                      <span>Authorize &amp; Generate Timetable</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleSendMessage('cancel')}
+                                      disabled={isLoading}
+                                      className="flex items-center justify-center gap-1 py-2 px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium text-xs rounded-lg transition-all duration-150 disabled:opacity-50"
+                                    >
+                                      <X size={14} />
+                                      <span>Cancel</span>
+                                    </button>
+                                  </div>
                                 ) : (
                                   <div className="flex items-center gap-1.5 p-2 bg-rose-50 text-rose-700 text-xs rounded-lg border border-rose-200">
                                     <AlertTriangle size={14} className="shrink-0" />

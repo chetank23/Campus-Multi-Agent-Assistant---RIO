@@ -19,6 +19,8 @@ from sqlalchemy.orm import Session
 
 from backend.models.identity import User
 from backend.models.resources import Resource, ResourceBooking
+from backend.models.space_time import Room
+from backend.models.workflow import AuditLog
 from backend.schemas.resources import (
     ResourceBookingCreate,
     ConflictDetail,
@@ -29,6 +31,8 @@ from backend.services.resource_booking_service import (
     find_alternative_resources,
     create_booking_request,
     cancel_booking_request,
+    approve_booking_request,
+    reject_booking_request,
 )
 
 
@@ -327,3 +331,182 @@ def execute_cancel_booking_data(
             "success": False,
             "error": detail,
         }
+
+
+def execute_approve_booking_data(
+    db: Session,
+    booking_id: int,
+    user: User,
+) -> Dict[str, Any]:
+    """
+    Executes authoritative booking approval through backend.services.resource_booking_service.
+    Enforces ADMIN role check, parent resource row lock, conflict revalidation, and persistence verification.
+    """
+    if user.role != "ADMIN":
+        return {
+            "success": False,
+            "error": "Access denied: Only university Administrators possess the authority to approve resource bookings.",
+        }
+
+    try:
+        booking = approve_booking_request(
+            db=db,
+            booking_id=booking_id,
+            approver_id=user.id,
+        )
+
+        # Persistence verification: re-read from database
+        refetched = db.query(ResourceBooking).filter(ResourceBooking.id == booking_id).first()
+        if not refetched or refetched.status != "APPROVED":
+            return {
+                "success": False,
+                "error": "Persistence verification failed: Booking status was not confirmed as APPROVED in the database.",
+            }
+
+        res = db.query(Resource).filter(Resource.id == refetched.resource_id).first()
+        return {
+            "success": True,
+            "booking_id": refetched.id,
+            "resource_id": refetched.resource_id,
+            "resource_name": res.name if res else f"Resource #{refetched.resource_id}",
+            "resource_type": res.resource_type if res else None,
+            "date": str(refetched.date),
+            "start_time": str(refetched.start_time),
+            "end_time": str(refetched.end_time),
+            "status": refetched.status,
+            "approved_by": refetched.approved_by,
+        }
+    except Exception as exc:
+        detail = getattr(exc, "detail", str(exc))
+        if isinstance(detail, dict) and "message" in detail:
+            detail = detail["message"]
+        return {
+            "success": False,
+            "error": detail,
+        }
+
+
+def execute_reject_booking_data(
+    db: Session,
+    booking_id: int,
+    user: User,
+    reason: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Executes authoritative booking rejection through backend.services.resource_booking_service.
+    Enforces ADMIN role check, status validation, and persistence verification.
+    """
+    if user.role != "ADMIN":
+        return {
+            "success": False,
+            "error": "Access denied: Only university Administrators possess the authority to reject resource bookings.",
+        }
+
+    try:
+        booking = reject_booking_request(
+            db=db,
+            booking_id=booking_id,
+            reviewer_id=user.id,
+            reason=reason,
+        )
+
+        # Persistence verification
+        refetched = db.query(ResourceBooking).filter(ResourceBooking.id == booking_id).first()
+        if not refetched or refetched.status != "REJECTED":
+            return {
+                "success": False,
+                "error": "Persistence verification failed: Booking status was not confirmed as REJECTED in the database.",
+            }
+
+        res = db.query(Resource).filter(Resource.id == refetched.resource_id).first()
+        return {
+            "success": True,
+            "booking_id": refetched.id,
+            "resource_name": res.name if res else f"Resource #{refetched.resource_id}",
+            "status": refetched.status,
+            "reason": reason,
+        }
+    except Exception as exc:
+        detail = getattr(exc, "detail", str(exc))
+        if isinstance(detail, dict) and "message" in detail:
+            detail = detail["message"]
+        return {
+            "success": False,
+            "error": detail,
+        }
+
+
+def execute_update_room_data(
+    db: Session,
+    room_id: int,
+    user: User,
+    capacity: Optional[int] = None,
+    room_type: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Executes authoritative room metadata updates in space_time inventory.
+    Enforces ADMIN role check, attribute validation, audit logging, and persistence verification.
+    """
+    if user.role != "ADMIN":
+        return {
+            "success": False,
+            "error": "Access denied: Only university Administrators possess the authority to update classroom or room metadata.",
+        }
+
+    room = db.query(Room).filter(Room.id == room_id).first()
+    if not room:
+        return {
+            "success": False,
+            "error": f"Room #{room_id} not found in campus inventory.",
+        }
+
+    old_values = {}
+    new_values = {}
+
+    if capacity is not None:
+        if capacity <= 0:
+            return {"success": False, "error": "Room capacity must be a positive integer."}
+        old_values["capacity"] = room.capacity
+        room.capacity = capacity
+        new_values["capacity"] = capacity
+
+    if room_type is not None:
+        allowed = {"CLASSROOM", "LAB", "SEMINAR_HALL", "AUDITORIUM", "MEETING_ROOM"}
+        rt_norm = room_type.upper().strip()
+        if rt_norm not in allowed:
+            return {"success": False, "error": f"Invalid room type '{room_type}'. Allowed: {', '.join(sorted(allowed))}"}
+        old_values["room_type"] = room.room_type
+        room.room_type = rt_norm
+        new_values["room_type"] = rt_norm
+
+    if not new_values:
+        return {"success": False, "error": "No valid changes specified for room update."}
+
+    audit = AuditLog(
+        user_id=user.id,
+        action="ROOM_METADATA_UPDATED",
+        entity_type="Room",
+        entity_id=room.id,
+        old_value=old_values,
+        new_value=new_values,
+    )
+    db.add(audit)
+    db.commit()
+
+    # Persistence verification
+    refetched = db.query(Room).filter(Room.id == room_id).first()
+    if not refetched:
+        return {"success": False, "error": "Persistence verification failed: Room could not be refetched."}
+
+    for k, v in new_values.items():
+        if getattr(refetched, k) != v:
+            return {"success": False, "error": f"Persistence verification failed: {k} did not match expected value {v}."}
+
+    return {
+        "success": True,
+        "room_id": refetched.id,
+        "room_number": refetched.room_number,
+        "capacity": refetched.capacity,
+        "room_type": refetched.room_type,
+        "changes": new_values,
+    }

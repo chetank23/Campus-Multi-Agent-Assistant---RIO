@@ -20,7 +20,6 @@ import {
   CalendarDays,
   Building2,
   Search,
-  Bell,
   Menu,
   X,
   LogOut,
@@ -32,6 +31,7 @@ import { apiGetMe } from '@/api/auth';
 import { getFacultyMyTimetable } from '@/api/timetable';
 import { SignOutConfirmDialog } from '@/components/common';
 import { CampusAssistantDrawer } from '@/components/chat';
+import { NotificationBellDropdown } from '@/components/notifications/NotificationBellDropdown';
 
 export const FacultyLayout: React.FC = () => {
   const { user: ctxUser, logout } = useAuth();
@@ -235,16 +235,12 @@ export const FacultyLayout: React.FC = () => {
               />
             </div>
 
-            {/* Notification Bell */}
-            <button
-              type="button"
-              title="Notifications"
-              aria-label="Notifications"
-              className="w-9 h-9 rounded-full border border-[#E3EBF6] bg-white text-[#647795] hover:text-[#101D36] hover:bg-[#F1F6FD] flex items-center justify-center transition-colors relative shadow-2xs"
-            >
-              <Bell size={15} />
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#3975D1]" />
-            </button>
+            {/* Notification Bell Dropdown */}
+            <NotificationBellDropdown
+              buttonClassName="w-9 h-9 rounded-full border border-[#E3EBF6] bg-white text-[#647795] hover:text-[#101D36] hover:bg-[#F1F6FD] flex items-center justify-center transition-colors relative shadow-2xs"
+              badgeClassName="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-[#3975D1] text-white text-[9px] font-bold rounded-full flex items-center justify-center ring-2 ring-white shadow-xs"
+              iconSize={15}
+            />
 
             {/* Faculty Initial Avatar */}
             <div className="w-9 h-9 rounded-full bg-[#142542] text-white font-bold flex items-center justify-center text-xs shadow-xs ring-2 ring-[#E3EBF6]">

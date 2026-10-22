@@ -15,6 +15,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -68,14 +69,20 @@ class ChangeRequest(Base):
 
 class Notification(Base):
     __tablename__ = "notifications"
+    __table_args__ = (
+        Index("ix_notifications_user_id_is_read", "user_id", "is_read"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("users.id", name="fk_notif_user_id"), nullable=True
+        Integer, ForeignKey("users.id", name="fk_notif_user_id", ondelete="CASCADE"), nullable=True
     )
     title: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
     message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    link: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    entity_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     is_read: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="FALSE"
     )

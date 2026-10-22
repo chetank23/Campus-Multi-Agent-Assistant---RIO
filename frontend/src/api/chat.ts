@@ -39,6 +39,13 @@ export interface ChatProposalData {
   start_time?: string;
   end_time?: string;
   purpose?: string;
+
+  // Real-Time AI Operations Capability Fields
+  action_name?: string;
+  target_entity_type?: string;
+  target_entity_id?: string | number;
+  parameters?: Record<string, unknown>;
+  consequences?: string;
 }
 
 export interface ChatMessageResponse {

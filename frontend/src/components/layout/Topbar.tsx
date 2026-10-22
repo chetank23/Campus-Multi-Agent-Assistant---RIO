@@ -4,7 +4,6 @@ import {
   LogOut,
   ChevronDown,
   Menu,
-  Bell,
   Shield,
   Building,
   Search,
@@ -13,6 +12,7 @@ import {
 import { useAuth } from '@/auth/AuthProvider';
 import { academicYearsApi } from '@/api/academicYears';
 import { SignOutConfirmDialog } from '@/components/common';
+import { NotificationBellDropdown } from '@/components/notifications/NotificationBellDropdown';
 import type { UserRole } from '@/auth/auth.types';
 
 interface TopbarProps {
@@ -141,17 +141,8 @@ export const Topbar: React.FC<TopbarProps> = ({ onToggleMobile }) => {
           <ChevronDown size={14} className="text-[#8190A5] ml-1" />
         </div>
 
-        {/* Notifications Icon Button */}
-        <div className="relative">
-          <button
-            type="button"
-            className="p-2 rounded-lg text-[#536783] hover:text-[#111D35] hover:bg-[#F4F7FB] transition-colors relative focus:outline-none focus:ring-2 focus:ring-[#93B5E8]"
-            aria-label="View notifications"
-            title="Notifications"
-          >
-            <Bell size={18} />
-          </button>
-        </div>
+        {/* Notification Bell Dropdown */}
+        <NotificationBellDropdown />
 
         {/* User Profile Menu */}
         <div className="relative" ref={menuRef}>

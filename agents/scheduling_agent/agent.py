@@ -19,14 +19,18 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from backend.models.identity import User
+from backend.models.timetable import TimetableVersion
 from backend.schemas.timetable_generation import GenerationScope
 from backend.services.timetable_service import execute_timetable_generation
 from agents.state.state import AgentState
 from agents.scheduling_agent.proposal_store import proposal_store
+from agents.common.operation_proposal_store import operation_proposal_store
 from agents.common.formatter import sanitize_plain_english
 from agents.tools.scheduling_tools import (
     resolve_academic_scope_data,
     analyze_scheduling_readiness_data,
+    execute_finalize_timetable_data,
+    execute_publish_timetable_data,
 )
 
 
@@ -67,7 +71,87 @@ def run_scheduling_agent(
             "success": True,
         }
 
-    # 2. Check for explicit Confirmation Action: e.g., "confirm prop_xxx" or "CONFIRM prop_xxx"
+    # 2. Check for explicit Confirmation Action: e.g., "confirm prop_xxx" or "confirm op_prop_xxx"
+    op_confirm_match = re.search(r"\b(?:confirm|execute|approve|proceed)\s+(op_prop_[a-zA-Z0-9_-]+)\b", msg_lower)
+    if op_confirm_match:
+        proposal_id = op_confirm_match.group(1)
+        tool_calls.append({"tool": "confirm_operation_proposal", "args": {"proposal_id": proposal_id}})
+
+        success, op, err_msg = operation_proposal_store.consume_proposal(
+            proposal_id=proposal_id,
+            user_id=user.id,
+        )
+        if not success or not op:
+            return {
+                "intent": "TIMETABLE_LIFECYCLE",
+                "selected_agent": "scheduling_agent",
+                "action_type": "CONFIRMATION_REJECTED",
+                "final_response": sanitize_plain_english(f"Confirmation Blocked: {err_msg}"),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+
+        if op.action_name == "FINALIZE_TIMETABLE":
+            fin_res = execute_finalize_timetable_data(db=db, version_id=op.entity_id, user=user)
+            if not fin_res.get("success"):
+                return {
+                    "intent": "TIMETABLE_LIFECYCLE",
+                    "selected_agent": "scheduling_agent",
+                    "action_type": "FINALIZATION_ERROR",
+                    "final_response": sanitize_plain_english(f"Finalization Failed: {fin_res.get('error')}"),
+                    "tool_calls": tool_calls,
+                    "sources": sources,
+                    "success": False,
+                }
+            reply = (
+                f"Timetable version #{fin_res['version_id']} (v{fin_res.get('version_number', '1')}) "
+                f"has been finalized successfully.\n\n"
+                f"- Status: FINALIZED\n"
+                f"- Confirmed By: {user.name} ({user.email})\n\n"
+                f"All entries are locked against manual edits. To publish campus-wide, ask: "
+                f"Publish timetable version {fin_res['version_id']}."
+            )
+            return {
+                "intent": "TIMETABLE_LIFECYCLE",
+                "selected_agent": "scheduling_agent",
+                "action_type": "TIMETABLE_FINALIZED",
+                "final_response": sanitize_plain_english(reply),
+                "tool_calls": tool_calls,
+                "sources": ["Timetable Version Register", "Audit Log"],
+                "success": True,
+            }
+
+        elif op.action_name == "PUBLISH_TIMETABLE":
+            pub_res = execute_publish_timetable_data(db=db, version_id=op.entity_id, user=user)
+            if not pub_res.get("success"):
+                return {
+                    "intent": "TIMETABLE_LIFECYCLE",
+                    "selected_agent": "scheduling_agent",
+                    "action_type": "PUBLICATION_ERROR",
+                    "final_response": sanitize_plain_english(f"Publication Failed: {pub_res.get('error')}"),
+                    "tool_calls": tool_calls,
+                    "sources": sources,
+                    "success": False,
+                }
+            reply = (
+                f"Timetable version #{pub_res['version_id']} (v{pub_res.get('version_number', '1')}) "
+                f"is now published and active campus-wide.\n\n"
+                f"- Status: PUBLISHED\n"
+                f"- Published At: {pub_res.get('published_at', 'Now')}\n"
+                f"- Published By: {user.name} ({user.email})\n\n"
+                f"Students and Faculty can now view their official schedules in their respective portals."
+            )
+            return {
+                "intent": "TIMETABLE_LIFECYCLE",
+                "selected_agent": "scheduling_agent",
+                "action_type": "TIMETABLE_PUBLISHED",
+                "final_response": sanitize_plain_english(reply),
+                "tool_calls": tool_calls,
+                "sources": ["Timetable Version Register", "Audit Log"],
+                "success": True,
+            }
+
     confirm_match = re.search(r"\b(?:confirm|execute|approve|proceed)\s+(prop_[a-zA-Z0-9_-]+)\b", msg_lower)
     if confirm_match:
         proposal_id = confirm_match.group(1)
@@ -195,6 +279,194 @@ def run_scheduling_agent(
             "final_response": sanitize_plain_english(reply),
             "tool_calls": tool_calls,
             "sources": ["Optimization Engine Specification"],
+            "success": True,
+        }
+
+    # 3b. Lifecycle Actions: Finalize / Publish Timetable Version
+    if re.search(r"\bfinalize\b.*?\b(?:timetable|version)\b", msg_lower) or re.search(r"\b(?:timetable|version)\b.*?\bfinalize\b", msg_lower):
+        v_match = re.search(r"#?(\d+)", message)
+        if not v_match:
+            return {
+                "intent": "TIMETABLE_LIFECYCLE",
+                "selected_agent": "scheduling_agent",
+                "action_type": "CLARIFICATION_NEEDED",
+                "final_response": sanitize_plain_english(
+                    "Which timetable version would you like to finalize?\n\n"
+                    "Please specify the version ID (e.g. Finalize timetable version 3)."
+                ),
+                "tool_calls": [],
+                "sources": sources,
+                "success": True,
+            }
+
+        vid = int(v_match.group(1))
+        version = db.query(TimetableVersion).filter(TimetableVersion.id == vid).first()
+        if not version:
+            return {
+                "intent": "TIMETABLE_LIFECYCLE",
+                "selected_agent": "scheduling_agent",
+                "action_type": "VERSION_NOT_FOUND",
+                "final_response": sanitize_plain_english(f"Timetable version #{vid} was not found."),
+                "tool_calls": [],
+                "sources": sources,
+                "success": False,
+            }
+
+        if version.status == "FINALIZED":
+            return {
+                "intent": "TIMETABLE_LIFECYCLE",
+                "selected_agent": "scheduling_agent",
+                "action_type": "INFO",
+                "final_response": sanitize_plain_english(f"Timetable version #{vid} (v{version.version_number}) is already finalized."),
+                "tool_calls": [],
+                "sources": sources,
+                "success": True,
+            }
+
+        if version.status != "VALIDATED":
+            return {
+                "intent": "TIMETABLE_LIFECYCLE",
+                "selected_agent": "scheduling_agent",
+                "action_type": "STATUS_INVALID",
+                "final_response": sanitize_plain_english(
+                    f"Cannot finalize timetable version #{vid} because its current status is '{version.status}'. "
+                    f"Timetables must pass constraint validation (status VALIDATED) in the Admin Review Workspace before finalization."
+                ),
+                "tool_calls": [],
+                "sources": sources,
+                "success": False,
+            }
+
+        consequences = f"Locks all entries of version #{version.id} against manual modifications and marks schedule ready for official campus publication."
+        op_prop = operation_proposal_store.create_proposal(
+            user_id=user.id,
+            role=user.role,
+            action_name="FINALIZE_TIMETABLE",
+            entity_type="TimetableVersion",
+            entity_id=version.id,
+            entity_name=f"Timetable Version #{version.id} (v{version.version_number})",
+            changes={"status": "FINALIZED"},
+            consequences=consequences,
+            proposal_data={"version_id": version.id, "version_number": version.version_number},
+        )
+
+        reply = (
+            f"Timetable Finalization Proposal ({op_prop.proposal_id})\n\n"
+            f"Affected Entity:\n"
+            f"- Version: #{version.id} (v{version.version_number})\n"
+            f"- Current Status: VALIDATED\n\n"
+            f"Requested Change:\n"
+            f"- Transition status from VALIDATED to FINALIZED.\n\n"
+            f"Consequences:\n"
+            f"- {consequences}\n\n"
+            f"Administrator Confirmation Required:\n"
+            f"To execute finalization, click Confirm below or type:\n"
+            f"confirm {op_prop.proposal_id}\n"
+            f"or say 'Yes, proceed'."
+        )
+        return {
+            "intent": "TIMETABLE_LIFECYCLE",
+            "selected_agent": "scheduling_agent",
+            "action_type": "PROPOSAL_CREATED",
+            "final_response": sanitize_plain_english(reply),
+            "proposal": op_prop.model_dump(),
+            "tool_calls": [{"tool": "prepare_finalize_timetable", "args": {"version_id": version.id}}],
+            "sources": sources,
+            "success": True,
+        }
+
+    # Publish Timetable request
+    if re.search(r"\bpublish\b.*?\b(?:timetable|version)\b", msg_lower) or re.search(r"\b(?:timetable|version)\b.*?\bpublish\b", msg_lower):
+        v_match = re.search(r"#?(\d+)", message)
+        if not v_match:
+            return {
+                "intent": "TIMETABLE_LIFECYCLE",
+                "selected_agent": "scheduling_agent",
+                "action_type": "CLARIFICATION_NEEDED",
+                "final_response": sanitize_plain_english(
+                    "Which timetable version would you like to publish?\n\n"
+                    "Please specify the version ID (e.g. Publish timetable version 3)."
+                ),
+                "tool_calls": [],
+                "sources": sources,
+                "success": True,
+            }
+
+        vid = int(v_match.group(1))
+        version = db.query(TimetableVersion).filter(TimetableVersion.id == vid).first()
+        if not version:
+            return {
+                "intent": "TIMETABLE_LIFECYCLE",
+                "selected_agent": "scheduling_agent",
+                "action_type": "VERSION_NOT_FOUND",
+                "final_response": sanitize_plain_english(f"Timetable version #{vid} was not found."),
+                "tool_calls": [],
+                "sources": sources,
+                "success": False,
+            }
+
+        if version.status == "PUBLISHED":
+            return {
+                "intent": "TIMETABLE_LIFECYCLE",
+                "selected_agent": "scheduling_agent",
+                "action_type": "INFO",
+                "final_response": sanitize_plain_english(
+                    f"Timetable version #{vid} (v{version.version_number}) is already published and active campus-wide."
+                ),
+                "tool_calls": [],
+                "sources": sources,
+                "success": True,
+            }
+
+        if version.status != "FINALIZED":
+            return {
+                "intent": "TIMETABLE_LIFECYCLE",
+                "selected_agent": "scheduling_agent",
+                "action_type": "STATUS_INVALID",
+                "final_response": sanitize_plain_english(
+                    f"Cannot publish timetable version #{vid} because its current status is '{version.status}'. "
+                    f"Versions must be finalized (status FINALIZED) by an Administrator before campus publication."
+                ),
+                "tool_calls": [],
+                "sources": sources,
+                "success": False,
+            }
+
+        consequences = f"Makes version #{version.id} the official active schedule campus-wide across all student and faculty portals."
+        op_prop = operation_proposal_store.create_proposal(
+            user_id=user.id,
+            role=user.role,
+            action_name="PUBLISH_TIMETABLE",
+            entity_type="TimetableVersion",
+            entity_id=version.id,
+            entity_name=f"Timetable Version #{version.id} (v{version.version_number})",
+            changes={"status": "PUBLISHED"},
+            consequences=consequences,
+            proposal_data={"version_id": version.id, "version_number": version.version_number},
+        )
+
+        reply = (
+            f"Timetable Publication Proposal ({op_prop.proposal_id})\n\n"
+            f"Affected Entity:\n"
+            f"- Version: #{version.id} (v{version.version_number})\n"
+            f"- Current Status: FINALIZED\n\n"
+            f"Requested Change:\n"
+            f"- Transition status from FINALIZED to PUBLISHED.\n\n"
+            f"Consequences:\n"
+            f"- {consequences}\n\n"
+            f"Administrator Confirmation Required:\n"
+            f"To publish this schedule campus-wide, click Confirm below or type:\n"
+            f"confirm {op_prop.proposal_id}\n"
+            f"or say 'Yes, proceed'."
+        )
+        return {
+            "intent": "TIMETABLE_LIFECYCLE",
+            "selected_agent": "scheduling_agent",
+            "action_type": "PROPOSAL_CREATED",
+            "final_response": sanitize_plain_english(reply),
+            "proposal": op_prop.model_dump(),
+            "tool_calls": [{"tool": "prepare_publish_timetable", "args": {"version_id": version.id}}],
+            "sources": sources,
             "success": True,
         }
 

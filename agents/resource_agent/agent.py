@@ -22,9 +22,11 @@ from sqlalchemy.orm import Session
 
 from backend.models.identity import User
 from backend.models.resources import Resource, ResourceBooking
-from backend.services.resource_booking_service import find_alternative_resources
+from backend.models.space_time import Room
+from backend.services.resource_booking_service import find_alternative_resources, check_resource_conflicts
 from agents.state.state import AgentState
-from agents.resource_agent.proposal_store import resource_proposal_store
+from agents.resource_agent.proposal_store import ResourceProposal, resource_proposal_store
+from agents.common.operation_proposal_store import operation_proposal_store
 from agents.common.formatter import sanitize_plain_english
 from agents.resource_agent.parser import (
     parse_date,
@@ -38,7 +40,271 @@ from agents.tools.resource_tools import (
     get_booking_details_data,
     execute_create_booking_data,
     execute_cancel_booking_data,
+    execute_approve_booking_data,
+    execute_reject_booking_data,
+    execute_update_room_data,
 )
+
+
+def handle_proposal_modification(
+    message: str,
+    pending_prop: ResourceProposal,
+    user: User,
+    db: Session,
+    tool_calls: List[Dict[str, Any]],
+    sources: List[str],
+) -> Optional[Dict[str, Any]]:
+    """
+    Evaluates follow-up parameter modifications ("Change it to Thursday", "Use Room B204 instead",
+    "Show me another option") against the user's active unconsumed proposal.
+    Atomically invalidates the old proposal, validates real-time availability, and builds an updated proposal.
+    """
+    msg_lower = message.lower().strip()
+
+    # Bare time change request: prompt user for preferred interval
+    if re.search(r"^\s*(?:change\s+the\s+time|change\s+time|another\s+time|different\s+time)\s*$", msg_lower):
+        return {
+            "intent": "CLARIFICATION_REQUIRED",
+            "selected_agent": "resource_agent",
+            "action_type": "CLARIFICATION_REQUIRED",
+            "final_response": "Please specify the preferred date and time interval you would like to check.",
+            "tool_calls": tool_calls,
+            "sources": sources,
+            "success": True,
+        }
+
+    # 1. Option shift: "Show me another option", "another option", "other options"
+    if any(k in msg_lower for k in ["another option", "other option", "different option", "next option", "other options"]):
+        try:
+            p_date = datetime.date.fromisoformat(pending_prop.date)
+            p_start = datetime.time.fromisoformat(pending_prop.start_time)
+            p_end = datetime.time.fromisoformat(pending_prop.end_time)
+        except Exception:
+            return None
+
+        alts = find_alternative_resources(
+            db=db,
+            resource_id=pending_prop.resource_id,
+            date=p_date,
+            start_time=p_start,
+            end_time=p_end,
+            limit=5,
+        )
+        valid_alts = [a for a in alts if a.id != pending_prop.resource_id]
+        if valid_alts:
+            chosen = valid_alts[0]
+            resource_proposal_store.discard_proposal(pending_prop.proposal_id, user.id)
+            new_prop = resource_proposal_store.create_proposal(
+                user_id=user.id,
+                role=user.role,
+                resource_id=chosen.id,
+                resource_name=chosen.name,
+                resource_type=chosen.resource_type,
+                location=chosen.location,
+                capacity=chosen.capacity,
+                date=pending_prop.date,
+                start_time=pending_prop.start_time,
+                end_time=pending_prop.end_time,
+                purpose=pending_prop.purpose,
+            )
+            tool_calls.append({"tool": "switch_alternative_resource", "args": {"resource_id": chosen.id}})
+            reply = (
+                f"Updated Resource Booking Proposal ({new_prop.proposal_id})\n\n"
+                f"Switched facility to recommended alternative:\n"
+                f"- Facility: {chosen.name} ({chosen.resource_type})\n"
+                f"- Location: {chosen.location or 'Main Campus'}\n"
+                f"- Capacity: {chosen.capacity or 'Standard'} seats\n"
+                f"- Date: {new_prop.date}\n"
+                f"- Time Interval: {new_prop.start_time[:5]} - {new_prop.end_time[:5]}\n"
+                f"- Purpose: {new_prop.purpose}\n\n"
+                f"Availability Pre-Check: Passed (0 conflicts).\n\n"
+                f"To finalize this booking, click Confirm & Submit Booking below or type:\n"
+                f"confirm {new_prop.proposal_id}\n"
+                f"or say 'Yes, proceed'."
+            )
+            return {
+                "intent": "RESOURCE_PROPOSAL",
+                "selected_agent": "resource_agent",
+                "action_type": "PROPOSAL_CREATED",
+                "final_response": sanitize_plain_english(reply),
+                "proposal": new_prop.model_dump(),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": True,
+            }
+        else:
+            return {
+                "intent": "RESOURCE_BOOKING",
+                "selected_agent": "resource_agent",
+                "action_type": "NO_ALTERNATIVES",
+                "final_response": sanitize_plain_english(
+                    f"No other alternative facilities of type '{pending_prop.resource_type}' are available "
+                    f"on {pending_prop.date} from {pending_prop.start_time[:5]} to {pending_prop.end_time[:5]}.\n\n"
+                    f"You can keep proposal {pending_prop.proposal_id} or request a different date or time."
+                ),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": True,
+            }
+
+    # 2. Date modification ("Change it to Thursday", "Change date to ...")
+    new_date = parse_date(message)
+    if new_date and str(new_date) != pending_prop.date:
+        try:
+            p_start = datetime.time.fromisoformat(pending_prop.start_time)
+            p_end = datetime.time.fromisoformat(pending_prop.end_time)
+        except Exception:
+            return None
+
+        avail = check_resource_availability_data(
+            db=db,
+            resource_id=pending_prop.resource_id,
+            date=new_date,
+            start_time=p_start,
+            end_time=p_end,
+        )
+
+        resource_proposal_store.discard_proposal(pending_prop.proposal_id, user.id)
+
+        if not avail.get("available"):
+            conflicts_desc = "\n".join(f"- {c['description']}" for c in avail.get("conflicts", []))
+            reply = (
+                f"Facility Unavailable on {new_date.isoformat()}\n\n"
+                f"{pending_prop.resource_name} cannot be booked on {new_date.isoformat()} from {p_start.strftime('%H:%M')} to {p_end.strftime('%H:%M')}:\n\n"
+                f"{conflicts_desc}\n\n"
+                f"Please choose another date or request a different facility."
+            )
+            return {
+                "intent": "RESOURCE_AVAILABILITY",
+                "selected_agent": "resource_agent",
+                "action_type": "RESOURCE_UNAVAILABLE",
+                "final_response": sanitize_plain_english(reply),
+                "tool_calls": [{"tool": "check_resource_availability", "args": {"resource_id": pending_prop.resource_id, "date": str(new_date)}}],
+                "sources": sources,
+                "success": True,
+            }
+
+        new_prop = resource_proposal_store.create_proposal(
+            user_id=user.id,
+            role=user.role,
+            resource_id=pending_prop.resource_id,
+            resource_name=pending_prop.resource_name,
+            resource_type=pending_prop.resource_type,
+            location=pending_prop.location,
+            capacity=pending_prop.capacity,
+            date=new_date.isoformat(),
+            start_time=pending_prop.start_time,
+            end_time=pending_prop.end_time,
+            purpose=pending_prop.purpose,
+        )
+        reply = (
+            f"Updated Resource Booking Proposal ({new_prop.proposal_id})\n\n"
+            f"Reservation date updated to {new_prop.date}.\n"
+            f"- Facility: {new_prop.resource_name} ({new_prop.resource_type})\n"
+            f"- Location: {new_prop.location or 'Main Campus'}\n"
+            f"- Capacity: {new_prop.capacity or 'Standard'} seats\n"
+            f"- Date: {new_prop.date}\n"
+            f"- Time Interval: {new_prop.start_time[:5]} - {new_prop.end_time[:5]}\n"
+            f"- Purpose: {new_prop.purpose}\n\n"
+            f"Availability Pre-Check: Passed (0 conflicts).\n\n"
+            f"To finalize this booking, click Confirm & Submit Booking below or type:\n"
+            f"confirm {new_prop.proposal_id}\n"
+            f"or say 'Yes, proceed'."
+        )
+        return {
+            "intent": "RESOURCE_PROPOSAL",
+            "selected_agent": "resource_agent",
+            "action_type": "PROPOSAL_CREATED",
+            "final_response": sanitize_plain_english(reply),
+            "proposal": new_prop.model_dump(),
+            "tool_calls": [{"tool": "update_proposal_date", "args": {"date": str(new_date)}}],
+            "sources": sources,
+            "success": True,
+        }
+
+    # 3. Resource change ("Use Room B204 instead", "Use Seminar Hall B instead", "Switch to ...")
+    active_res = db.query(Resource).filter(Resource.status == "ACTIVE").all()
+    target_switch = None
+    for r in sorted(active_res, key=lambda x: len(x.name or ""), reverse=True):
+        if r.name and r.name.lower() in msg_lower and r.id != pending_prop.resource_id:
+            target_switch = r
+            break
+
+    if target_switch:
+        try:
+            p_date = datetime.date.fromisoformat(pending_prop.date)
+            p_start = datetime.time.fromisoformat(pending_prop.start_time)
+            p_end = datetime.time.fromisoformat(pending_prop.end_time)
+        except Exception:
+            return None
+
+        avail = check_resource_availability_data(
+            db=db,
+            resource_id=target_switch.id,
+            date=p_date,
+            start_time=p_start,
+            end_time=p_end,
+        )
+
+        resource_proposal_store.discard_proposal(pending_prop.proposal_id, user.id)
+
+        if not avail.get("available"):
+            conflicts_desc = "\n".join(f"- {c['description']}" for c in avail.get("conflicts", []))
+            reply = (
+                f"Requested Resource Unavailable: {target_switch.name}\n\n"
+                f"{target_switch.name} cannot be booked on {pending_prop.date} from {p_start.strftime('%H:%M')} to {p_end.strftime('%H:%M')}:\n\n"
+                f"{conflicts_desc}\n\n"
+                f"Please choose another facility or slot."
+            )
+            return {
+                "intent": "RESOURCE_AVAILABILITY",
+                "selected_agent": "resource_agent",
+                "action_type": "RESOURCE_UNAVAILABLE",
+                "final_response": sanitize_plain_english(reply),
+                "tool_calls": [{"tool": "check_resource_availability", "args": {"resource_id": target_switch.id}}],
+                "sources": sources,
+                "success": True,
+            }
+
+        new_prop = resource_proposal_store.create_proposal(
+            user_id=user.id,
+            role=user.role,
+            resource_id=target_switch.id,
+            resource_name=str(target_switch.name or "Facility"),
+            resource_type=str(target_switch.resource_type or "Room"),
+            location=target_switch.location,
+            capacity=target_switch.capacity,
+            date=pending_prop.date,
+            start_time=pending_prop.start_time,
+            end_time=pending_prop.end_time,
+            purpose=pending_prop.purpose,
+        )
+        reply = (
+            f"Updated Resource Booking Proposal ({new_prop.proposal_id})\n\n"
+            f"Facility changed to {new_prop.resource_name}.\n"
+            f"- Facility: {new_prop.resource_name} ({new_prop.resource_type})\n"
+            f"- Location: {new_prop.location or 'Main Campus'}\n"
+            f"- Capacity: {new_prop.capacity or 'Standard'} seats\n"
+            f"- Date: {new_prop.date}\n"
+            f"- Time Interval: {new_prop.start_time[:5]} - {new_prop.end_time[:5]}\n"
+            f"- Purpose: {new_prop.purpose}\n\n"
+            f"Availability Pre-Check: Passed (0 conflicts).\n\n"
+            f"To finalize this booking, click Confirm & Submit Booking below or type:\n"
+            f"confirm {new_prop.proposal_id}\n"
+            f"or say 'Yes, proceed'."
+        )
+        return {
+            "intent": "RESOURCE_PROPOSAL",
+            "selected_agent": "resource_agent",
+            "action_type": "PROPOSAL_CREATED",
+            "final_response": sanitize_plain_english(reply),
+            "proposal": new_prop.model_dump(),
+            "tool_calls": [{"tool": "update_proposal_resource", "args": {"resource_id": target_switch.id}}],
+            "sources": sources,
+            "success": True,
+        }
+
+    return None
 
 
 def run_resource_agent(
@@ -190,6 +456,270 @@ def run_resource_agent(
         }
 
     # ──────────────────────────────────────────────────────────────────────────
+    # 1b. Operation Proposal Confirmation (op_prop_<hex>)
+    # ──────────────────────────────────────────────────────────────────────────
+    op_confirm_match = re.search(r"\b(?:confirm|execute|approve|proceed)\s+(op_prop_[a-zA-Z0-9_-]+)\b", msg_lower)
+    if op_confirm_match:
+        proposal_id = op_confirm_match.group(1)
+        tool_calls.append({"tool": "confirm_operation_proposal", "args": {"proposal_id": proposal_id}})
+
+        success, op, err_msg = operation_proposal_store.consume_proposal(
+            proposal_id=proposal_id,
+            user_id=user.id,
+        )
+        if not success or not op:
+            return {
+                "intent": "RESOURCE_BOOKING",
+                "selected_agent": "resource_agent",
+                "action_type": "CONFIRMATION_REJECTED",
+                "final_response": sanitize_plain_english(f"Operation Confirmation Blocked: {err_msg}"),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+
+        if op.action_name == "APPROVE_RESOURCE_BOOKING":
+            app_res = execute_approve_booking_data(db=db, booking_id=op.entity_id, user=user)
+            if not app_res.get("success"):
+                return {
+                    "intent": "RESOURCE_BOOKING",
+                    "selected_agent": "resource_agent",
+                    "action_type": "APPROVAL_ERROR",
+                    "final_response": sanitize_plain_english(f"Approval Execution Failed: {app_res.get('error')}"),
+                    "tool_calls": tool_calls,
+                    "sources": sources,
+                    "success": False,
+                }
+            reply = (
+                f"Resource booking request approved successfully.\n\n"
+                f"- Booking ID: #{app_res['booking_id']}\n"
+                f"- Facility: {app_res['resource_name']} ({app_res.get('resource_type', 'N/A')})\n"
+                f"- Date: {app_res['date']}\n"
+                f"- Time Interval: {app_res['start_time'][:5]} - {app_res['end_time'][:5]}\n"
+                f"- Status: APPROVED\n"
+                f"- Approved By: {user.name} ({user.email})\n\n"
+                f"The facility is now officially reserved and locked in the campus register."
+            )
+            return {
+                "intent": "RESOURCE_BOOKING",
+                "selected_agent": "resource_agent",
+                "action_type": "BOOKING_APPROVED",
+                "final_response": sanitize_plain_english(reply),
+                "tool_calls": tool_calls,
+                "sources": ["Resource Booking Register", "Audit Log"],
+                "success": True,
+            }
+
+        elif op.action_name == "REJECT_RESOURCE_BOOKING":
+            rej_res = execute_reject_booking_data(db=db, booking_id=op.entity_id, user=user, reason=op.proposal_data.get("reason"))
+            if not rej_res.get("success"):
+                return {
+                    "intent": "RESOURCE_BOOKING",
+                    "selected_agent": "resource_agent",
+                    "action_type": "REJECTION_ERROR",
+                    "final_response": sanitize_plain_english(f"Rejection Failed: {rej_res.get('error')}"),
+                    "tool_calls": tool_calls,
+                    "sources": sources,
+                    "success": False,
+                }
+            reply = (
+                f"Resource booking request #{rej_res['booking_id']} has been rejected.\n\n"
+                f"- Facility: {rej_res.get('resource_name', 'Campus Resource')}\n"
+                f"- Status: REJECTED\n"
+                f"- Reviewer: {user.name} ({user.email})\n\n"
+                f"The reservation request has been closed and recorded in the audit log."
+            )
+            return {
+                "intent": "RESOURCE_BOOKING",
+                "selected_agent": "resource_agent",
+                "action_type": "BOOKING_REJECTED",
+                "final_response": sanitize_plain_english(reply),
+                "tool_calls": tool_calls,
+                "sources": ["Resource Booking Register", "Audit Log"],
+                "success": True,
+            }
+
+        elif op.action_name == "CANCEL_RESOURCE_BOOKING":
+            canc_res = execute_cancel_booking_data(db=db, booking_id=op.entity_id, user=user, reason=op.proposal_data.get("reason"))
+            if not canc_res.get("success"):
+                return {
+                    "intent": "RESOURCE_BOOKING",
+                    "selected_agent": "resource_agent",
+                    "action_type": "CANCELLATION_FAILED",
+                    "final_response": sanitize_plain_english(f"Cancellation Failed: {canc_res.get('error')}"),
+                    "tool_calls": tool_calls,
+                    "sources": sources,
+                    "success": False,
+                }
+            reply = (
+                f"Booking Request Cancelled\n\n"
+                f"Booking #{op.entity_id} for {canc_res.get('resource_name')} has been marked as CANCELLED.\n"
+                f"Any scheduled reservations for this slot have been released."
+            )
+            return {
+                "intent": "RESOURCE_BOOKING",
+                "selected_agent": "resource_agent",
+                "action_type": "BOOKING_CANCELLED",
+                "final_response": sanitize_plain_english(reply),
+                "tool_calls": tool_calls,
+                "sources": ["Resource Booking Register", "Audit Log"],
+                "success": True,
+            }
+
+        elif op.action_name == "UPDATE_ROOM":
+            room_res = execute_update_room_data(db=db, room_id=op.entity_id, user=user, **op.changes)
+            if not room_res.get("success"):
+                return {
+                    "intent": "RESOURCE_BOOKING",
+                    "selected_agent": "resource_agent",
+                    "action_type": "ROOM_UPDATE_ERROR",
+                    "final_response": sanitize_plain_english(f"Room Update Failed: {room_res.get('error')}"),
+                    "tool_calls": tool_calls,
+                    "sources": sources,
+                    "success": False,
+                }
+            changes_str = ", ".join(f"{k}: {v}" for k, v in room_res.get("changes", {}).items())
+            reply = (
+                f"Room Metadata Updated Successfully\n\n"
+                f"- Room Number: {room_res['room_number']} (#{room_res['room_id']})\n"
+                f"- Applied Changes: {changes_str}\n"
+                f"- Current Seating Capacity: {room_res['capacity']}\n"
+                f"- Room Type: {room_res['room_type']}\n\n"
+                f"The update has been persisted in the campus space register and logged to the audit trail."
+            )
+            return {
+                "intent": "RESOURCE_BOOKING",
+                "selected_agent": "resource_agent",
+                "action_type": "ROOM_UPDATED",
+                "final_response": sanitize_plain_english(reply),
+                "tool_calls": tool_calls,
+                "sources": ["Campus Space Register", "Audit Log"],
+                "success": True,
+            }
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 1c. Follow-Up Modification on Pending Booking Proposal
+    # ──────────────────────────────────────────────────────────────────────────
+    is_mod_phrase = bool(re.search(
+        r"\b(?:change\s+it\s+to|change\s+to|change\s+(?:the\s+)?date\s+to|switch\s+to|move\s+to|use\s+.*?instead|show\s+me\s+another\s+option|another\s+option|other\s+options|different\s+option|change\s+the\s+time|change\s+time|another\s+time|different\s+time|change\s+room|change\s+facility|different\s+room)\b",
+        msg_lower
+    ))
+    is_new_request = (
+        msg_lower.startswith("book ")
+        or msg_lower.startswith("reserve ")
+        or bool(re.search(r"\b(?:is\s+.*?available|check\s+availability|is\s+.*?free)\b", msg_lower))
+    )
+    if is_mod_phrase and not is_new_request:
+        pending_booking_prop = resource_proposal_store.get_latest_pending_proposal(user.id)
+        if pending_booking_prop:
+            mod_result = handle_proposal_modification(
+                message=message,
+                pending_prop=pending_booking_prop,
+                user=user,
+                db=db,
+                tool_calls=tool_calls,
+                sources=sources,
+            )
+            if mod_result:
+                return mod_result
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 1d. Room Metadata Updates (Admin only)
+    # ──────────────────────────────────────────────────────────────────────────
+    room_update_match = bool(
+        re.search(r"\b(?:update|change)\b.*?\broom\b.*?(?:capacity|type)\b", msg_lower)
+        or re.search(r"\b(?:update|change)\b.*?(?:capacity|type)\b.*?\broom\b", msg_lower)
+    )
+    if room_update_match:
+        if user.role != "ADMIN":
+            return {
+                "intent": "RESOURCE_ADMIN",
+                "selected_agent": "resource_agent",
+                "action_type": "ACCESS_DENIED",
+                "final_response": sanitize_plain_english(
+                    "Access Restricted: Only university Administrators possess the authority to update classroom or room metadata."
+                ),
+                "tool_calls": [],
+                "sources": sources,
+                "success": False,
+            }
+
+        rm_match = re.search(r"\broom\s+([a-zA-Z0-9\-]+)\b", msg_lower)
+        target_rm = None
+        if rm_match:
+            r_num = rm_match.group(1).upper()
+            target_rm = db.query(Room).filter(Room.room_number.ilike(f"%{r_num}%")).first()
+
+        if not target_rm:
+            return {
+                "intent": "RESOURCE_ADMIN",
+                "selected_agent": "resource_agent",
+                "action_type": "ROOM_NOT_FOUND",
+                "final_response": sanitize_plain_english(
+                    "Which room would you like to update?\n\n"
+                    "Please specify the room number (e.g. Update room 101 capacity to 60)."
+                ),
+                "tool_calls": [],
+                "sources": sources,
+                "success": False,
+            }
+
+        cap_match = re.search(r"\bcapacity\s+(?:to\s+)?(\d+)\b", msg_lower) or re.search(r"\bto\s+(\d+)\s+seats?\b", msg_lower)
+        new_cap = int(cap_match.group(1)) if cap_match else None
+
+        if new_cap is None:
+            return {
+                "intent": "RESOURCE_ADMIN",
+                "selected_agent": "resource_agent",
+                "action_type": "CLARIFICATION_NEEDED",
+                "final_response": sanitize_plain_english(
+                    f"Please specify the new capacity for Room {target_rm.room_number} (e.g. Update room {target_rm.room_number} capacity to 60)."
+                ),
+                "tool_calls": [],
+                "sources": sources,
+                "success": False,
+            }
+
+        consequences = f"Modifies seating capacity for Room {target_rm.room_number} from {target_rm.capacity} to {new_cap} seats in the campus facilities register."
+        op_prop = operation_proposal_store.create_proposal(
+            user_id=user.id,
+            role=user.role,
+            action_name="UPDATE_ROOM",
+            entity_type="Room",
+            entity_id=target_rm.id,
+            entity_name=f"Room {target_rm.room_number}",
+            changes={"capacity": new_cap},
+            consequences=consequences,
+            proposal_data={"room_number": target_rm.room_number, "old_capacity": target_rm.capacity, "new_capacity": new_cap},
+        )
+
+        reply = (
+            f"Room Metadata Update Proposal ({op_prop.proposal_id})\n\n"
+            f"Affected Entity:\n"
+            f"- Room: {target_rm.room_number} (#{target_rm.id})\n"
+            f"- Room Type: {target_rm.room_type}\n"
+            f"- Current Seating Capacity: {target_rm.capacity} seats\n\n"
+            f"Requested Change:\n"
+            f"- Seating Capacity: {target_rm.capacity} -> {new_cap} seats\n\n"
+            f"Consequences:\n"
+            f"- {consequences}\n\n"
+            f"Administrator Confirmation Required:\n"
+            f"To execute this update, click Confirm below or type:\n"
+            f"confirm {op_prop.proposal_id}\n"
+            f"or say 'Yes, proceed'."
+        )
+        return {
+            "intent": "RESOURCE_ADMIN",
+            "selected_agent": "resource_agent",
+            "action_type": "PROPOSAL_CREATED",
+            "final_response": sanitize_plain_english(reply),
+            "proposal": op_prop.model_dump(),
+            "tool_calls": [{"tool": "prepare_update_room", "args": {"room_id": target_rm.id, "capacity": new_cap}}],
+            "sources": sources,
+            "success": True,
+        }
+
+    # ──────────────────────────────────────────────────────────────────────────
     # 2. Administrative Action Guard (Approve / Reject booking)
     # ──────────────────────────────────────────────────────────────────────────
     if re.search(r"\b(approve|reject)\b.*?\bbooking\b", msg_lower):
@@ -209,6 +739,157 @@ def run_resource_agent(
                 "success": True,
             }
         else:
+            # Check if booking exists in database for administrative approval proposal
+            bid_match = re.search(r"#?(\d+)", message)
+            if bid_match:
+                bid = int(bid_match.group(1))
+                target_booking = db.query(ResourceBooking).filter(ResourceBooking.id == bid).first()
+                if target_booking:
+                    if "reject" in msg_lower:
+                        res_row = db.query(Resource).filter(Resource.id == target_booking.resource_id).first()
+                        res_name = res_row.name if res_row else f"Resource #{target_booking.resource_id}"
+                        consequences = f"Rejects the reservation request for {res_name} and leaves the slot unallocated."
+                        op_prop = operation_proposal_store.create_proposal(
+                            user_id=user.id,
+                            role=user.role,
+                            action_name="REJECT_RESOURCE_BOOKING",
+                            entity_type="ResourceBooking",
+                            entity_id=target_booking.id,
+                            entity_name=str(res_name),
+                            changes={"status": "REJECTED", "reviewer_id": user.id},
+                            consequences=consequences,
+                            proposal_data={"resource_name": str(res_name)},
+                        )
+                        reply = (
+                            f"Resource Booking Rejection Proposal ({op_prop.proposal_id})\n\n"
+                            f"Affected Entity:\n"
+                            f"- Booking ID: #{target_booking.id}\n"
+                            f"- Facility: {res_name}\n"
+                            f"- Date: {target_booking.date}\n"
+                            f"- Current Status: {target_booking.status}\n\n"
+                            f"Requested Change:\n"
+                            f"- Transition status to REJECTED.\n\n"
+                            f"Consequences:\n"
+                            f"- {consequences}\n\n"
+                            f"Administrator Confirmation Required:\n"
+                            f"To execute this rejection, type:\n"
+                            f"confirm {op_prop.proposal_id}\n"
+                            f"or say 'Yes, proceed'."
+                        )
+                        return {
+                            "intent": "RESOURCE_ADMIN",
+                            "selected_agent": "resource_agent",
+                            "action_type": "PROPOSAL_CREATED",
+                            "final_response": sanitize_plain_english(reply),
+                            "proposal": op_prop.model_dump(),
+                            "tool_calls": [{"tool": "prepare_reject_booking", "args": {"booking_id": target_booking.id}}],
+                            "sources": sources,
+                            "success": True,
+                        }
+                    else:
+                        if target_booking.status != "PENDING":
+                            return {
+                                "intent": "RESOURCE_ADMIN",
+                                "selected_agent": "resource_agent",
+                                "action_type": "STATUS_INVALID",
+                                "final_response": sanitize_plain_english(
+                                    f"Cannot approve booking #{bid} because its current status is '{target_booking.status}'. "
+                                    f"Only PENDING booking requests can be approved."
+                                ),
+                                "tool_calls": [],
+                                "sources": sources,
+                                "success": False,
+                            }
+                        res_row = db.query(Resource).filter(Resource.id == target_booking.resource_id).first()
+                        res_name = res_row.name if res_row else f"Resource #{target_booking.resource_id}"
+                        st_val = target_booking.start_time.strftime("%H:%M") if target_booking.start_time else "N/A"
+                        et_val = target_booking.end_time.strftime("%H:%M") if target_booking.end_time else "N/A"
+
+                        if not (target_booking.resource_id and target_booking.date and target_booking.start_time and target_booking.end_time):
+                            return {
+                                "intent": "RESOURCE_ADMIN",
+                                "selected_agent": "resource_agent",
+                                "action_type": "DATA_INCOMPLETE",
+                                "final_response": sanitize_plain_english(
+                                    f"Cannot approve booking #{bid} because the booking record has incomplete date or time data."
+                                ),
+                                "tool_calls": [],
+                                "sources": sources,
+                                "success": False,
+                            }
+
+                        avail, conflicts = check_resource_conflicts(
+                            db=db,
+                            resource_id=target_booking.resource_id,
+                            date=target_booking.date,
+                            start_time=target_booking.start_time,
+                            end_time=target_booking.end_time,
+                            exclude_booking_id=target_booking.id,
+                        )
+                        if not avail:
+                            conflicts_desc = "\n".join(f"- {c.description}" for c in conflicts)
+                            return {
+                                "intent": "RESOURCE_ADMIN",
+                                "selected_agent": "resource_agent",
+                                "action_type": "CONFLICT_DETECTED",
+                                "final_response": sanitize_plain_english(
+                                    f"Cannot Approve Booking #{bid}: Resource Conflict Detected\n\n"
+                                    f"{conflicts_desc}\n\n"
+                                    f"Approval cannot proceed until conflicting events are resolved."
+                                ),
+                                "tool_calls": [],
+                                "sources": sources,
+                                "success": False,
+                            }
+
+                        consequences = f"Locks {res_name} on {target_booking.date} from {st_val} to {et_val} and confirms the reservation."
+                        op_prop = operation_proposal_store.create_proposal(
+                            user_id=user.id,
+                            role=user.role,
+                            action_name="APPROVE_RESOURCE_BOOKING",
+                            entity_type="ResourceBooking",
+                            entity_id=target_booking.id,
+                            entity_name=str(res_name),
+                            changes={"status": "APPROVED", "approved_by": user.id},
+                            consequences=consequences,
+                            proposal_data={
+                                "resource_name": str(res_name),
+                                "date": str(target_booking.date),
+                                "start_time": st_val,
+                                "end_time": et_val,
+                                "purpose": target_booking.purpose,
+                            },
+                        )
+                        reply = (
+                            f"Resource Booking Approval Proposal ({op_prop.proposal_id})\n\n"
+                            f"Affected Entity:\n"
+                            f"- Booking ID: #{target_booking.id}\n"
+                            f"- Facility: {res_name} ({res_row.resource_type if res_row else 'FACILITY'})\n"
+                            f"- Location: {res_row.location if res_row else 'Main Campus'}\n"
+                            f"- Date: {target_booking.date}\n"
+                            f"- Time Interval: {st_val} - {et_val}\n"
+                            f"- Purpose: {target_booking.purpose or 'N/A'}\n"
+                            f"- Current Status: PENDING\n\n"
+                            f"Requested Change:\n"
+                            f"- Transition status from PENDING to APPROVED under administrator account {user.email}.\n\n"
+                            f"Consequences:\n"
+                            f"- {consequences}\n\n"
+                            f"Administrator Confirmation Required:\n"
+                            f"To execute this approval, click Confirm & Approve below or type:\n"
+                            f"confirm {op_prop.proposal_id}\n"
+                            f"or say 'Yes, proceed'."
+                        )
+                        return {
+                            "intent": "RESOURCE_ADMIN",
+                            "selected_agent": "resource_agent",
+                            "action_type": "PROPOSAL_CREATED",
+                            "final_response": sanitize_plain_english(reply),
+                            "proposal": op_prop.model_dump(),
+                            "tool_calls": [{"tool": "prepare_approve_booking", "args": {"booking_id": target_booking.id}}],
+                            "sources": sources,
+                            "success": True,
+                        }
+
             return {
                 "intent": "RESOURCE_ADMIN",
                 "selected_agent": "resource_agent",

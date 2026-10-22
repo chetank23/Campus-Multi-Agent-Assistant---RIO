@@ -39,3 +39,9 @@ MANIFEST
 # Database
 *.sqlite3
 REVA_School_of_CSE_Faculty.xlsx
+
+# Node
+node_modules/
+backend/node_modules/
+backend/package.json
+backend/package-lock.json

@@ -19,6 +19,7 @@ from backend.optimizer.validator import validate_timetable, ValidationResult, Va
 from backend.optimizer.scorer import compute_score
 from backend.models.timetable import TimetableVersion, TimetableEntry
 from backend.models.workflow import AuditLog
+from backend.services.notification_service import notify_timetable_published
 
 router = APIRouter(prefix="/timetable", tags=["timetable"])
 
@@ -367,4 +368,13 @@ def publish_version(
     )
     db.add(audit)
     db.commit()
-    return {"message": "Timetable published", "version_id": version.id, "status": version.status}
+
+    # Trigger authoritative notifications for affected faculty and students
+    dispatch_res = notify_timetable_published(db=db, version_id=version.id)
+
+    return {
+        "message": "Timetable published",
+        "version_id": version.id,
+        "status": version.status,
+        "notifications": dispatch_res,
+    }
