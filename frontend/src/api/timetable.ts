@@ -84,11 +84,20 @@ export interface TimetableVersionDetailResponse extends TimetableVersionResponse
 export interface ValidationViolation {
   severity: string;
   message: string;
+  code?: string | null;
+  entry_ids?: number[];
+  entity_type?: string | null;
+  entity_id?: number | null;
+  entity_name?: string | null;
+  suggestion?: string | null;
 }
 
 export interface ValidationResult {
   is_valid: boolean;
   violations: ValidationViolation[];
+  blocker_count?: number;
+  warning_count?: number;
+  info_count?: number;
 }
 
 export interface TimetableScore {

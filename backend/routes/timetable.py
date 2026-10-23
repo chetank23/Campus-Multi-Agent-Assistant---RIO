@@ -14,9 +14,12 @@ from backend.schemas.timetable import (
     TimetableEntryUpdate,
 )
 from backend.services.timetable_input_loader import validate_and_load_input
-from backend.optimizer.timetable_solver import TimetableSolver
-from backend.optimizer.validator import validate_timetable, ValidationResult, ValidationViolation
-from backend.optimizer.scorer import compute_score
+from backend.optimizer.validator import (
+    validate_timetable,
+    validate_persisted_timetable,
+    ValidationResult,
+    ValidationViolation,
+)
 from backend.models.timetable import TimetableVersion, TimetableEntry
 from backend.models.workflow import AuditLog
 from backend.services.notification_service import notify_timetable_published
@@ -194,71 +197,31 @@ def validate_version(
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
         
-    entries = db.query(TimetableEntry).filter(TimetableEntry.version_id == version_id).all()
-    if not entries:
-        return ValidationResult(is_valid=True, violations=[])
-        
-    first_entry = entries[0]
-    if not (version.academic_year_id and first_entry.department_id and first_entry.program_id and first_entry.semester_id):
-        raise HTTPException(status_code=400, detail="Incomplete context in timetable entries")
-        
-    scope = GenerationScope(
-        academic_year_id=version.academic_year_id,
-        department_id=first_entry.department_id,
-        program_id=first_entry.program_id,
-        semester_id=first_entry.semester_id
-    )
-    
-    try:
-        opt_input = validate_and_load_input(db, scope)
-    except HTTPException as e:
-        raise e
-        
-    assignment_lookup = {
-        (a.course_id, a.faculty_id, a.section_id, a.batch_id): a.id
-        for a in opt_input.course_assignments
-    }
-    
-    entry_results = []
-    for entry in entries:
-        if entry.course_id is None or entry.faculty_id is None or entry.room_id is None or entry.slot_id is None:
-            return ValidationResult(
-                is_valid=False,
-                violations=[ValidationViolation(severity="HARD", message=f"Persisted entry {entry.id} is incomplete and cannot be validated")]
-            )
-            
-        a_id = assignment_lookup.get((entry.course_id, entry.faculty_id, entry.section_id, entry.batch_id))
-        if not a_id:
-            return ValidationResult(
-                is_valid=False,
-                violations=[ValidationViolation(severity="HARD", message=f"Persisted entry {entry.id} does not match any valid course assignment")]
-            )
-            
-        h_type = "THEORY"
-        c = next((c for c in opt_input.courses if c.id == entry.course_id), None)
-        if c and c.practical_hours > 0:
-            room = next((r for r in opt_input.rooms if r.id == entry.room_id), None)
-            if room and room.room_type == 'LAB':
-                h_type = "PRACTICAL"
-                
-        entry_results.append(TimetableEntryResult(
-            course_assignment_id=a_id,
-            room_id=entry.room_id,
-            slot_id=entry.slot_id,
-            hour_type=h_type
-        ))
-        
-    val_result = validate_timetable(entry_results, opt_input)
+    val_result = validate_persisted_timetable(db, version_id)
     
     # Update status safely if valid
     if val_result.is_valid and version.status in ("DRAFT", "GENERATED", "REVIEWED"):
+        old_status = version.status
         version.status = "VALIDATED"
         db.add(AuditLog(
             user_id=current_user.id,
             action="TIMETABLE_VALIDATED",
             entity_type="TimetableVersion",
             entity_id=version.id,
+            old_value={"status": old_status},
             new_value={"status": "VALIDATED"}
+        ))
+        db.commit()
+    elif not val_result.is_valid and version.status == "VALIDATED":
+        old_status = version.status
+        version.status = "REVIEWED"
+        db.add(AuditLog(
+            user_id=current_user.id,
+            action="TIMETABLE_VALIDATION_FAILED",
+            entity_type="TimetableVersion",
+            entity_id=version.id,
+            old_value={"status": old_status},
+            new_value={"status": "REVIEWED", "blocker_count": val_result.blocker_count}
         ))
         db.commit()
 
@@ -325,6 +288,16 @@ def finalize_version(
     if version.status != "VALIDATED":
         raise HTTPException(status_code=409, detail=f"Cannot finalize version in status {version.status}. It must be VALIDATED first.")
         
+    # Authoritative re-validation before finalization
+    val_result = validate_persisted_timetable(db, version_id)
+    if not val_result.is_valid or val_result.blocker_count > 0:
+        version.status = "REVIEWED"
+        db.commit()
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot finalize timetable: {val_result.blocker_count} blocker violation(s) found. Please resolve conflicts before finalizing."
+        )
+
     old_status = version.status
     version.status = "FINALIZED"
     
@@ -350,9 +323,20 @@ def publish_version(
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
         
+    if version.status == "PUBLISHED":
+        raise HTTPException(status_code=409, detail="Version is already PUBLISHED")
+
     if version.status != "FINALIZED":
         raise HTTPException(status_code=409, detail=f"Version must be FINALIZED before publishing (current: {version.status})")
         
+    # Authoritative server-side validation against hard constraints before publication
+    val_result = validate_persisted_timetable(db, version_id)
+    if not val_result.is_valid or val_result.blocker_count > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Publication rejected: {val_result.blocker_count} blocker violation(s) found in timetable version #{version_id}."
+        )
+
     old_status = version.status
     now = datetime.datetime.now(datetime.UTC)
     version.status = "PUBLISHED"

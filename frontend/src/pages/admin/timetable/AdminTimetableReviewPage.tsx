@@ -42,6 +42,7 @@ export const AdminTimetableReviewPage: React.FC = () => {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [errorStatus, setErrorStatus] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [showPublishConfirm, setShowPublishConfirm] = useState(false);
 
   // Fetch Version Data
   const { data: version, isLoading: isVersionLoading, isError: isVersionError } = useQuery({
@@ -235,22 +236,46 @@ export const AdminTimetableReviewPage: React.FC = () => {
 
               {/* Action: Publish */}
               {version.status === 'FINALIZED' && (
-                <button
-                  onClick={() => {
-                    if (confirm('Publish this timetable? This will make it visible to faculty and students.')) {
-                      publishMutation.mutate();
-                    }
-                  }}
-                  disabled={publishMutation.isPending}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-colors disabled:opacity-50"
-                >
-                  {publishMutation.isPending ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <Send size={15} />
-                  )}
-                  <span>Publish to Portal</span>
-                </button>
+                showPublishConfirm ? (
+                  <div className="inline-flex items-center gap-1.5 p-1 bg-emerald-50 rounded-xl border border-emerald-200">
+                    <button
+                      onClick={() => {
+                        setShowPublishConfirm(false);
+                        publishMutation.mutate();
+                      }}
+                      disabled={publishMutation.isPending}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors disabled:opacity-50"
+                    >
+                      {publishMutation.isPending ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Send size={13} />
+                      )}
+                      <span>Confirm Publish</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPublishConfirm(false)}
+                      disabled={publishMutation.isPending}
+                      className="px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-200/60 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowPublishConfirm(true)}
+                    disabled={publishMutation.isPending}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-colors disabled:opacity-50"
+                  >
+                    {publishMutation.isPending ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Send size={15} />
+                    )}
+                    <span>Publish to Portal</span>
+                  </button>
+                )
               )}
             </div>
           }
