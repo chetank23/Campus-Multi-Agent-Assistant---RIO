@@ -525,18 +525,31 @@ export const CampusAssistantDrawer: React.FC = () => {
                                   <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                                     <Settings2 size={13} className="text-blue-600" />
                                     Timetable Proposal
+                                    {msg.proposal.revision && msg.proposal.revision > 1 && (
+                                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                                        Rev {msg.proposal.revision}
+                                      </span>
+                                    )}
                                   </span>
-                                  <span
-                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                      msg.proposal.readiness_status === 'READY'
-                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                        : msg.proposal.readiness_status === 'READY_WITH_WARNINGS'
-                                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                        : 'bg-rose-100 text-rose-800 border border-rose-300'
-                                    }`}
-                                  >
-                                    {msg.proposal.readiness_status}
-                                  </span>
+                                  <div className="flex items-center gap-1">
+                                    {msg.proposal.superseded ? (
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-300">
+                                        Superseded
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                          msg.proposal.readiness_status === 'READY'
+                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                            : msg.proposal.readiness_status === 'READY_WITH_WARNINGS'
+                                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                            : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                        }`}
+                                      >
+                                        {msg.proposal.readiness_status}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 bg-white p-2.5 rounded-lg border border-slate-100">
@@ -558,9 +571,26 @@ export const CampusAssistantDrawer: React.FC = () => {
                                       {msg.proposal.scope_display?.academic_year || 'Current'}
                                     </span>
                                   </div>
+                                  {msg.proposal.parameters && Object.keys(msg.proposal.parameters).length > 0 && (
+                                    <div className="col-span-2 pt-1 border-t border-slate-100">
+                                      <span className="font-semibold text-slate-500 block text-[10px] uppercase mb-0.5">Parameters</span>
+                                      <div className="flex flex-wrap gap-1">
+                                        {Object.entries(msg.proposal.parameters).map(([k, v]) => (
+                                          <span key={k} className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded border border-slate-200">
+                                            {k}: {String(v)}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
 
-                                {msg.proposal.readiness_status !== 'BLOCKED' ? (
+                                {msg.proposal.superseded ? (
+                                  <div className="flex items-center gap-1.5 p-2 bg-slate-100 text-slate-600 text-xs rounded-lg border border-slate-200">
+                                    <AlertTriangle size={14} className="shrink-0 text-slate-500" />
+                                    <span>This proposal has been superseded by a revision and can no longer be confirmed.</span>
+                                  </div>
+                                ) : msg.proposal.readiness_status !== 'BLOCKED' ? (
                                   <div className="flex items-center gap-2 pt-1">
                                     <button
                                       onClick={() => handleSendMessage(`confirm ${msg.proposal?.proposal_id}`)}
@@ -583,6 +613,7 @@ export const CampusAssistantDrawer: React.FC = () => {
                                   <div className="flex items-center gap-1.5 p-2 bg-rose-50 text-rose-700 text-xs rounded-lg border border-rose-200">
                                     <AlertTriangle size={14} className="shrink-0" />
                                     <span>Generation is blocked until data issues are resolved.</span>
+
                                   </div>
                                 )}
                               </>

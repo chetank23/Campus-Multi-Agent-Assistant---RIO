@@ -27,6 +27,9 @@ export interface ChatProposalData {
   };
   strategy?: string;
   readiness_status?: string;
+  revision?: number;
+  superseded?: boolean;
+  superseded_by?: string | null;
   expires_at?: number;
 
   // Stage 9C: Resource Booking Proposal Fields

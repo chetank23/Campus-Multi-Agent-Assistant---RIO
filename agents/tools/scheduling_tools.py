@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from backend.models.identity import User
-from backend.models.academic import Department, Program, Semester, Section, AcademicYear, Batch
+from backend.models.academic import Department, Program, Semester, Section, AcademicYear, Batch, Faculty
 from backend.models.courses import Course, CourseAssignment
 from backend.models.space_time import Room, TimeSlot, FacultyAvailability
 from backend.models.timetable import TimetableVersion
@@ -24,6 +24,7 @@ from backend.models.workflow import AuditLog
 from backend.schemas.timetable_generation import GenerationScope
 from backend.services.timetable_input_loader import validate_and_load_input
 from backend.services.notification_service import notify_timetable_published
+from backend.optimizer.validator import validate_persisted_timetable
 
 
 def resolve_academic_scope_data(
@@ -355,6 +356,16 @@ def execute_finalize_timetable_data(
             ),
         }
 
+    # Authoritative constraint validation check before state transition
+    if version.timetable_entries:
+        val_res = validate_persisted_timetable(db, version.id)
+        if not val_res.is_valid:
+            blocker_msgs = ", ".join(v.message for v in val_res.violations if v.severity in ("BLOCKER", "HARD"))
+            return {
+                "success": False,
+                "error": f"Cannot finalize timetable version #{version_id}: Constraint validation failed with blockers: {blocker_msgs}",
+            }
+
     old_status = version.status
     version.status = "FINALIZED"
 
@@ -393,7 +404,7 @@ def execute_publish_timetable_data(
     """
     Executes authoritative timetable version publication.
     Enforces ADMIN role check, version status validation (must be FINALIZED),
-    audit logging, and persistence verification.
+    independent validation verification, audit logging, and persistence verification.
     """
     if user.role != "ADMIN":
         return {
@@ -426,6 +437,16 @@ def execute_publish_timetable_data(
                 f"Versions must be finalized (status FINALIZED) by an Administrator before campus publication."
             ),
         }
+
+    # Authoritative constraint validation check before state transition
+    if version.timetable_entries:
+        val_res = validate_persisted_timetable(db, version.id)
+        if not val_res.is_valid:
+            blocker_msgs = ", ".join(v.message for v in val_res.violations if v.severity in ("BLOCKER", "HARD"))
+            return {
+                "success": False,
+                "error": f"Cannot publish timetable version #{version_id}: Constraint validation failed with blockers: {blocker_msgs}",
+            }
 
     old_status = version.status
     now = datetime.datetime.now(datetime.UTC)
@@ -461,3 +482,230 @@ def execute_publish_timetable_data(
         "status": refetched.status,
         "published_at": str(refetched.published_at),
     }
+
+
+def inspect_timetable_conflicts_data(
+    db: Session,
+    version_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Authoritative conflict inspection tool.
+    Validates a persisted TimetableVersion against all hard constraints, interval overlaps,
+    break/lunch slot exclusions, and room capacity limits.
+    If no version_id is provided, checks the most recent timetable version or pending proposal.
+    """
+    target_version: Optional[TimetableVersion] = None
+    if version_id is not None:
+        target_version = db.query(TimetableVersion).filter(TimetableVersion.id == version_id).first()
+        if not target_version:
+            return {
+                "success": False,
+                "error": f"Timetable version #{version_id} was not found.",
+            }
+    else:
+        target_version = db.query(TimetableVersion).order_by(TimetableVersion.id.desc()).first()
+
+    if target_version:
+        val_res = validate_persisted_timetable(db=db, version_id=target_version.id)
+        blockers = [v for v in val_res.violations if v.severity in ("BLOCKER", "HARD")]
+        warnings = [v for v in val_res.violations if v.severity not in ("BLOCKER", "HARD")]
+
+        return {
+            "success": True,
+            "version_id": target_version.id,
+            "version_number": target_version.version_number,
+            "status": target_version.status,
+            "is_valid": val_res.is_valid,
+            "blockers_count": len(blockers),
+            "warnings_count": len(warnings),
+            "blockers": [f"[{b.code}] {b.message}" for b in blockers],
+            "warnings": [f"[{w.code}] {w.message}" for w in warnings],
+            "recommendations": [
+                "Resolve all BLOCKER violations in the Admin Review Workspace before requesting finalization.",
+                "Review soft warnings to see if re-generating with a different optimization strategy (e.g. FACULTY_COMFORT or ROOM_EFFICIENCY) improves schedule metrics.",
+            ] if (blockers or warnings) else ["Timetable is completely valid with zero constraint violations. Ready for finalization and publication."],
+        }
+
+    # If no persisted timetable version exists, check active pending proposal
+    if user_id:
+        from agents.scheduling_agent.proposal_store import proposal_store
+        prop = proposal_store.get_latest_pending_proposal(user_id)
+        if prop:
+            readiness = analyze_scheduling_readiness_data(db=db, scope_dict=prop.scope)
+            blockers = [f for f in readiness.get("findings", []) if "BLOCKED" in f]
+            warnings = [f for f in readiness.get("findings", []) if "WARNING" in f]
+            return {
+                "success": True,
+                "proposal_id": prop.proposal_id,
+                "revision": prop.revision,
+                "status": prop.readiness_status,
+                "is_valid": prop.readiness_status != "BLOCKED",
+                "blockers_count": len(blockers),
+                "warnings_count": len(warnings),
+                "blockers": blockers,
+                "warnings": warnings,
+                "recommendations": ["Resolve missing prerequisites before generating."] if prop.readiness_status == "BLOCKED" else ["Proposal is valid and ready for confirmation."],
+            }
+
+    return {
+        "success": False,
+        "error": "No timetable version or active proposal found to inspect for conflicts.",
+    }
+
+
+def update_faculty_availability_data(
+    db: Session,
+    faculty_query: str,
+    day_text: str,
+    time_window: str = "afternoon",
+    availability_status: str = "UNAVAILABLE",
+    user: Optional[User] = None,
+) -> Dict[str, Any]:
+    """
+    Registers faculty availability constraints in the database.
+    - Resolves faculty by name, code, or email.
+    - Maps day_text (e.g. Wednesday, Wed) to DB day format ('WED').
+    - Maps time_window ('afternoon', 'morning', 'all day') to matching CLASS time slots.
+    - Upserts FacultyAvailability rows.
+    - Writes an audit log record.
+    """
+    if user and user.role != "ADMIN":
+        return {
+            "success": False,
+            "error": "Access denied: Only university Administrators can modify faculty availability constraints.",
+        }
+
+    clean_f = faculty_query.strip().lower()
+    for prefix in ["dr.", "dr ", "prof.", "prof ", "professor ", "faculty "]:
+        if clean_f.startswith(prefix):
+            clean_f = clean_f[len(prefix):].strip()
+
+    faculty_obj = (
+        db.query(Faculty)
+        .join(User, Faculty.user_id == User.id)
+        .filter(
+            (User.name.ilike(f"%{clean_f}%"))
+            | (User.email.ilike(f"%{clean_f}%"))
+            | (Faculty.faculty_id.ilike(f"%{clean_f}%"))
+        )
+        .first()
+    )
+
+    if not faculty_obj:
+        return {
+            "success": False,
+            "error": f"Faculty member matching '{faculty_query}' could not be resolved from university records.",
+        }
+
+    # Map day text
+    DAY_MAP = {
+        "mon": "MON", "monday": "MON",
+        "tue": "TUE", "tuesday": "TUE",
+        "wed": "WED", "wednesday": "WED",
+        "thu": "THU", "thursday": "THU",
+        "fri": "FRI", "friday": "FRI",
+        "sat": "SAT", "saturday": "SAT",
+        "sun": "SUN", "sunday": "SUN",
+    }
+    day_lower = day_text.strip().lower()
+    db_day = DAY_MAP.get(day_lower)
+    if not db_day:
+        for k, v in DAY_MAP.items():
+            if k in day_lower or day_lower in k:
+                db_day = v
+                break
+
+    if not db_day:
+        return {
+            "success": False,
+            "error": f"Unrecognized day '{day_text}'. Supported days are Monday through Saturday.",
+        }
+
+    # Determine slots by time window
+    window_lower = time_window.strip().lower()
+    day_slots = (
+        db.query(TimeSlot)
+        .filter(TimeSlot.day == db_day, TimeSlot.slot_type == "CLASS")
+        .all()
+    )
+
+    if not day_slots:
+        return {
+            "success": False,
+            "error": f"No class time slots found for day '{db_day}'.",
+        }
+
+    target_slots: List[TimeSlot] = []
+    if "afternoon" in window_lower or "post lunch" in window_lower or "pm" in window_lower:
+        noon = datetime.time(12, 0)
+        target_slots = [s for s in day_slots if s.start_time and s.start_time >= noon]
+    elif "morning" in window_lower or "am" in window_lower:
+        noon = datetime.time(12, 0)
+        target_slots = [s for s in day_slots if s.start_time and s.start_time < noon]
+    else:
+        # All day or specific slots
+        target_slots = day_slots
+
+    if not target_slots:
+        target_slots = day_slots
+
+    avail_status = availability_status.upper()
+    if avail_status not in ("AVAILABLE", "UNAVAILABLE", "PREFERRED"):
+        avail_status = "UNAVAILABLE"
+
+    # Upsert availability
+    updated_slot_ids = []
+    for slot in target_slots:
+        fa = (
+            db.query(FacultyAvailability)
+            .filter(
+                FacultyAvailability.faculty_id == faculty_obj.id,
+                FacultyAvailability.slot_id == slot.id,
+            )
+            .first()
+        )
+        if fa:
+            fa.availability = avail_status
+        else:
+            fa = FacultyAvailability(
+                faculty_id=faculty_obj.id,
+                slot_id=slot.id,
+                availability=avail_status,
+                preference=0 if avail_status != "PREFERRED" else 10,
+            )
+            db.add(fa)
+        updated_slot_ids.append(slot.id)
+
+    # Audit log
+    audit = AuditLog(
+        user_id=user.id if user else None,
+        action="FACULTY_AVAILABILITY_UPDATED",
+        entity_type="Faculty",
+        entity_id=faculty_obj.id,
+        new_value={
+            "faculty_name": faculty_obj.user.name if faculty_obj.user else "Unknown",
+            "day": db_day,
+            "window": window_lower,
+            "availability": avail_status,
+            "slot_ids": updated_slot_ids,
+        },
+    )
+    db.add(audit)
+    db.commit()
+
+    faculty_name = faculty_obj.user.name if faculty_obj.user else (faculty_obj.faculty_id or "Faculty")
+    slot_desc = ", ".join(f"{s.start_time.strftime('%H:%M')}-{s.end_time.strftime('%H:%M')}" for s in target_slots if s.start_time and s.end_time)
+
+    return {
+        "success": True,
+        "faculty_id": faculty_obj.id,
+        "faculty_name": faculty_name,
+        "day": db_day,
+        "time_window": window_lower,
+        "availability": avail_status,
+        "slots_updated": len(target_slots),
+        "slot_intervals": slot_desc,
+        "message": f"Successfully updated availability for {faculty_name} on {db_day} ({slot_desc}) to {avail_status}.",
+    }
+

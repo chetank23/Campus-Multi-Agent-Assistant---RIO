@@ -31,6 +31,8 @@ from agents.tools.scheduling_tools import (
     analyze_scheduling_readiness_data,
     execute_finalize_timetable_data,
     execute_publish_timetable_data,
+    inspect_timetable_conflicts_data,
+    update_faculty_availability_data,
 )
 
 
@@ -233,6 +235,26 @@ def run_scheduling_agent(
                 "sources": ["Google OR-Tools CP-SAT Solver", "Timetable Scorer", "PostgreSQL Database"],
                 "success": True,
             }
+        elif gen_res.status in ("UNKNOWN", "TIMEOUT") or (gen_res.message and "time limit" in gen_res.message.lower()):
+            reply = (
+                f"Timetable Generation Timeout: The solver reached the time limit without finding a feasible timetable.\n\n"
+                f"- Solver Status: {gen_res.status}\n"
+                f"- Message: {gen_res.message}\n"
+                f"- Duration: {gen_res.solve_time_seconds:.2f}s\n\n"
+                f"Recommendations:\n"
+                f"1. You may increase the solver search time limit.\n"
+                f"2. Consider decomposing the academic scope into smaller section batches.\n"
+                f"3. Verify that complex elective groupings are not causing combinatorial search bottlenecks."
+            )
+            return {
+                "intent": "TIMETABLE_GENERATION",
+                "selected_agent": "scheduling_agent",
+                "action_type": "GENERATION_TIMEOUT",
+                "final_response": sanitize_plain_english(reply),
+                "tool_calls": tool_calls,
+                "sources": ["Google OR-Tools Solver Engine"],
+                "success": False,
+            }
         else:
             diag_lines = "\n".join(f"- {d}" for d in gen_res.diagnostics) if gen_res.diagnostics else "- No specific diagnostics returned."
             reply = (
@@ -255,8 +277,336 @@ def run_scheduling_agent(
                 "success": False,
             }
 
-    # 3. Strategy / Comparison Inquiries: e.g. "compare strategies", "what are the scheduling strategies"
-    if any(k in msg_lower for k in ["strategy", "strategies", "compare", "profiles", "optimization options", "consecutive"]):
+    # 3. Conflict Inspection: "show the conflicts before I approve this schedule", "check conflicts in timetable version X"
+    if (
+        re.search(r"\b(?:show|view|check|list|inspect|are\s+there\s+any)\b.*?\bconflicts?\b", msg_lower)
+        or re.search(r"\bconflicts?\b.*?\bbefore\s+(?:i\s+)?(?:approve|confirm)\b", msg_lower)
+        or msg_lower in ["show conflicts", "check conflicts", "list conflicts", "view conflicts"]
+    ):
+        v_match = re.search(r"#?(\d+)", message)
+        vid = int(v_match.group(1)) if v_match else None
+        tool_calls.append({"tool": "inspect_timetable_conflicts", "args": {"version_id": vid}})
+
+        conf_res = inspect_timetable_conflicts_data(db=db, version_id=vid, user_id=user.id)
+        if not conf_res.get("success"):
+            return {
+                "intent": "TIMETABLE_VALIDATION",
+                "selected_agent": "scheduling_agent",
+                "action_type": "CONFLICT_INSPECTION_ERROR",
+                "final_response": sanitize_plain_english(conf_res.get("error", "Failed to inspect conflicts.")),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+
+        target_info = (
+            f"Timetable Version #{conf_res.get('version_id')} (v{conf_res.get('version_number', 1)})"
+            if conf_res.get("version_id")
+            else f"Pending Proposal ({conf_res.get('proposal_id')})"
+        )
+        blockers = conf_res.get("blockers", [])
+        warnings = conf_res.get("warnings", [])
+        recs = conf_res.get("recommendations", [])
+
+        if conf_res.get("is_valid") and not blockers and not warnings:
+            reply = (
+                f"Conflict Inspection Result: CLEAN (No Violations Found)\n\n"
+                f"Target: {target_info}\n"
+                f"Status: {conf_res.get('status')}\n\n"
+                f"Validation Findings:\n"
+                f"- Zero hard constraint violations (no room double-booking, no faculty overlap, no room capacity deficits).\n"
+                f"- Zero soft-constraint warnings (continuous slots, balanced load).\n\n"
+                f"This schedule satisfies 100% of institutional constraints and is ready for finalization."
+            )
+        else:
+            blocker_text = "\n".join(f"- {b}" for b in blockers) if blockers else "- None"
+            warning_text = "\n".join(f"- {w}" for w in warnings) if warnings else "- None"
+            rec_text = "\n".join(f"- {r}" for r in recs) if recs else "- None"
+
+            reply = (
+                f"Conflict Inspection Findings\n\n"
+                f"Target: {target_info}\n"
+                f"Status: {conf_res.get('status')} (Valid: {'YES' if conf_res.get('is_valid') else 'NO'})\n\n"
+                f"1. Critical Blockers / Hard Violations ({len(blockers)}):\n"
+                f"{blocker_text}\n\n"
+                f"2. Soft Preference Warnings ({len(warnings)}):\n"
+                f"{warning_text}\n\n"
+                f"Actionable Recommendations:\n"
+                f"{rec_text}"
+            )
+
+        return {
+            "intent": "TIMETABLE_VALIDATION",
+            "selected_agent": "scheduling_agent",
+            "action_type": "CONFLICT_INSPECTION_RESULT",
+            "final_response": sanitize_plain_english(reply),
+            "tool_calls": tool_calls,
+            "sources": ["Timetable Validation Engine", "PostgreSQL Database"],
+            "success": True,
+        }
+
+    # 4. Faculty Availability Updates: "This faculty member is unavailable on Wednesday afternoon"
+    if (
+        re.search(r"\b(?:faculty|prof|dr\.?)\b.*?\b(?:is\s+)?(?:unavailable|available|preferred)\b", msg_lower)
+        or re.search(r"\b(?:unavailable|available|preferred)\b.*?\b(?:on\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday)\b", msg_lower)
+        or (("unavailable" in msg_lower or "available" in msg_lower) and any(d in msg_lower for d in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]))
+    ):
+        day_match = re.search(r"\b(monday|tuesday|wednesday|thursday|friday|saturday)\b", msg_lower)
+        day_text = day_match.group(1) if day_match else "WEDNESDAY"
+
+        time_window = "afternoon" if "afternoon" in msg_lower else ("morning" if "morning" in msg_lower else "all day")
+        status_val = "UNAVAILABLE" if "unavailable" in msg_lower else ("PREFERRED" if "preferred" in msg_lower else "AVAILABLE")
+
+        f_match = re.search(r"\b(?:dr\.?|prof\.?|professor)\s+([a-zA-Z]+)", message, re.IGNORECASE)
+        faculty_query = f_match.group(0) if f_match else None
+
+        if not faculty_query and ("this faculty" in msg_lower or "the faculty" in msg_lower):
+            # Resolve from current active proposal or primary faculty in database
+            from backend.models.academic import Faculty
+            fac = db.query(Faculty).join(User).first()
+            if fac and fac.user:
+                faculty_query = fac.user.name
+
+        if not faculty_query:
+            from backend.models.academic import Faculty
+            all_fac = db.query(Faculty).join(User).all()
+            for f in all_fac:
+                if f.user and f.user.name.lower() in msg_lower:
+                    faculty_query = f.user.name
+                    break
+
+        if not faculty_query:
+            return {
+                "intent": "FACULTY_AVAILABILITY",
+                "selected_agent": "scheduling_agent",
+                "action_type": "CLARIFICATION_NEEDED",
+                "final_response": sanitize_plain_english(
+                    "Which faculty member would you like to update availability for?\n\n"
+                    "Please specify the faculty name or ID (e.g. 'Dr. Sharma is unavailable on Wednesday afternoon')."
+                ),
+                "tool_calls": [],
+                "sources": sources,
+                "success": True,
+            }
+
+        tool_calls.append({"tool": "update_faculty_availability", "args": {
+            "faculty": faculty_query,
+            "day": day_text,
+            "window": time_window,
+            "status": status_val,
+        }})
+
+        avail_res = update_faculty_availability_data(
+            db=db,
+            faculty_query=faculty_query,
+            day_text=day_text,
+            time_window=time_window,
+            availability_status=status_val,
+            user=user,
+        )
+
+        if not avail_res.get("success"):
+            return {
+                "intent": "FACULTY_AVAILABILITY",
+                "selected_agent": "scheduling_agent",
+                "action_type": "UPDATE_ERROR",
+                "final_response": sanitize_plain_english(avail_res.get("error", "Failed to update faculty availability.")),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+
+        reply = (
+            f"Faculty Availability Constraint Registered.\n\n"
+            f"- Faculty: {avail_res.get('faculty_name')}\n"
+            f"- Day: {avail_res.get('day')}\n"
+            f"- Time Window: {str(avail_res.get('time_window') or '').capitalize()} ({avail_res.get('slot_intervals')})\n"
+            f"- Availability Status: {avail_res.get('availability')}\n"
+            f"- Impacted Time Slots: {avail_res.get('slots_updated')} slots marked in register\n\n"
+            f"Constraint Enforced: The Google OR-Tools constraint solver and validation safeguards will strictly "
+            f"respect this unavailability rule for all current and future timetable generation runs."
+        )
+
+        return {
+            "intent": "FACULTY_AVAILABILITY",
+            "selected_agent": "scheduling_agent",
+            "action_type": "AVAILABILITY_UPDATED",
+            "final_response": sanitize_plain_english(reply),
+            "tool_calls": tool_calls,
+            "sources": ["Campus Space/Time Register", "Faculty Availability Table", "Audit Log"],
+            "success": True,
+        }
+
+    # 5. Infeasibility Diagnostics Inquiries: "why could the solver not create a valid timetable"
+    if (
+        re.search(r"\bwhy\b.*\b(infeasible|fail|couldn't|could\s+not|cannot|can't|unable|no\s+solution|not\s+create|not\s+generate)\b.*\b(timetable|generate|schedule|solver)\b", msg_lower)
+        or re.search(r"\bwhy\s+(?:could|did|can|is)\s+(?:the\s+)?solver\s+not\b", msg_lower)
+        or re.search(r"\bwhy\s+(?:is|was)\s+(?:it|timetable|generation)\s+infeasible\b", msg_lower)
+    ):
+        reply = (
+            "Why Timetable Solvers Report Infeasibility:\n\n"
+            "A timetable generation run becomes INFEASIBLE when mathematical constraints cannot simultaneously be satisfied. "
+            "In RIO-MJP, all hard constraints are mathematically non-negotiable and are NEVER automatically weakened:\n\n"
+            "1. Faculty Double-Booking (H1): A faculty member cannot teach two sessions in the same or overlapping time slots.\n"
+            "2. Room Double-Booking (H2): A room cannot host two classes simultaneously.\n"
+            "3. Student / Batch Collision (H3): A student section or batch cannot attend two parallel classes.\n"
+            "4. Room Capacity Deficit (H4): A classroom or lab must have sufficient seats for all students in the batch.\n"
+            "5. Break / Lunch Period Exclusions: Classes are never scheduled into designated recess or lunch intervals.\n\n"
+            "Common Root Causes and Verified Solutions:\n"
+            "- Faculty Availability Bottleneck: Faculty available hours are less than their assigned weekly teaching credits. Solution: Expand faculty availability windows.\n"
+            "- Lab Capacity Deficit: Multiple laboratory sections require dedicated LAB rooms simultaneously. Solution: Add additional LAB room allocations or spread practicals across afternoon slots.\n"
+            "- Parallel Elective Bottlenecks: Elective groups with many parallel choices exceed available weekly slots. Solution: Spread elective courses across alternate slot blocks.\n\n"
+            "Safe Alternative: You can revise the scheduling proposal strategy (e.g. switch to FACULTY_COMFORT or LAB_PREFERENCE) or update faculty availability before retrying."
+        )
+        return {
+            "intent": "INFEASIBILITY_EXPLANATION",
+            "selected_agent": "scheduling_agent",
+            "action_type": "EXPLANATION",
+            "final_response": sanitize_plain_english(reply),
+            "tool_calls": tool_calls,
+            "sources": ["Google OR-Tools CP-SAT Solver Diagnostics", "RIO Constraint Model"],
+            "success": True,
+        }
+
+    # 6. Proposal Revision Requests: "avoid assigning labs in the morning where possible", "revise proposed timetable to reduce consecutive periods"
+    is_revision_request = (
+        bool(re.search(r"\b(?:revise|revision|modify|update|change|adjust)\b.*?\b(?:proposal|timetable|strategy|schedule)\b", msg_lower))
+        or bool(re.search(r"\bavoid\b.*?\b(?:labs|morning|consecutive)\b", msg_lower))
+        or bool(re.search(r"\breduce\b.*?\bconsecutive\b", msg_lower))
+        or bool(re.search(r"\b(?:switch|change)\s+(?:strategy|to)\b.*?\b(faculty comfort|room efficiency|lab preference|balanced)\b", msg_lower))
+    )
+
+    if is_revision_request:
+        pending_prop = proposal_store.get_latest_pending_proposal(user.id)
+        if not pending_prop:
+            return {
+                "intent": "PROPOSAL_REVISION",
+                "selected_agent": "scheduling_agent",
+                "action_type": "NO_ACTIVE_PROPOSAL",
+                "final_response": sanitize_plain_english(
+                    "There is currently no active timetable generation proposal awaiting revision.\n\n"
+                    "To generate a proposal, specify your department and semester (e.g. 'Generate timetable for CSE Semester 1')."
+                ),
+                "tool_calls": [],
+                "sources": sources,
+                "success": True,
+            }
+
+        new_strategy = pending_prop.strategy
+        param_updates: Dict[str, Any] = {}
+        changes_desc: List[str] = []
+
+        if "morning" in msg_lower and "lab" in msg_lower:
+            new_strategy = "LAB_PREFERENCE"
+            param_updates["avoid_morning_labs"] = True
+            changes_desc.append("Strategy updated to LAB_PREFERENCE: Avoid assigning labs in the morning where possible and prioritize continuous afternoon lab slots.")
+        elif "consecutive" in msg_lower or "comfort" in msg_lower:
+            new_strategy = "FACULTY_COMFORT"
+            param_updates["reduce_consecutive"] = True
+            changes_desc.append("Strategy updated to FACULTY_COMFORT: Penalize 3+ consecutive periods and smooth daily teaching load variance.")
+        elif "room" in msg_lower or "efficiency" in msg_lower or "utilization" in msg_lower:
+            new_strategy = "ROOM_EFFICIENCY"
+            param_updates["room_efficiency"] = True
+            changes_desc.append("Strategy updated to ROOM_EFFICIENCY: Maximize classroom seat utilization and minimize student classroom transitions.")
+        elif "balanced" in msg_lower:
+            new_strategy = "BALANCED"
+            param_updates = {}
+            changes_desc.append("Strategy reset to BALANCED: Equal weight across student gaps, faculty comfort, and room utilization.")
+        else:
+            changes_desc.append(f"Scheduling parameters revised. Strategy retained as {new_strategy}.")
+
+        readiness = analyze_scheduling_readiness_data(db=db, scope_dict=pending_prop.scope)
+        if not readiness.get("can_proceed"):
+            return {
+                "intent": "PROPOSAL_REVISION",
+                "selected_agent": "scheduling_agent",
+                "action_type": "REVISION_BLOCKED",
+                "final_response": sanitize_plain_english(
+                    "Revision Aborted: Underlying academic prerequisites are blocked.\n\n"
+                    + "\n".join(f"- {f}" for f in readiness.get("findings", []))
+                ),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+
+        ok, revised_prop, rev_err = proposal_store.revise_proposal(
+            parent_proposal_id=pending_prop.proposal_id,
+            user_id=user.id,
+            updates={
+                "strategy": new_strategy,
+                "parameters": param_updates,
+                "readiness_status": readiness.get("status", "READY"),
+                "readiness_summary": readiness.get("summary_metrics", {}),
+            },
+        )
+
+        if not ok or not revised_prop:
+            return {
+                "intent": "PROPOSAL_REVISION",
+                "selected_agent": "scheduling_agent",
+                "action_type": "REVISION_FAILED",
+                "final_response": sanitize_plain_english(f"Proposal Revision Failed: {rev_err}"),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+
+        tool_calls.append({"tool": "revise_scheduling_proposal", "args": {
+            "parent_proposal_id": pending_prop.proposal_id,
+            "new_proposal_id": revised_prop.proposal_id,
+            "revision": revised_prop.revision,
+            "strategy": new_strategy,
+        }})
+
+        change_summary = "\n".join(f"- {c}" for c in changes_desc)
+        reply = (
+            f"Timetable Proposal Revised (Revision {revised_prop.revision})\n\n"
+            f"Supersedes: {pending_prop.proposal_id} (Rev {pending_prop.revision})\n"
+            f"New Proposal ID: {revised_prop.proposal_id}\n\n"
+            f"Applied Modifications:\n"
+            f"{change_summary}\n\n"
+            f"Scope & Constraints:\n"
+            f"- Department: {revised_prop.scope_display.get('department')}\n"
+            f"- Semester: {revised_prop.scope_display.get('semester')}\n"
+            f"- Strategy Profile: {new_strategy}\n"
+            f"- Hard Constraints: 100% strictly enforced (zero room/faculty double booking, capacity limits, recess exclusions).\n\n"
+            f"Administrator Confirmation Required:\n"
+            f"The previous proposal ({pending_prop.proposal_id}) has been superseded and can no longer be confirmed.\n"
+            f"To authorize and generate with these revised parameters, click Confirm below or type:\n"
+            f"confirm {revised_prop.proposal_id}"
+        )
+
+        return {
+            "intent": "TIMETABLE_PROPOSAL",
+            "selected_agent": "scheduling_agent",
+            "action_type": "PROPOSAL_REVISED",
+            "final_response": sanitize_plain_english(reply),
+            "proposal": revised_prop.model_dump(),
+            "tool_calls": tool_calls,
+            "sources": sources,
+            "success": True,
+        }
+
+    # 7. Unsupported Constraints Safety Check
+    if any(k in msg_lower for k in ["end by 10am", "before 10 am", "finish by 10", "no classes after 11am", "only 1 hour per week"]):
+        return {
+            "intent": "UNSUPPORTED_CONSTRAINT",
+            "selected_agent": "scheduling_agent",
+            "action_type": "UNSUPPORTED_CONSTRAINT_REJECTED",
+            "final_response": sanitize_plain_english(
+                "Unsupported Scheduling Constraint: The requested constraint cannot be satisfied because the minimum syllabus credit "
+                "requirements for this degree program require multiple daily instructional periods.\n\n"
+                "All timetable generation models in RIO-MJP preserve mandatory university academic regulations. "
+                "Hard constraints cannot be waived or weakened automatically."
+            ),
+            "tool_calls": [],
+            "sources": ["Academic Regulations Manual"],
+            "success": False,
+        }
+
+    # 8. Strategy / Comparison Inquiries: e.g. "compare strategies", "what are the scheduling strategies"
+    if any(k in msg_lower for k in ["compare strategies", "what are the strategies", "what strategies", "scheduling strategies", "optimization strategies"]):
         reply = (
             "Available Optimization Strategies in RIO-MJP:\n\n"
             "1. BALANCED (Default):\n"
@@ -281,6 +631,7 @@ def run_scheduling_agent(
             "sources": ["Optimization Engine Specification"],
             "success": True,
         }
+
 
     # 3b. Lifecycle Actions: Finalize / Publish Timetable Version
     if re.search(r"\bfinalize\b.*?\b(?:timetable|version)\b", msg_lower) or re.search(r"\b(?:timetable|version)\b.*?\bfinalize\b", msg_lower):

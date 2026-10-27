@@ -57,7 +57,7 @@ def classify_intent(message: str) -> str:
         if re.search(pat, msg):
             return "TIMETABLE_READINESS"
 
-    # 3. Scheduling / Timetable Generation & Lifecycle requests
+    # 3. Scheduling / Timetable Generation, Revision, Conflicts, & Faculty Availability requests
     scheduling_patterns = [
         r"\bgenerate\b.*\btimetable\b",
         r"\bcreate\b.*\btimetable\b",
@@ -70,12 +70,19 @@ def classify_intent(message: str) -> str:
         r"\bconfirm\s+prop_[a-zA-Z0-9_-]+\b",
         r"\bexecute\s+prop_[a-zA-Z0-9_-]+\b",
         r"\bproceed\s+prop_[a-zA-Z0-9_-]+\b",
-        r"\bwhy\b.*\b(infeasible|fail|couldn't|cannot)\b.*\b(timetable|generate|schedule)\b",
+        r"\bwhy\b.*\b(infeasible|fail|couldn't|could\s+not|cannot|can't|unable|no\s+solution|not\s+create|not\s+generate)\b.*\b(timetable|generate|schedule|solver)\b",
         r"\bcompare\b.*\b(strategies|scheduling|scenarios)\b",
         r"\bscheduling\s+strateg(y|ies)\b",
         r"\bfaculty-comfort\b",
         r"\broom-efficiency\b",
         r"\blab-preference\b",
+        r"\b(?:show|view|check|list|inspect|are\s+there\s+any)\b.*?\bconflicts?\b",
+        r"\bconflicts?\b.*?\b(before|approve|timetable|schedule)\b",
+        r"\bavoid\b.*?\b(labs?|morning|consecutive)\b",
+        r"\brevise\b.*?\b(timetable|proposal|schedule|periods|strategy)\b",
+        r"\breduce\b.*?\bconsecutive\b",
+        r"\b(?:faculty|prof|dr\.?)\b.*?\b(unavailable|available|preferred)\b",
+        r"\bunavailable\b.*?\b(monday|tuesday|wednesday|thursday|friday|saturday|afternoon|morning)\b",
     ]
     for pat in scheduling_patterns:
         if re.search(pat, msg):
@@ -151,9 +158,9 @@ def classify_intent(message: str) -> str:
     # 9. Informational Queries supported by Query Agent
     query_patterns = [
         "timetable", "schedule", "class", "classes", "lecture", "timing", "when is",
-        "ongoing", "upcoming", "next class", "faculty", "professor", "teacher",
+        "ongoing", "upcoming", "next class", "faculty", "professor", "professors", "teacher", "teachers",
         "teach", "teaching", "who is", "who teaches", "dr.", "dr ", "prof",
-        "course", "subject", "credits", "syllabus", "room", "rooms", "classroom", "classrooms", "lab", "labs",
+        "course", "courses", "subject", "subjects", "credits", "syllabus", "room", "rooms", "classroom", "classrooms", "lab", "labs",
         "auditorium", "seminar", "capacity", "where is", "holiday", "exam", "vacation",
         "academic calendar", "events", "department schedule", "calendar"
     ]
