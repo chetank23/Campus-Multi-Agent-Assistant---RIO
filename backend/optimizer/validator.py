@@ -59,6 +59,30 @@ class ValidationResult(BaseModel):
         )
 
 
+def slots_overlap(s1, s2) -> bool:
+    """
+    Returns True if slot s1 and slot s2 overlap in time on the same day.
+    Works for both OptTimeSlot Pydantic objects and TimeSlot SQLAlchemy models.
+    """
+    if s1 is None or s2 is None:
+        return False
+    s1_id = getattr(s1, "id", None)
+    s2_id = getattr(s2, "id", None)
+    if s1_id is not None and s2_id is not None and s1_id == s2_id:
+        return True
+    day1 = getattr(s1, "day", None)
+    day2 = getattr(s2, "day", None)
+    if day1 != day2 or not day1:
+        return False
+    st1 = getattr(s1, "start_time", None)
+    et1 = getattr(s1, "end_time", None)
+    st2 = getattr(s2, "start_time", None)
+    et2 = getattr(s2, "end_time", None)
+    if st1 and et1 and st2 and et2:
+        return max(st1, st2) < min(et1, et2)
+    return False
+
+
 def validate_timetable(entries: List[TimetableEntryResult], opt_input: OptimizerInput) -> ValidationResult:
     """
     Validates in-memory solver output against optimizer input constraints.
@@ -79,9 +103,6 @@ def validate_timetable(entries: List[TimetableEntryResult], opt_input: Optimizer
     for fa in opt_input.faculty_availability:
         faculty_availability[fa.faculty_id][fa.slot_id] = fa
 
-    faculty_schedule = defaultdict(list)
-    section_schedule = defaultdict(list)
-    room_schedule = defaultdict(list)
     course_hours_assigned = defaultdict(int)
 
     for entry in entries:
@@ -92,62 +113,24 @@ def validate_timetable(entries: List[TimetableEntryResult], opt_input: Optimizer
         slot = slots.get(entry.slot_id)
         slot_label = f"{slot.day} {slot.start_time.strftime('%H:%M')}-{slot.end_time.strftime('%H:%M')}" if slot else f"Slot #{entry.slot_id}"
 
-        # 1. Faculty collision
-        if entry.slot_id in faculty_schedule[a.faculty_id]:
-            f_name = f"Faculty #{a.faculty_id}"
+        # 1. Invalid Slot Type check (e.g. BREAK or LUNCH)
+        if slot and getattr(slot, "slot_type", "") in ("BREAK", "LUNCH"):
             violations.append(
                 ValidationViolation(
                     severity="BLOCKER",
-                    code="FACULTY_OVERLAP",
-                    entity_type="FACULTY",
-                    entity_id=a.faculty_id,
-                    entity_name=f_name,
-                    message=f"{f_name} is double-booked in slot {slot_label}.",
-                    suggestion=f"Reschedule one of the conflicting assignments to a slot where {f_name} is free.",
+                    code="INVALID_SLOT_TYPE",
+                    message=f"Assignment #{a.id} is scheduled during {slot.slot_type} slot ({slot_label}). Classes cannot be scheduled during breaks.",
+                    suggestion="Move assignment to an active teaching slot.",
                 )
             )
-        faculty_schedule[a.faculty_id].append(entry.slot_id)
 
-        # 2. Section collision
-        if a.section_id:
-            if entry.slot_id in section_schedule[a.section_id]:
-                s_name = f"Section #{a.section_id}"
-                violations.append(
-                    ValidationViolation(
-                        severity="BLOCKER",
-                        code="SECTION_OVERLAP",
-                        entity_type="SECTION",
-                        entity_id=a.section_id,
-                        entity_name=s_name,
-                        message=f"{s_name} has multiple overlapping classes scheduled in slot {slot_label}.",
-                        suggestion="Stagger section lectures across different periods to avoid student schedule collision.",
-                    )
-                )
-            section_schedule[a.section_id].append(entry.slot_id)
-
-        # 3. Room collision
-        if entry.slot_id in room_schedule[entry.room_id]:
-            r_name = f"Room #{entry.room_id}"
-            violations.append(
-                ValidationViolation(
-                    severity="BLOCKER",
-                    code="ROOM_OVERLAP",
-                    entity_type="ROOM",
-                    entity_id=entry.room_id,
-                    entity_name=r_name,
-                    message=f"{r_name} is double-booked in slot {slot_label}.",
-                    suggestion=f"Assign conflicting classes to separate classrooms or laboratories.",
-                )
-            )
-        room_schedule[entry.room_id].append(entry.slot_id)
-
-        # 4. Capacity and Lab requirements
+        # 2. Capacity requirement (H4 - Hard Constraint)
         student_count = sections[a.section_id].student_count if a.section_id and a.section_id in sections else (batches[a.batch_id].student_count if a.batch_id and a.batch_id in batches else 0)
         room = rooms.get(entry.room_id)
         if room and room.capacity < student_count:
             violations.append(
                 ValidationViolation(
-                    severity="WARNING",
+                    severity="BLOCKER",
                     code="CAPACITY_DEFICIT",
                     entity_type="ROOM",
                     entity_id=room.id,
@@ -156,6 +139,7 @@ def validate_timetable(entries: List[TimetableEntryResult], opt_input: Optimizer
                 )
             )
 
+        # 3. Lab / Practical suitability check
         if entry.hour_type == "PRACTICAL":
             if room and (room.room_type != "LAB" or room.id not in labs):
                 violations.append(
@@ -169,7 +153,7 @@ def validate_timetable(entries: List[TimetableEntryResult], opt_input: Optimizer
                     )
                 )
 
-        # 5. Faculty Availability
+        # 4. Faculty Availability adherence
         fa = faculty_availability[a.faculty_id].get(entry.slot_id)
         if fa and fa.availability == "UNAVAILABLE":
             violations.append(
@@ -184,6 +168,80 @@ def validate_timetable(entries: List[TimetableEntryResult], opt_input: Optimizer
             )
 
         course_hours_assigned[(entry.course_assignment_id, entry.hour_type)] += 1
+
+    # 5. Pairwise Overlap Checks (H1: Faculty, H2: Room, H3: Batch / Section)
+    for i in range(len(entries)):
+        for j in range(i + 1, len(entries)):
+            e1 = entries[i]
+            e2 = entries[j]
+            a1 = assignments.get(e1.course_assignment_id)
+            a2 = assignments.get(e2.course_assignment_id)
+            if not a1 or not a2:
+                continue
+
+            sl1 = slots.get(e1.slot_id)
+            sl2 = slots.get(e2.slot_id)
+            if not slots_overlap(sl1, sl2):
+                continue
+
+            s_desc = f"{sl1.day} {sl1.start_time.strftime('%H:%M')}-{sl1.end_time.strftime('%H:%M')}" if sl1 else f"Slot #{e1.slot_id}"
+
+            # H1 - Faculty collision
+            if a1.faculty_id == a2.faculty_id:
+                violations.append(
+                    ValidationViolation(
+                        severity="BLOCKER",
+                        code="FACULTY_OVERLAP",
+                        entity_type="FACULTY",
+                        entity_id=a1.faculty_id,
+                        entity_name=f"Faculty #{a1.faculty_id}",
+                        message=f"Faculty #{a1.faculty_id} is double-booked during overlapping time window {s_desc}.",
+                        suggestion=f"Reschedule one of the conflicting assignments to a slot where Faculty #{a1.faculty_id} is free.",
+                    )
+                )
+
+            # H2 - Room collision
+            if e1.room_id == e2.room_id:
+                violations.append(
+                    ValidationViolation(
+                        severity="BLOCKER",
+                        code="ROOM_OVERLAP",
+                        entity_type="ROOM",
+                        entity_id=e1.room_id,
+                        entity_name=f"Room #{e1.room_id}",
+                        message=f"Room #{e1.room_id} is double-booked during overlapping time window {s_desc}.",
+                        suggestion="Assign conflicting classes to separate classrooms or laboratories.",
+                    )
+                )
+
+            # H3 - Batch collision
+            if a1.batch_id and a2.batch_id and a1.batch_id == a2.batch_id:
+                violations.append(
+                    ValidationViolation(
+                        severity="BLOCKER",
+                        code="BATCH_OVERLAP",
+                        entity_type="SECTION",
+                        entity_id=a1.batch_id,
+                        entity_name=f"Batch #{a1.batch_id}",
+                        message=f"Batch #{a1.batch_id} has multiple classes scheduled at overlapping times in {s_desc}.",
+                        suggestion="Stagger practical or tutorial batch sessions across different time slots.",
+                    )
+                )
+
+            # H3 - Section collision (whole-section vs whole-section OR whole-section vs batch in same section)
+            if a1.section_id and a2.section_id and a1.section_id == a2.section_id:
+                if a1.batch_id is None or a2.batch_id is None or a1.batch_id == a2.batch_id:
+                    violations.append(
+                        ValidationViolation(
+                            severity="BLOCKER",
+                            code="SECTION_OVERLAP",
+                            entity_type="SECTION",
+                            entity_id=a1.section_id,
+                            entity_name=f"Section #{a1.section_id}",
+                            message=f"Section #{a1.section_id} has overlapping classes scheduled in {s_desc}.",
+                            suggestion="Stagger section lectures across different periods to avoid student schedule collision.",
+                        )
+                    )
 
     # 6. Required Course Hours
     for a in assignments.values():
@@ -250,26 +308,36 @@ def validate_timetable(entries: List[TimetableEntryResult], opt_input: Optimizer
                     )
                 )
 
-    return ValidationResult.from_violations(violations, has_entries=len(entries) > 0)
+    # Deduplicate violations
+    seen = set()
+    deduped: List[ValidationViolation] = []
+    for v in violations:
+        sig = (v.code, v.entity_id, v.message)
+        if sig not in seen:
+            seen.add(sig)
+            deduped.append(v)
+
+    return ValidationResult.from_violations(deduped, has_entries=len(entries) > 0)
 
 
 def validate_persisted_timetable(db: Session, version_id: int) -> ValidationResult:
     """
     Authoritative database validator for an existing TimetableVersion.
     Inspects all actual TimetableEntry records and linked relational entities
-    (Faculty, User, Room, Slot, Section, Course) in the active database.
+    (Faculty, User, Room, Slot, Section, Batch, Course) in the active database.
 
     Enforces:
     1. Non-empty schedule verification.
     2. Complete entry attribute checking.
-    3. Faculty double-booking detection (same faculty_id & slot_id).
-    4. Room collision detection (same room_id & slot_id).
-    5. Section schedule overlap detection (same section_id & slot_id).
-    6. Room active status check (room.status == 'ACTIVE').
-    7. Lab / Practical suitability (practical courses must use LAB rooms).
-    8. Room capacity sufficiency check against section size.
-    9. Faculty availability adherence (UNAVAILABLE slots flagged as BLOCKER).
-    10. Academic calendar holiday alignment check.
+    3. Invalid slot type check (BREAK / LUNCH flagged as BLOCKER).
+    4. Faculty double-booking detection (interval-overlap aware).
+    5. Room collision detection (interval-overlap aware).
+    6. Batch collision detection (interval-overlap aware).
+    7. Section schedule overlap detection (interval-overlap aware).
+    8. Room active status check (room.status == 'ACTIVE').
+    9. Lab / Practical suitability (practical courses must use LAB rooms).
+    10. Room capacity sufficiency check against section/batch size (H4 BLOCKER).
+    11. Faculty availability adherence (UNAVAILABLE slots flagged as BLOCKER).
     """
     version = (
         db.query(TimetableVersion)
@@ -280,6 +348,7 @@ def validate_persisted_timetable(db: Session, version_id: int) -> ValidationResu
             joinedload(TimetableVersion.timetable_entries).joinedload(TimetableEntry.room).joinedload(Room.building),
             joinedload(TimetableVersion.timetable_entries).joinedload(TimetableEntry.slot),
             joinedload(TimetableVersion.timetable_entries).joinedload(TimetableEntry.section),
+            joinedload(TimetableVersion.timetable_entries).joinedload(TimetableEntry.batch),
             joinedload(TimetableVersion.timetable_entries).joinedload(TimetableEntry.department),
         )
         .filter(TimetableVersion.id == version_id)
@@ -318,11 +387,6 @@ def validate_persisted_timetable(db: Session, version_id: int) -> ValidationResu
         for fa in fa_records:
             fa_lookup[(fa.faculty_id, fa.slot_id)] = fa.availability
 
-    # Schedules for collision tracking
-    faculty_map = defaultdict(list)  # (faculty_id, slot_id) -> list of entry
-    room_map = defaultdict(list)     # (room_id, slot_id) -> list of entry
-    section_map = defaultdict(list)  # (section_id, slot_id) -> list of entry
-
     for entry in entries:
         # 2. Incomplete entry check
         if entry.course_id is None or entry.faculty_id is None or entry.room_id is None or entry.slot_id is None:
@@ -337,14 +401,6 @@ def validate_persisted_timetable(db: Session, version_id: int) -> ValidationResu
             )
             continue
 
-        # Grouping for collision detection
-        faculty_map[(entry.faculty_id, entry.slot_id)].append(entry)
-        room_map[(entry.room_id, entry.slot_id)].append(entry)
-
-        # Whole-section lectures (where batch_id is None) cannot overlap
-        if entry.section_id is not None and entry.batch_id is None:
-            section_map[(entry.section_id, entry.slot_id)].append(entry)
-
         slot = entry.slot
         slot_label = f"{slot.day} {slot.start_time.strftime('%H:%M')}-{slot.end_time.strftime('%H:%M')}" if slot and slot.start_time and slot.end_time else f"Slot #{entry.slot_id}"
         room = entry.room
@@ -356,7 +412,21 @@ def validate_persisted_timetable(db: Session, version_id: int) -> ValidationResu
         section = entry.section
         section_label = section.section_name if section else f"Section #{entry.section_id}"
 
-        # 3. Room Active Status check
+        # 3. Invalid Slot Type (e.g. BREAK / LUNCH)
+        if slot and getattr(slot, "slot_type", None) in ("BREAK", "LUNCH"):
+            violations.append(
+                ValidationViolation(
+                    severity="BLOCKER",
+                    code="INVALID_SLOT_TYPE",
+                    entry_ids=[entry.id],
+                    entity_type="SLOT",
+                    entity_id=slot.id,
+                    message=f"Entry #{entry.id} is scheduled during a {slot.slot_type} slot ({slot_label}). Classes cannot be scheduled during breaks.",
+                    suggestion="Move assignment to an active teaching slot.",
+                )
+            )
+
+        # 4. Room Active Status check
         if room and getattr(room, "status", "ACTIVE") != "ACTIVE":
             violations.append(
                 ValidationViolation(
@@ -371,7 +441,7 @@ def validate_persisted_timetable(db: Session, version_id: int) -> ValidationResu
                 )
             )
 
-        # 4. Lab / Practical suitability check
+        # 5. Lab / Practical suitability check
         is_lab_required = (
             getattr(course, "requires_lab", False) is True
             or (getattr(course, "course_type", "") or "").upper() == "LAB"
@@ -393,24 +463,24 @@ def validate_persisted_timetable(db: Session, version_id: int) -> ValidationResu
                     )
                 )
 
-        # 5. Room Capacity vs Section Size check
-        sec_size = getattr(section, "student_count", None)
+        # 6. Room Capacity vs Class Size check (H4 - BLOCKER)
+        class_size = getattr(entry.batch, "student_count", None) if entry.batch_id and entry.batch else getattr(section, "student_count", None)
         rm_cap = getattr(room, "capacity", None)
-        if sec_size is not None and rm_cap is not None and sec_size > rm_cap:
+        if class_size is not None and rm_cap is not None and class_size > rm_cap:
             violations.append(
                 ValidationViolation(
-                    severity="WARNING",
+                    severity="BLOCKER",
                     code="CAPACITY_DEFICIT",
                     entry_ids=[entry.id],
                     entity_type="ROOM",
                     entity_id=room.id if room else None,
                     entity_name=room_label,
-                    message=f"Room {room_label} capacity ({rm_cap}) is smaller than Section {section_label} size ({sec_size} students).",
-                    suggestion=f"Move Entry #{entry.id} to a room with capacity >= {sec_size}.",
+                    message=f"Room {room_label} capacity ({rm_cap}) is smaller than required class size ({class_size} students) for Entry #{entry.id}.",
+                    suggestion=f"Move Entry #{entry.id} to a room with capacity >= {class_size}.",
                 )
             )
 
-        # 6. Faculty Availability adherence
+        # 7. Faculty Availability adherence
         fa_status = fa_lookup.get((entry.faculty_id, entry.slot_id))
         if fa_status == "UNAVAILABLE":
             violations.append(
@@ -438,77 +508,90 @@ def validate_persisted_timetable(db: Session, version_id: int) -> ValidationResu
                 )
             )
 
-    # 7. Faculty Double-Booking Collisions
-    for (f_id, s_id), coll_entries in faculty_map.items():
-        if len(coll_entries) > 1:
-            first_e = coll_entries[0]
-            f_name = first_e.faculty.user.name if (first_e.faculty and first_e.faculty.user and first_e.faculty.user.name) else f"Faculty #{f_id}"
-            s_obj = first_e.slot
-            slot_label = f"{s_obj.day} {s_obj.start_time.strftime('%H:%M')}-{s_obj.end_time.strftime('%H:%M')}" if (s_obj and s_obj.start_time) else f"Slot #{s_id}"
-            entry_ids = [e.id for e in coll_entries]
+    # 8. Pairwise Overlap Collisions across all entries (Interval-Overlap Semantics)
+    for i in range(len(entries)):
+        for j in range(i + 1, len(entries)):
+            e1 = entries[i]
+            e2 = entries[j]
+            if not e1.slot or not e2.slot:
+                continue
+            if not slots_overlap(e1.slot, e2.slot):
+                continue
 
-            violations.append(
-                ValidationViolation(
-                    severity="BLOCKER",
-                    code="FACULTY_OVERLAP",
-                    entry_ids=entry_ids,
-                    entity_type="FACULTY",
-                    entity_id=f_id,
-                    entity_name=f_name,
-                    message=f"Faculty {f_name} is double-booked across {len(coll_entries)} classes in slot {slot_label} (Entries: {', '.join(f'#{eid}' for eid in entry_ids)}).",
-                    suggestion=f"Reschedule one of the conflicting entries ({', '.join(f'#{eid}' for eid in entry_ids)}) to an alternate slot where {f_name} is free.",
+            s_obj = e1.slot
+            slot_label = f"{s_obj.day} {s_obj.start_time.strftime('%H:%M')}-{s_obj.end_time.strftime('%H:%M')}" if (s_obj and s_obj.start_time and s_obj.end_time) else f"Slot #{e1.slot_id}"
+
+            # H1 - Faculty collision
+            if e1.faculty_id and e2.faculty_id and e1.faculty_id == e2.faculty_id:
+                f_name = e1.faculty.user.name if (e1.faculty and e1.faculty.user and e1.faculty.user.name) else f"Faculty #{e1.faculty_id}"
+                violations.append(
+                    ValidationViolation(
+                        severity="BLOCKER",
+                        code="FACULTY_OVERLAP",
+                        entry_ids=[e1.id, e2.id],
+                        entity_type="FACULTY",
+                        entity_id=e1.faculty_id,
+                        entity_name=f_name,
+                        message=f"Faculty {f_name} is double-booked across conflicting classes at overlapping times in {slot_label} (Entries: #{e1.id}, #{e2.id}).",
+                        suggestion=f"Reschedule one of the conflicting entries (#{e1.id}, #{e2.id}) to an alternate slot where {f_name} is free.",
+                    )
                 )
-            )
 
-    # 8. Room Double-Booking Collisions
-    for (r_id, s_id), coll_entries in room_map.items():
-        if len(coll_entries) > 1:
-            first_e = coll_entries[0]
-            r_name = first_e.room.room_number if first_e.room and first_e.room.room_number else f"Room #{r_id}"
-            s_obj = first_e.slot
-            slot_label = f"{s_obj.day} {s_obj.start_time.strftime('%H:%M')}-{s_obj.end_time.strftime('%H:%M')}" if (s_obj and s_obj.start_time) else f"Slot #{s_id}"
-            entry_ids = [e.id for e in coll_entries]
-
-            violations.append(
-                ValidationViolation(
-                    severity="BLOCKER",
-                    code="ROOM_OVERLAP",
-                    entry_ids=entry_ids,
-                    entity_type="ROOM",
-                    entity_id=r_id,
-                    entity_name=r_name,
-                    message=f"Room {r_name} is double-booked across {len(coll_entries)} classes in slot {slot_label} (Entries: {', '.join(f'#{eid}' for eid in entry_ids)}).",
-                    suggestion=f"Assign conflicting classes ({', '.join(f'#{eid}' for eid in entry_ids)}) to separate rooms.",
+            # H2 - Room collision
+            if e1.room_id and e2.room_id and e1.room_id == e2.room_id:
+                r_name = e1.room.room_number if (e1.room and e1.room.room_number) else f"Room #{e1.room_id}"
+                violations.append(
+                    ValidationViolation(
+                        severity="BLOCKER",
+                        code="ROOM_OVERLAP",
+                        entry_ids=[e1.id, e2.id],
+                        entity_type="ROOM",
+                        entity_id=e1.room_id,
+                        entity_name=r_name,
+                        message=f"Room {r_name} is double-booked across conflicting classes at overlapping times in {slot_label} (Entries: #{e1.id}, #{e2.id}).",
+                        suggestion=f"Assign conflicting classes (#{e1.id}, #{e2.id}) to separate rooms.",
+                    )
                 )
-            )
 
-    # 9. Section Schedule Overlap Collisions
-    for (sec_id, s_id), coll_entries in section_map.items():
-        if len(coll_entries) > 1:
-            first_e = coll_entries[0]
-            sec_name = first_e.section.section_name if first_e.section and first_e.section.section_name else f"Section #{sec_id}"
-            s_obj = first_e.slot
-            slot_label = f"{s_obj.day} {s_obj.start_time.strftime('%H:%M')}-{s_obj.end_time.strftime('%H:%M')}" if (s_obj and s_obj.start_time) else f"Slot #{s_id}"
-            entry_ids = [e.id for e in coll_entries]
-
-            violations.append(
-                ValidationViolation(
-                    severity="BLOCKER",
-                    code="SECTION_OVERLAP",
-                    entry_ids=entry_ids,
-                    entity_type="SECTION",
-                    entity_id=sec_id,
-                    entity_name=sec_name,
-                    message=f"Section {sec_name} has {len(coll_entries)} overlapping whole-class lectures in slot {slot_label} (Entries: {', '.join(f'#{eid}' for eid in entry_ids)}).",
-                    suggestion="Stagger section lectures across different periods to avoid student schedule collision.",
+            # H3 - Batch collision
+            if e1.batch_id and e2.batch_id and e1.batch_id == e2.batch_id:
+                b_name = getattr(e1.batch, "batch_name", f"Batch #{e1.batch_id}")
+                violations.append(
+                    ValidationViolation(
+                        severity="BLOCKER",
+                        code="BATCH_OVERLAP",
+                        entry_ids=[e1.id, e2.id],
+                        entity_type="SECTION",
+                        entity_id=e1.batch_id,
+                        entity_name=b_name,
+                        message=f"{b_name} has multiple overlapping classes scheduled in {slot_label} (Entries: #{e1.id}, #{e2.id}).",
+                        suggestion="Stagger batch classes to avoid student schedule collision.",
+                    )
                 )
-            )
 
-    # 10. Deduplicate violations by (code, entity_id, message)
+            # H3 - Section collision (whole-section vs whole-section OR whole-section vs batch)
+            if e1.section_id and e2.section_id and e1.section_id == e2.section_id:
+                if e1.batch_id is None or e2.batch_id is None or e1.batch_id == e2.batch_id:
+                    sec_name = e1.section.section_name if e1.section else f"Section #{e1.section_id}"
+                    violations.append(
+                        ValidationViolation(
+                            severity="BLOCKER",
+                            code="SECTION_OVERLAP",
+                            entry_ids=[e1.id, e2.id],
+                            entity_type="SECTION",
+                            entity_id=e1.section_id,
+                            entity_name=sec_name,
+                            message=f"Section {sec_name} has overlapping classes scheduled in {slot_label} (Entries: #{e1.id}, #{e2.id}).",
+                            suggestion="Stagger section lectures across different periods to avoid student schedule collision.",
+                        )
+                    )
+
+    # 9. Deduplicate violations by (code, entity_id, sorted_entry_ids, message)
     seen = set()
     deduped_violations = []
     for v in violations:
-        sig = (v.code, v.entity_id, v.message)
+        sorted_eids = tuple(sorted(v.entry_ids))
+        sig = (v.code, v.entity_id, sorted_eids, v.message)
         if sig not in seen:
             seen.add(sig)
             deduped_violations.append(v)

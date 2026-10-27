@@ -211,7 +211,7 @@ def compute_score(validation_result: ValidationResult, entries: List[TimetableEn
 
     return {
         "total_score": total_score,
-        "hard_violations": len([v for v in validation_result.violations if v.severity == "HARD"]),
+        "hard_violations": len([v for v in validation_result.violations if v.severity in ("HARD", "BLOCKER")]),
         "soft_violations": actual_faculty_gaps + actual_student_gaps + actual_room_changes + actual_late_labs, 
         "room_utilization_pct": round(room_utilization_pct, 2),
         "faculty_workload_balance": round(workload_stddev, 2),

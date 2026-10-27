@@ -68,12 +68,11 @@ class TimetableSolver:
         return eligible
 
     def _get_eligible_slots(self, faculty_id: int) -> List[int]:
-        # Filter slots by faculty availability
+        # Filter slots by faculty availability and exclude BREAK/LUNCH periods
         eligible = []
         for t_id, slot in self.slots.items():
-            # If no availability record is found, we might assume available, 
-            # but to be strict, if faculty have availability records, we respect them.
-            # "Faculty can only be scheduled in permitted time slots."
+            if getattr(slot, "slot_type", "") in ("BREAK", "LUNCH"):
+                continue
             fa = self.faculty_availability[faculty_id].get(t_id)
             if fa and fa.availability == 'UNAVAILABLE':
                 continue
@@ -93,6 +92,7 @@ class TimetableSolver:
         a_r_t_vars = defaultdict(list)
         f_t_vars = defaultdict(list)
         s_t_vars = defaultdict(list)
+        b_t_vars = defaultdict(list)
         r_t_vars = defaultdict(list)
         
         self.assignment_vars = []
@@ -101,6 +101,7 @@ class TimetableSolver:
             course = self.courses[a.course_id]
             f_id = a.faculty_id
             sec_id = a.section_id
+            batch_id = a.batch_id
             
             hours_needed = {
                 'THEORY': course.lecture_hours + course.tutorial_hours,
@@ -132,6 +133,12 @@ class TimetableSolver:
                         f_t_vars[(f_id, t_id)].append(v)
                         if sec_id:
                             s_t_vars[(sec_id, t_id)].append(v)
+                        if batch_id:
+                            b_t_vars[(batch_id, t_id)].append(v)
+                        elif sec_id:
+                            for b in self.batches.values():
+                                if b.section_id == sec_id:
+                                    b_t_vars[(b.id, t_id)].append(v)
                         r_t_vars[(r_id, t_id)].append(v)
                 
                 self.assignment_vars.append((a, h_type, req_hours, var_list))
@@ -151,11 +158,45 @@ class TimetableSolver:
         for (sec_id, t_id), vars_in_slot in s_t_vars.items():
             if len(vars_in_slot) > 1:
                 self.model.add_at_most_one(vars_in_slot)
+
+        # C2. Batch Conflict (<= 1 per slot)
+        for (b_id, t_id), vars_in_slot in b_t_vars.items():
+            if len(vars_in_slot) > 1:
+                self.model.add_at_most_one(vars_in_slot)
                 
         # D. Room Conflict (<= 1 per slot)
         for (r_id, t_id), vars_in_slot in r_t_vars.items():
             if len(vars_in_slot) > 1:
                 self.model.add_at_most_one(vars_in_slot)
+
+        # Overlapping interval constraints (for slots with different IDs that overlap in time)
+        slot_list = list(self.slots.values())
+        for i in range(len(slot_list)):
+            for j in range(i + 1, len(slot_list)):
+                sl1 = slot_list[i]
+                sl2 = slot_list[j]
+                if sl1.day == sl2.day and sl1.start_time and sl1.end_time and sl2.start_time and sl2.end_time:
+                    if max(sl1.start_time, sl2.start_time) < min(sl1.end_time, sl2.end_time):
+                        for f_id in self.faculty.keys():
+                            v1 = f_t_vars.get((f_id, sl1.id), [])
+                            v2 = f_t_vars.get((f_id, sl2.id), [])
+                            if v1 and v2:
+                                self.model.add_at_most_one(v1 + v2)
+                        for r_id in self.rooms.keys():
+                            v1 = r_t_vars.get((r_id, sl1.id), [])
+                            v2 = r_t_vars.get((r_id, sl2.id), [])
+                            if v1 and v2:
+                                self.model.add_at_most_one(v1 + v2)
+                        for sec_id in self.sections.keys():
+                            v1 = s_t_vars.get((sec_id, sl1.id), [])
+                            v2 = s_t_vars.get((sec_id, sl2.id), [])
+                            if v1 and v2:
+                                self.model.add_at_most_one(v1 + v2)
+                        for b_id in self.batches.keys():
+                            v1 = b_t_vars.get((b_id, sl1.id), [])
+                            v2 = b_t_vars.get((b_id, sl2.id), [])
+                            if v1 and v2:
+                                self.model.add_at_most_one(v1 + v2)
                 
         # E. Elective Group Conflict (<= 1 course per elective group per slot per section)
         # Note: We group assignments by (elective_group, section, slot)

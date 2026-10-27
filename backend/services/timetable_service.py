@@ -80,7 +80,7 @@ def execute_timetable_generation(
     if solver_res.feasible:
         # 3. Independent validation
         val_result = validate_timetable(solver_res.entries, optimizer_input)
-        hard_violations = [v for v in val_result.violations if v.severity == "HARD"]
+        hard_violations = [v for v in val_result.violations if v.severity in ("HARD", "BLOCKER")]
         if hard_violations:
             violation_msgs = ", ".join(v.message for v in hard_violations)
             return TimetableGenerationResult(

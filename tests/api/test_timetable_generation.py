@@ -142,7 +142,7 @@ def test_generate_timetable_infeasible(admin_token):
         assert department is not None
         assert program is not None
 
-    with patch('backend.routes.timetable.TimetableSolver.solve') as mock_solve:
+    with patch('backend.services.timetable_service.TimetableSolver.solve') as mock_solve:
         from backend.optimizer.timetable_solver import SolverResult
         mock_solve.return_value = SolverResult(
             feasible=False,
