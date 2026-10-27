@@ -59,6 +59,8 @@ class ResourceBookingBase(BaseModel):
     def validate_interval(self) -> "ResourceBookingBase":
         if self.start_time >= self.end_time:
             raise ValueError("end_time must be strictly after start_time")
+        if self.date < datetime.date.today():
+            raise ValueError("Booking date cannot be in the past")
         return self
 
 
@@ -104,6 +106,17 @@ class AlternativeResource(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AlternativeTime(BaseModel):
+    resource_id: int
+    resource_name: str
+    date: datetime.date
+    start_time: datetime.time
+    end_time: datetime.time
+    duration_minutes: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ConflictDetail(BaseModel):
     conflict_type: Literal["EXISTING_BOOKING", "PUBLISHED_TIMETABLE", "RESOURCE_INACTIVE", "ACTIVE_BOOKING_LOCK"]
     description: str
@@ -120,3 +133,4 @@ class AvailabilityResponse(BaseModel):
     available: bool
     conflicts: List[ConflictDetail] = Field(default_factory=list)
     alternatives: List[AlternativeResource] = Field(default_factory=list)
+    alternative_times: List[AlternativeTime] = Field(default_factory=list)

@@ -25,10 +25,12 @@ from backend.schemas.resources import (
     ResourceBookingCreate,
     ConflictDetail,
     AlternativeResource,
+    AlternativeTime,
 )
 from backend.services.resource_booking_service import (
     check_resource_conflicts,
     find_alternative_resources,
+    find_alternative_times,
     create_booking_request,
     cancel_booking_request,
     approve_booking_request,
@@ -135,6 +137,7 @@ def check_resource_availability_data(
     )
 
     alternatives: List[AlternativeResource] = []
+    alt_times: List[AlternativeTime] = []
     if not available:
         alternatives = find_alternative_resources(
             db=db,
@@ -142,6 +145,14 @@ def check_resource_availability_data(
             date=date,
             start_time=start_time,
             end_time=end_time,
+            limit=5,
+        )
+        duration_minutes = int((datetime.datetime.combine(date, end_time) - datetime.datetime.combine(date, start_time)).total_seconds() // 60)
+        alt_times = find_alternative_times(
+            db=db,
+            resource_id=resource_id,
+            date=date,
+            duration_minutes=duration_minutes,
             limit=5,
         )
 
@@ -157,6 +168,7 @@ def check_resource_availability_data(
         "available": available,
         "conflicts": [c.model_dump(mode="json") for c in conflicts],
         "alternatives": [a.model_dump(mode="json") for a in alternatives],
+        "alternative_times": [t.model_dump(mode="json") for t in alt_times],
     }
 
 

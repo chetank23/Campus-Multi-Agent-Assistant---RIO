@@ -791,14 +791,16 @@ def run_resource_agent(
                             return {
                                 "intent": "RESOURCE_ADMIN",
                                 "selected_agent": "resource_agent",
-                                "action_type": "STATUS_INVALID",
+                                "action_type": "ADMIN_GUIDANCE",
                                 "final_response": sanitize_plain_english(
+                                    f"Administrative Booking Review\n\n"
                                     f"Cannot approve booking #{bid} because its current status is '{target_booking.status}'. "
-                                    f"Only PENDING booking requests can be approved."
+                                    f"Only PENDING booking requests can be approved.\n\n"
+                                    f"Please review and finalize approvals directly in the Admin Resource Management Workspace at /admin/resources."
                                 ),
                                 "tool_calls": [],
                                 "sources": sources,
-                                "success": False,
+                                "success": True,
                             }
                         res_row = db.query(Resource).filter(Resource.id == target_booking.resource_id).first()
                         res_name = res_row.name if res_row else f"Resource #{target_booking.resource_id}"

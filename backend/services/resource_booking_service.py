@@ -13,17 +13,19 @@ Core domain logic for the Resource Allocation Engine:
 from __future__ import annotations
 
 import datetime
+import re
 from typing import List, Optional, Tuple
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from backend.models.resources import Resource, ResourceBooking
-from backend.models.space_time import Room, TimeSlot
+from backend.models.space_time import Lab, Room, TimeSlot
 from backend.models.timetable import TimetableEntry, TimetableVersion
 from backend.models.workflow import AuditLog
 from backend.schemas.resources import (
     AlternativeResource,
+    AlternativeTime,
     ConflictDetail,
     ResourceBookingCreate,
     ResourceCreate,
@@ -51,11 +53,23 @@ def find_matching_room(db: Session, resource: Resource) -> Optional[Room]:
         if room:
             return room
 
-    # Check direct name match against room_number
+    # Check direct name match against room_number (with optional prefix stripping)
     if resource.name:
-        room = db.query(Room).filter(Room.room_number.ilike(resource.name.strip())).first()
+        clean_name = re.sub(r"^(?:room|lab|hall|seminar\s+hall)\s+", "", resource.name.strip(), flags=re.IGNORECASE)
+        room = db.query(Room).filter(
+            or_(
+                Room.room_number.ilike(resource.name.strip()),
+                Room.room_number.ilike(clean_name),
+            )
+        ).first()
         if room:
             return room
+
+    # Check lab_name match against Lab model
+    if resource.name:
+        lab = db.query(Lab).filter(Lab.lab_name.ilike(f"%{resource.name.strip()}%")).first()
+        if lab and lab.room:
+            return lab.room
 
     return None
 
@@ -158,7 +172,8 @@ def check_resource_conflicts(
     # 3. Published timetable check (for physical room-based resources)
     room = find_matching_room(db, resource)
     if room:
-        day_of_week = date.strftime("%A").upper()
+        day_3 = date.strftime("%a").upper()
+        day_full = date.strftime("%A").upper()
 
         # Join TimetableEntry -> TimetableVersion (PUBLISHED only) & TimeSlot
         tt_conflicts = (
@@ -169,7 +184,7 @@ def check_resource_conflicts(
                 TimetableVersion.status == "PUBLISHED",
                 TimetableEntry.room_id == room.id,
                 TimetableEntry.status.in_(["ACTIVE", "DRAFT"]),
-                TimeSlot.day == day_of_week,
+                TimeSlot.day.in_([day_3, day_full]),
                 TimeSlot.start_time < end_time,
                 TimeSlot.end_time > start_time,
             )
@@ -182,7 +197,7 @@ def check_resource_conflicts(
                     conflict_type="PUBLISHED_TIMETABLE",
                     description=(
                         f"Physical room '{room.room_number}' is occupied by published timetable class "
-                        f"on {day_of_week} ({slot.start_time.strftime('%H:%M')} - {slot.end_time.strftime('%H:%M')})"
+                        f"on {day_full} ({slot.start_time.strftime('%H:%M')} - {slot.end_time.strftime('%H:%M')})"
                     ),
                     conflicting_id=entry.id,
                     start_time=slot.start_time,
@@ -251,6 +266,65 @@ def find_alternative_resources(
     return alternatives
 
 
+def find_alternative_times(
+    db: Session,
+    resource_id: int,
+    date: datetime.date,
+    duration_minutes: int,
+    limit: int = 5,
+) -> List[AlternativeTime]:
+    """
+    Finds available alternative time intervals for the same resource on the requested date.
+    Evaluates candidate standard campus operating windows (09:00 to 17:00).
+    """
+    resource = db.query(Resource).filter(Resource.id == resource_id).first()
+    if not resource or resource.status != "ACTIVE":
+        return []
+
+    candidate_starts = [
+        datetime.time(9, 0),
+        datetime.time(10, 0),
+        datetime.time(11, 15),
+        datetime.time(12, 15),
+        datetime.time(14, 0),
+        datetime.time(15, 0),
+        datetime.time(16, 0),
+    ]
+
+    duration_delta = datetime.timedelta(minutes=duration_minutes)
+    alternatives: List[AlternativeTime] = []
+
+    for start_t in candidate_starts:
+        dummy_dt = datetime.datetime.combine(date, start_t)
+        end_dt = dummy_dt + duration_delta
+        if end_dt.time() > datetime.time(18, 0):
+            continue
+        end_t = end_dt.time()
+
+        is_avail, _ = check_resource_conflicts(
+            db=db,
+            resource_id=resource_id,
+            date=date,
+            start_time=start_t,
+            end_time=end_t,
+        )
+        if is_avail:
+            alternatives.append(
+                AlternativeTime(
+                    resource_id=resource.id,
+                    resource_name=resource.name or f"Resource #{resource.id}",
+                    date=date,
+                    start_time=start_t,
+                    end_time=end_t,
+                    duration_minutes=duration_minutes,
+                )
+            )
+            if len(alternatives) >= limit:
+                break
+
+    return alternatives
+
+
 # ── Booking Mutations with Atomic State & Concurrency Safety ──────────────────
 
 def create_booking_request(
@@ -292,6 +366,13 @@ def create_booking_request(
             start_time=booking_in.start_time,
             end_time=booking_in.end_time,
         )
+        duration_minutes = int((datetime.datetime.combine(booking_in.date, booking_in.end_time) - datetime.datetime.combine(booking_in.date, booking_in.start_time)).total_seconds() // 60)
+        alt_times = find_alternative_times(
+            db=db,
+            resource_id=booking_in.resource_id,
+            date=booking_in.date,
+            duration_minutes=duration_minutes,
+        )
         conflict_msg = "; ".join(c.description for c in conflicts)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -299,6 +380,7 @@ def create_booking_request(
                 "message": f"Resource unavailable due to conflict: {conflict_msg}",
                 "conflicts": [c.model_dump(mode="json") for c in conflicts],
                 "alternatives": [a.model_dump(mode="json") for a in alternatives],
+                "alternative_times": [t.model_dump(mode="json") for t in alt_times],
             },
         )
 

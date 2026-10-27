@@ -24,6 +24,13 @@ from agents.resource_agent.proposal_store import resource_proposal_store
 from agents.common.operation_proposal_store import operation_proposal_store
 from agents.action_registry import action_registry
 from agents.common.formatter import sanitize_plain_english
+from agents.resource_agent.parser import (
+    parse_date,
+    parse_time_interval,
+    extract_resource_details,
+)
+from agents.tools.faculty_tools import get_available_faculty_data
+
 
 
 def classify_intent(message: str) -> str:
@@ -96,6 +103,17 @@ def classify_intent(message: str) -> str:
     for pat in room_update_patterns:
         if re.search(pat, msg):
             return "RESOURCE_BOOKING"
+
+    # 4.5 Composite Multi-Agent Requests (Resource Booking + Faculty Supervision)
+    composite_patterns = [
+        r"\b(?:book|reserve)\b.*?\b(?:faculty|prof|professors|teachers?|supervis(?:e|or|ion))\b.*?\b(?:free|available)\b",
+        r"\b(?:book|reserve)\b.*?\b(?:who|which)\b.*?\b(?:faculty|prof|teachers?)\b.*?\b(?:free|available|supervise)\b",
+        r"\b(?:book|reserve)\b.*?\b(?:tell\s+me|find|show|which|who)\b.*?\b(?:faculty|prof|professors?)\b.*?\b(?:free|available|supervise)\b",
+        r"\b(?:faculty|prof|professors?)\b.*?\b(?:free|available|supervise)\b.*?\b(?:book|reserve)\b",
+    ]
+    for pat in composite_patterns:
+        if re.search(pat, msg):
+            return "COMPOSITE_BOOKING_SUPERVISION"
 
     # 5. Resource Agent requests (Discovery, Availability, Booking, Status, Cancellation, Pending queries)
     resource_patterns = [
@@ -319,6 +337,12 @@ def supervisor_node(state: AgentState) -> AgentState:
             "selected_agent": "scheduling_agent",
         }
 
+    elif intent == "COMPOSITE_BOOKING_SUPERVISION":
+        return {
+            "intent": intent,
+            "selected_agent": "composite_coordinator",
+        }
+
     elif intent == "RESOURCE_BOOKING":
         return {
             "intent": intent,
@@ -359,7 +383,109 @@ def supervisor_node(state: AgentState) -> AgentState:
         }
 
 
-def route_supervisor(state: AgentState) -> Literal["query_agent_node", "scheduling_agent_node", "resource_agent_node", "end_node"]:
+def run_composite_booking_supervision(
+    state: AgentState,
+    db: Session,
+    user: User,
+) -> Dict[str, Any]:
+    """
+    Coordinates multi-step composite requests involving both Resource Allocation and Query Agent services:
+    e.g., "Book Lab 3 for 2 PM tomorrow and tell me which faculty are free to supervise it."
+    Executes authoritative facility availability validation and proposal creation, followed by
+    database-grounded faculty schedule inspection, synthesizing a unified, transparent response.
+    """
+    message = state.get("message", "")
+    req_date = parse_date(message)
+    req_start, req_end = parse_time_interval(message)
+    res_details = extract_resource_details(message)
+
+    tool_calls: List[Dict[str, Any]] = list(state.get("tool_calls", []))
+    sources: List[str] = list(state.get("sources", []))
+
+    # Clarification if missing critical date/time/resource
+    missing_elements: List[str] = []
+    if not res_details.get("resource_name") and not res_details.get("resource_type") and not res_details.get("resource_id"):
+        missing_elements.append("the facility or lab name (e.g., Lab 3, Seminar Hall A)")
+    if req_date is None:
+        missing_elements.append("the target date (e.g., tomorrow or 2026-10-28)")
+    if req_start is None or req_end is None:
+        missing_elements.append("the time interval (e.g., 2:00 PM to 3:00 PM)")
+
+    if missing_elements or req_date is None or req_start is None or req_end is None:
+        clarification_msg = (
+            "To check facility availability and identify available supervising faculty, please provide:\n"
+            + "\n".join(f"- {m}" for m in missing_elements)
+        )
+        return {
+            "intent": "CLARIFICATION_REQUIRED",
+            "selected_agent": "composite_coordinator",
+            "action_type": "CLARIFICATION_REQUIRED",
+            "final_response": sanitize_plain_english(clarification_msg),
+            "tool_calls": tool_calls,
+            "sources": ["Supervisor Agent"],
+            "success": True,
+        }
+
+    # 1. Execute Resource Allocation Agent for booking proposal or alternatives
+    res_agent_result = run_resource_agent(state=dict(state), db=db, user=user)
+    res_reply = res_agent_result.get("final_response") or ""
+    res_tool_calls = res_agent_result.get("tool_calls") or []
+    res_proposal = res_agent_result.get("proposal")
+    res_action = res_agent_result.get("action_type")
+
+    tool_calls.extend(res_tool_calls)
+    sources.append("Resource Allocation Engine")
+
+    # 2. Execute Faculty Availability lookup
+    tool_calls.append({
+        "tool": "get_available_faculty",
+        "args": {
+            "date": req_date.isoformat(),
+            "start_time": req_start.strftime("%H:%M"),
+            "end_time": req_end.strftime("%H:%M"),
+        },
+    })
+    sources.extend(["Published Academic Timetable", "Faculty Directory"])
+
+    faculty_data = get_available_faculty_data(
+        db=db,
+        date=req_date,
+        start_time=req_start,
+        end_time=req_end,
+    )
+
+    # 3. Synthesize unified response
+    faculty_lines: List[str] = []
+    if faculty_data["total_available"] > 0:
+        faculty_lines.append(
+            f"Available Faculty for Supervision ({req_date.isoformat()} from {req_start.strftime('%H:%M')} to {req_end.strftime('%H:%M')}):"
+        )
+        for f in faculty_data["available_faculty"][:6]:
+            faculty_lines.append(f"- {f['name']} ({f['designation']}, {f['department']} - {f['specialization']})")
+        if faculty_data["total_available"] > 6:
+            faculty_lines.append(f"- ... and {faculty_data['total_available'] - 6} other available faculty members")
+    else:
+        faculty_lines.append(
+            f"No faculty members are currently free of scheduled classes or marked available during this interval "
+            f"({req_start.strftime('%H:%M')} - {req_end.strftime('%H:%M')})."
+        )
+
+    faculty_section = "\n".join(faculty_lines)
+    combined_response = f"{res_reply}\n\n---\n\n{faculty_section}"
+
+    return {
+        "intent": "COMPOSITE_BOOKING_SUPERVISION",
+        "selected_agent": "composite_coordinator",
+        "action_type": res_action or "COMPOSITE_RESPONSE",
+        "final_response": sanitize_plain_english(combined_response),
+        "proposal": res_proposal,
+        "tool_calls": tool_calls,
+        "sources": list(dict.fromkeys(sources)),
+        "success": res_agent_result.get("success", True),
+    }
+
+
+def route_supervisor(state: AgentState) -> Literal["query_agent_node", "scheduling_agent_node", "resource_agent_node", "composite_coordinator_node", "end_node"]:
     """
     Conditional routing function for LangGraph.
     """
@@ -370,6 +496,8 @@ def route_supervisor(state: AgentState) -> Literal["query_agent_node", "scheduli
         return "scheduling_agent_node"
     elif selected == "resource_agent":
         return "resource_agent_node"
+    elif selected == "composite_coordinator":
+        return "composite_coordinator_node"
     return "end_node"
 
 
@@ -397,6 +525,11 @@ def build_supervisor_graph(db: Session, user: User):
 
     workflow.add_node("resource_agent_node", resource_node_runner)
 
+    def composite_node_runner(state: AgentState) -> Dict[str, Any]:
+        return run_composite_booking_supervision(state=state, db=db, user=user)
+
+    workflow.add_node("composite_coordinator_node", composite_node_runner)
+
     def end_node(state: AgentState) -> Dict[str, Any]:
         return {}
 
@@ -412,6 +545,7 @@ def build_supervisor_graph(db: Session, user: User):
             "query_agent_node": "query_agent_node",
             "scheduling_agent_node": "scheduling_agent_node",
             "resource_agent_node": "resource_agent_node",
+            "composite_coordinator_node": "composite_coordinator_node",
             "end_node": "end_node",
         },
     )
@@ -419,6 +553,7 @@ def build_supervisor_graph(db: Session, user: User):
     workflow.add_edge("query_agent_node", "end_node")
     workflow.add_edge("scheduling_agent_node", "end_node")
     workflow.add_edge("resource_agent_node", "end_node")
+    workflow.add_edge("composite_coordinator_node", "end_node")
     workflow.add_edge("end_node", END)
 
     return workflow.compile()

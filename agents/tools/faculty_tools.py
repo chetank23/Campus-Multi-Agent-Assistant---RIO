@@ -7,15 +7,17 @@ Masks sensitive private fields and enforces role boundaries.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from datetime import date, datetime as dt, time
+from typing import Any, Dict, List, Optional, Union
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from backend.models.academic import Department, Faculty, Section
 from backend.models.courses import Course
 from backend.models.identity import User
-from backend.models.space_time import Room, TimeSlot
+from backend.models.space_time import Room, TimeSlot, FacultyAvailability
 from backend.models.timetable import TimetableEntry, TimetableVersion
+
 
 
 def get_faculty_schedule_data(
@@ -164,3 +166,116 @@ def get_faculty_profile_data(
         "count": len(results),
         "results": results,
     }
+
+
+def get_available_faculty_data(
+    db: Session,
+    date: Union[str, date],
+    start_time: Union[str, time],
+    end_time: Union[str, time],
+    department_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Identifies active faculty members who are genuinely available for a specific date and time interval.
+    Authoritative checks:
+    1. No overlapping published timetable assignments.
+    2. No UNAVAILABLE status in faculty_availability for overlapping slots.
+    3. User account is active.
+    """
+    if isinstance(date, str):
+        target_date = dt.strptime(date, "%Y-%m-%d").date()
+    else:
+        target_date = date
+
+    day_full = target_date.strftime("%A").upper()
+    day_3 = day_full[:3]
+
+    if isinstance(start_time, str):
+        parts = [int(p) for p in start_time.split(":")[:2]]
+        st = time(parts[0], parts[1])
+    else:
+        st = start_time
+
+    if isinstance(end_time, str):
+        parts = [int(p) for p in end_time.split(":")[:2]]
+        et = time(parts[0], parts[1])
+    else:
+        et = end_time
+
+    busy_faculty_ids: set[int] = set()
+
+    # 1. Published timetable conflicts
+    published_version = (
+        db.query(TimetableVersion)
+        .filter(TimetableVersion.status == "PUBLISHED")
+        .order_by(TimetableVersion.published_at.desc(), TimetableVersion.id.desc())
+        .first()
+    )
+
+    if published_version:
+        tt_conflicts = (
+            db.query(TimetableEntry.faculty_id)
+            .join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id)
+            .filter(
+                TimetableEntry.version_id == published_version.id,
+                TimeSlot.day.in_([day_3, day_full]),
+                TimeSlot.start_time < et,
+                TimeSlot.end_time > st,
+                TimetableEntry.faculty_id.isnot(None),
+            )
+            .all()
+        )
+        for (fid,) in tt_conflicts:
+            if fid:
+                busy_faculty_ids.add(fid)
+
+    # 2. Explicit faculty availability records (UNAVAILABLE)
+    fa_conflicts = (
+        db.query(FacultyAvailability.faculty_id)
+        .join(TimeSlot, FacultyAvailability.slot_id == TimeSlot.id)
+        .filter(
+            FacultyAvailability.availability == "UNAVAILABLE",
+            TimeSlot.day.in_([day_3, day_full]),
+            TimeSlot.start_time < et,
+            TimeSlot.end_time > st,
+            FacultyAvailability.faculty_id.isnot(None),
+        )
+        .all()
+    )
+    for (fid,) in fa_conflicts:
+        if fid:
+            busy_faculty_ids.add(fid)
+
+    # 3. Query all active faculty
+    faculty_query = (
+        db.query(Faculty)
+        .join(User, Faculty.user_id == User.id)
+        .filter(User.is_active.is_(True))
+    )
+    if department_id:
+        faculty_query = faculty_query.filter(Faculty.department_id == department_id)
+
+    all_faculty = faculty_query.all()
+
+    available_list: List[Dict[str, Any]] = []
+    for f in all_faculty:
+        if f.id not in busy_faculty_ids:
+            dept = db.query(Department).filter(Department.id == f.department_id).first() if f.department_id else None
+            available_list.append({
+                "id": f.id,
+                "faculty_id": f.faculty_id,
+                "name": f.user.name if f.user else "Faculty Member",
+                "department": dept.name if dept else "N/A",
+                "designation": f.designation or "Faculty",
+                "specialization": f.specialization or "N/A",
+            })
+
+    return {
+        "date": target_date.isoformat(),
+        "day": day_full,
+        "interval": f"{st.strftime('%H:%M')} - {et.strftime('%H:%M')}",
+        "total_available": len(available_list),
+        "busy_count": len(busy_faculty_ids),
+        "available_faculty": available_list,
+    }
+

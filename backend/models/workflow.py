@@ -111,3 +111,31 @@ class AuditLog(Base):
     )
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="audit_logs")
+
+
+class AgentProposal(Base):
+    __tablename__ = "agent_proposals"
+    __table_args__ = (
+        Index("ix_agent_proposals_proposal_id", "proposal_id", unique=True),
+        Index("ix_agent_proposals_lookup", "user_id", "proposal_type", "consumed", "superseded"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    proposal_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    proposal_type: Mapped[str] = mapped_column(String(50))  # 'SCHEDULING', 'RESOURCE_BOOKING', 'OPERATION'
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", name="fk_ap_user_id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    parent_proposal_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    superseded: Mapped[bool] = mapped_column(Boolean, default=False, server_default="FALSE")
+    superseded_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    consumed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="FALSE")
+    payload: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=utc_now, server_default=func.now()
+    )
+    expires_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+
+    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id])

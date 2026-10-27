@@ -36,6 +36,7 @@ from backend.services.resource_booking_service import (
     create_resource,
     delete_or_deactivate_resource,
     find_alternative_resources,
+    find_alternative_times,
     reject_booking_request,
     update_resource,
 )
@@ -274,6 +275,7 @@ def check_availability(
     )
 
     alternatives = []
+    alt_times = []
     if not available:
         alternatives = find_alternative_resources(
             db=db,
@@ -281,6 +283,13 @@ def check_availability(
             date=date,
             start_time=start_time,
             end_time=end_time,
+        )
+        duration_minutes = int((datetime.datetime.combine(date, end_time) - datetime.datetime.combine(date, start_time)).total_seconds() // 60)
+        alt_times = find_alternative_times(
+            db=db,
+            resource_id=resource_id,
+            date=date,
+            duration_minutes=duration_minutes,
         )
 
     return AvailabilityResponse(
@@ -291,6 +300,7 @@ def check_availability(
         available=available,
         conflicts=conflicts,
         alternatives=alternatives,
+        alternative_times=alt_times,
     )
 
 

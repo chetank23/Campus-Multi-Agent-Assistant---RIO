@@ -215,6 +215,22 @@ def parse_time_interval(text: str) -> Tuple[Optional[datetime.time], Optional[da
             end_dt = start_dt + datetime.timedelta(hours=duration_hrs)
             return start_t, end_dt.time()
 
+    # Pattern C: Single time point: "at <start>", "for <start>", or standalone time e.g. "for 2 PM", "at 14:00"
+    # Defaults duration to 1 hour (standard academic period)
+    single_pattern = r"\b(?:at|for)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b"
+    m_single = re.search(single_pattern, cleaned)
+    if not m_single:
+        m_single = re.search(r"\b(?:at|for)\s+(\d{1,2}:\d{2})\b", cleaned)
+    if not m_single:
+        m_single = re.search(r"\b(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b", cleaned)
+    if m_single:
+        start_str = m_single.group(1).strip()
+        start_t = parse_time_str(start_str)
+        if start_t:
+            start_dt = datetime.datetime.combine(datetime.date.today(), start_t)
+            end_dt = start_dt + datetime.timedelta(hours=1)
+            return start_t, end_dt.time()
+
     return None, None
 
 
@@ -272,12 +288,16 @@ def extract_resource_details(text: str) -> Dict[str, Any]:
             break
 
     # Purpose extraction: "for <purpose>", e.g. "for AI workshop", "for guest lecture"
-    # Make sure we don't grab "for 2 hours" or "for 50 students"
-    purpose_match = re.search(r"\bfor\s+(?!\d+\s*(?:hour|hr|student|seat|people))([a-zA-Z0-9\s,.-]+)$", text, re.IGNORECASE)
+    # Make sure we don't grab "for 2 hours", "for 50 students", "for 2 pm", "for 14:00"
+    purpose_match = re.search(
+        r"\bfor\s+(?!\d+\s*(?:hour|hr|hours|hrs|student|seat|people|am|pm)|(?:\d{1,2}:\d{2})|\d{1,2}\s*(?:am|pm))([a-zA-Z0-9\s,.-]+)$",
+        text,
+        re.IGNORECASE,
+    )
     if purpose_match:
         candidate_purpose = purpose_match.group(1).strip()
-        # Clean up any trailing punctuation or date words if present
-        candidate_purpose = re.sub(r"\b(on|at|from)\b.*$", "", candidate_purpose, flags=re.IGNORECASE).strip()
+        # Clean up any trailing punctuation, date words, or follow-up clauses
+        candidate_purpose = re.sub(r"\b(on|at|from|and\s+tell|and\s+check|and\s+find)\b.*$", "", candidate_purpose, flags=re.IGNORECASE).strip()
         if len(candidate_purpose) >= 3:
             res_details["purpose"] = candidate_purpose
 

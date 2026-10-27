@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 
 from backend.models.identity import User
 from agents.tools.student_tools import get_student_timetable_data, get_class_status_data
-from agents.tools.faculty_tools import get_faculty_schedule_data, get_faculty_profile_data
+from agents.tools.faculty_tools import (
+    get_faculty_schedule_data,
+    get_faculty_profile_data,
+    get_available_faculty_data,
+)
 from agents.tools.campus_tools import (
     get_course_details_data,
     get_room_or_lab_details_data,
@@ -69,6 +73,21 @@ QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                 }
             },
             "required": ["search_query"],
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_available_faculty",
+        "description": "Identifies active faculty members who have no teaching classes or unavailability during a given date and time interval.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string", "description": "Target date in YYYY-MM-DD format"},
+                "start_time": {"type": "string", "description": "Start time in HH:MM format"},
+                "end_time": {"type": "string", "description": "End time in HH:MM format"},
+                "department_id": {"type": "integer", "description": "Optional department filter"},
+            },
+            "required": ["date", "start_time", "end_time"],
         },
         "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
     },
@@ -292,6 +311,15 @@ def execute_tool(
                 db=db,
                 viewer=user,
                 search_query=tool_args.get("search_query", ""),
+            )
+
+        elif tool_name == "get_available_faculty":
+            return get_available_faculty_data(
+                db=db,
+                date=tool_args["date"],
+                start_time=tool_args["start_time"],
+                end_time=tool_args["end_time"],
+                department_id=tool_args.get("department_id"),
             )
 
         elif tool_name == "get_course_details":
