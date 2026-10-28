@@ -50,7 +50,7 @@ from .timetable import TimetableEntry, TimetableVersion  # noqa: F401
 from .resources import Resource, ResourceBooking  # noqa: F401
 
 # Workflow
-from .workflow import AgentProposal, AuditLog, ChangeRequest, Notification  # noqa: F401
+from .workflow import AgentProposal, AuditLog, ChangeRequest, Notification, NotificationOutbox  # noqa: F401
 
 # Expose the metadata object Alembic needs
 metadata = Base.metadata
@@ -85,4 +85,5 @@ __all__ = [
     "Notification",
     "AuditLog",
     "AgentProposal",
+    "NotificationOutbox",
 ]

@@ -51,6 +51,9 @@ def classify_intent(message: str) -> str:
     if re.search(r"\b(?:confirm|execute|approve|proceed)\s+res_prop_[a-zA-Z0-9_-]+\b", msg):
         return "RESOURCE_BOOKING"
 
+    if re.search(r"\b(?:confirm|execute|approve|proceed)\s+disrupt_prop_[a-zA-Z0-9_-]+\b", msg):
+        return "TIMETABLE_GENERATION"
+
     # 2. Scheduling Readiness Check (Read-only assessment, Admin only)
     readiness_patterns = [
         r"\breadiness\b",
@@ -90,6 +93,12 @@ def classify_intent(message: str) -> str:
         r"\breduce\b.*?\bconsecutive\b",
         r"\b(?:faculty|prof|dr\.?)\b.*?\b(unavailable|available|preferred)\b",
         r"\bunavailable\b.*?\b(monday|tuesday|wednesday|thursday|friday|saturday|afternoon|morning)\b",
+        r"\bdisrupt(ion|ions)?\b",
+        r"\breschedule\b",
+        r"\b(room|lab)\b.*?\bmaintenance\b",
+        r"\bmaintenance\b.*?\b(room|lab)\b",
+        r"\b(block|close)\b.*?\b(room|lab)\b.*?\bfor\s+maintenance\b",
+        r"\b(faculty|prof|dr\.?)\b.*?\b(leave|sick|absence)\b",
     ]
     for pat in scheduling_patterns:
         if re.search(pat, msg):

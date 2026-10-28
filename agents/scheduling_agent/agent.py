@@ -33,6 +33,9 @@ from agents.tools.scheduling_tools import (
     execute_publish_timetable_data,
     inspect_timetable_conflicts_data,
     update_faculty_availability_data,
+    analyze_disruption_impact_data,
+    create_rescheduling_proposal_data,
+    confirm_rescheduling_proposal_data,
 )
 
 
@@ -73,7 +76,48 @@ def run_scheduling_agent(
             "success": True,
         }
 
-    # 2. Check for explicit Confirmation Action: e.g., "confirm prop_xxx" or "confirm op_prop_xxx"
+    # 2. Check for explicit Confirmation Action: e.g., "confirm prop_xxx" or "confirm op_prop_xxx" or "confirm disrupt_prop_xxx"
+    disrupt_confirm_match = re.search(r"\b(?:confirm|execute|approve|proceed)\s+(disrupt_prop_[a-zA-Z0-9_-]+)\b", msg_lower)
+    if disrupt_confirm_match:
+        proposal_id = disrupt_confirm_match.group(1)
+        tool_calls.append({"tool": "confirm_rescheduling_proposal", "args": {"proposal_id": proposal_id}})
+
+        pub_res = confirm_rescheduling_proposal_data(db=db, proposal_id=proposal_id, admin_user=user)
+        if not pub_res.get("success"):
+            return {
+                "intent": "TIMETABLE_RESCHEDULING",
+                "selected_agent": "scheduling_agent",
+                "action_type": "CONFIRMATION_REJECTED",
+                "final_response": sanitize_plain_english(f"Rescheduling Confirmation Blocked: {pub_res.get('error', 'Execution failed.')}"),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+
+        notifs = pub_res.get("notifications", {})
+        fac_count = notifs.get("faculty_notified", 0)
+        stud_count = notifs.get("students_notified", 0)
+
+        reply = (
+            f"Revised Timetable #{pub_res.get('new_version_id')} Published Successfully.\n\n"
+            f"- Prior Version: #{pub_res.get('old_version_id')} (Archived)\n"
+            f"- Status: PUBLISHED\n"
+            f"- Changed Sessions: {pub_res.get('changed_count')}\n"
+            f"- Preserved Sessions: {pub_res.get('preserved_count')}\n"
+            f"- Published At: {pub_res.get('published_at')}\n"
+            f"- Targeted Notifications: {fac_count} affected faculty and {stud_count} enrolled students notified.\n\n"
+            f"The revised timetable is now authoritative campus-wide."
+        )
+        return {
+            "intent": "TIMETABLE_RESCHEDULING",
+            "selected_agent": "scheduling_agent",
+            "action_type": "TIMETABLE_RESCHEDULED_AND_PUBLISHED",
+            "final_response": sanitize_plain_english(reply),
+            "tool_calls": tool_calls,
+            "sources": ["Timetable Version Register", "Notification Outbox Queue", "Audit Log"],
+            "success": True,
+        }
+
     op_confirm_match = re.search(r"\b(?:confirm|execute|approve|proceed)\s+(op_prop_[a-zA-Z0-9_-]+)\b", msg_lower)
     if op_confirm_match:
         proposal_id = op_confirm_match.group(1)
@@ -342,6 +386,267 @@ def run_scheduling_agent(
             "final_response": sanitize_plain_english(reply),
             "tool_calls": tool_calls,
             "sources": ["Timetable Validation Engine", "PostgreSQL Database"],
+            "success": True,
+        }
+
+    # 3c. Academic Disruption Intake & Minimal-Perturbation Rescheduling
+    is_disruption_request = (
+        bool(re.search(r"\b(reschedule|disruption|disrupted)\b", msg_lower))
+        or bool(re.search(r"\b(room|lab)\b.*?\bmaintenance\b", msg_lower))
+        or bool(re.search(r"\bmaintenance\b.*?\b(room|lab)\b", msg_lower))
+        or bool(re.search(r"\b(block|close)\b.*?\b(room|lab)\b.*?\bfor\s+maintenance\b", msg_lower))
+        or (bool(re.search(r"\b(leave|sick|absence)\b", msg_lower)) and bool(re.search(r"\b(faculty|prof|dr\.?)\b", msg_lower)))
+    )
+    if is_disruption_request:
+        import datetime
+        from backend.models.space_time import Room, TimeSlot
+        from backend.models.academic import Faculty
+
+        # 1. Day resolution
+        DAY_MAP = {
+            "mon": "MON", "monday": "MON",
+            "tue": "TUE", "tuesday": "TUE",
+            "wed": "WED", "wednesday": "WED",
+            "thu": "THU", "thursday": "THU",
+            "fri": "FRI", "friday": "FRI",
+            "sat": "SAT", "saturday": "SAT",
+        }
+        day_val = None
+        for k, v in DAY_MAP.items():
+            if re.search(r"\b" + k + r"\b", msg_lower):
+                day_val = v
+                break
+
+        if not day_val:
+            if "tomorrow" in msg_lower:
+                t_day = (datetime.date.today() + datetime.timedelta(days=1)).strftime("%a").lower()
+                day_val = DAY_MAP.get(t_day[:3], "MON")
+            elif "today" in msg_lower:
+                t_day = datetime.date.today().strftime("%a").lower()
+                day_val = DAY_MAP.get(t_day[:3], "MON")
+
+        time_window = "afternoon" if ("afternoon" in msg_lower or "pm" in msg_lower) else ("morning" if ("morning" in msg_lower or "am" in msg_lower) else "all day")
+
+        # 2. Determine disruption type & entity
+        is_room_type = any(w in msg_lower for w in ["room", "lab", "laboratory", "classroom", "maintenance"]) and not any(w in msg_lower for w in ["dr.", "prof.", "faculty", "leave", "sick", "absence"])
+        disruption_type = "ROOM_MAINTENANCE" if is_room_type else "FACULTY_LEAVE"
+
+        faculty_obj = None
+        room_obj = None
+
+        if disruption_type == "FACULTY_LEAVE":
+            f_match = re.search(r"\b(?:dr\.?|prof\.?|professor)\s+([a-zA-Z]+)", message, re.IGNORECASE)
+            if f_match:
+                f_name_part = f_match.group(1).lower()
+                faculty_obj = db.query(Faculty).join(User).filter(User.name.ilike(f"%{f_name_part}%")).first()
+            if not faculty_obj:
+                all_fac = db.query(Faculty).join(User).all()
+                for f in all_fac:
+                    if f.user and f.user.name and f.user.name.lower() in msg_lower:
+                        faculty_obj = f
+                        break
+
+            if not faculty_obj:
+                return {
+                    "intent": "TIMETABLE_RESCHEDULING",
+                    "selected_agent": "scheduling_agent",
+                    "action_type": "CLARIFICATION_NEEDED",
+                    "final_response": sanitize_plain_english(
+                        "Which faculty member is reporting leave or unavailability?\n\n"
+                        "Please specify their name or ID (e.g., 'Dr. Sharma is unavailable on Wednesday afternoon, reschedule affected classes')."
+                    ),
+                    "tool_calls": [],
+                    "sources": sources,
+                    "success": True,
+                }
+        else:
+            r_match = re.search(r"\b(?:room|lab|laboratory)\s+([a-zA-Z0-9_-]+)", message, re.IGNORECASE)
+            if r_match:
+                r_num_part = r_match.group(1).lower()
+                room_obj = db.query(Room).filter(
+                    (Room.room_number.ilike(f"%{r_num_part}%")) | (Room.name.ilike(f"%{r_num_part}%"))
+                ).first()
+            if not room_obj:
+                all_rooms = db.query(Room).all()
+                for r in all_rooms:
+                    if (r.room_number and r.room_number.lower() in msg_lower) or (r.name and r.name.lower() in msg_lower):
+                        room_obj = r
+                        break
+
+            if not room_obj:
+                return {
+                    "intent": "TIMETABLE_RESCHEDULING",
+                    "selected_agent": "scheduling_agent",
+                    "action_type": "CLARIFICATION_NEEDED",
+                    "final_response": sanitize_plain_english(
+                        "Which classroom or laboratory is undergoing maintenance?\n\n"
+                        "Please specify the room number or lab name (e.g., 'Block Lab 3 for maintenance tomorrow and reschedule')."
+                    ),
+                    "tool_calls": [],
+                    "sources": sources,
+                    "success": True,
+                }
+
+        if not day_val:
+            return {
+                "intent": "TIMETABLE_RESCHEDULING",
+                "selected_agent": "scheduling_agent",
+                "action_type": "CLARIFICATION_NEEDED",
+                "final_response": sanitize_plain_english(
+                    "Which day and time interval will the disruption occur?\n\n"
+                    "Please specify the day and window (e.g., 'Wednesday afternoon' or 'tomorrow morning')."
+                ),
+                "tool_calls": [],
+                "sources": sources,
+                "success": True,
+            }
+
+        # 3. Resolve target slots
+        day_slots = db.query(TimeSlot).filter(TimeSlot.day == day_val, TimeSlot.slot_type == "CLASS").all()
+        target_slots = []
+        if time_window == "afternoon":
+            noon = datetime.time(12, 0)
+            target_slots = [s for s in day_slots if s.start_time and s.start_time >= noon]
+        elif time_window == "morning":
+            noon = datetime.time(12, 0)
+            target_slots = [s for s in day_slots if s.start_time and s.start_time < noon]
+        else:
+            target_slots = day_slots
+
+        target_slot_ids = [s.id for s in target_slots]
+
+        reason_text = f"{'Faculty unavailability' if disruption_type == 'FACULTY_LEAVE' else 'Room maintenance'}: {message}"
+
+        # 4. Impact Analysis Tool
+        tool_calls.append({
+            "tool": "analyze_disruption_impact",
+            "args": {
+                "disruption_type": disruption_type,
+                "faculty_id": faculty_obj.id if faculty_obj else None,
+                "room_id": room_obj.id if room_obj else None,
+                "day": day_val,
+                "slot_ids": target_slot_ids,
+            },
+        })
+
+        impact_res = analyze_disruption_impact_data(
+            db=db,
+            disruption_type=disruption_type,
+            reason=reason_text,
+            faculty_id=faculty_obj.id if faculty_obj else None,
+            room_id=room_obj.id if room_obj else None,
+            day=day_val,
+            slot_ids=target_slot_ids,
+        )
+
+        if not impact_res.get("success"):
+            return {
+                "intent": "TIMETABLE_RESCHEDULING",
+                "selected_agent": "scheduling_agent",
+                "action_type": "IMPACT_ANALYSIS_ERROR",
+                "final_response": sanitize_plain_english(f"Impact Analysis Failed: {impact_res.get('error')}"),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+
+        if impact_res.get("affected_count", 0) == 0:
+            target_name = (faculty_obj.user.name if faculty_obj and faculty_obj.user else "Faculty") if disruption_type == "FACULTY_LEAVE" else (room_obj.room_number if room_obj else "Room")
+            reply = (
+                f"Disruption Impact Analysis Complete: Zero Affected Sessions.\n\n"
+                f"- Target: {target_name} on {day_val} ({time_window})\n"
+                f"- Published Timetable: #{impact_res.get('source_version_id')} (v{impact_res.get('source_version_number', '1')})\n"
+                f"- Total Sessions in Scope: {impact_res.get('total_entries')}\n"
+                f"- Affected Sessions: 0\n\n"
+                f"No scheduled classes coincide with this disruption window. The current published schedule remains valid and unchanged."
+            )
+            return {
+                "intent": "TIMETABLE_RESCHEDULING",
+                "selected_agent": "scheduling_agent",
+                "action_type": "NO_IMPACT",
+                "final_response": sanitize_plain_english(reply),
+                "tool_calls": tool_calls,
+                "sources": ["Timetable Version Register", "Published Timetable"],
+                "success": True,
+            }
+
+        # 5. Create Minimal-Perturbation Rescheduling Proposal
+        tool_calls.append({
+            "tool": "create_rescheduling_proposal",
+            "args": {
+                "disruption_type": disruption_type,
+                "faculty_id": faculty_obj.id if faculty_obj else None,
+                "room_id": room_obj.id if room_obj else None,
+                "day": day_val,
+                "slot_ids": target_slot_ids,
+            },
+        })
+
+        prop_res = create_rescheduling_proposal_data(
+            db=db,
+            disruption_type=disruption_type,
+            reason=reason_text,
+            admin_user=user,
+            faculty_id=faculty_obj.id if faculty_obj else None,
+            room_id=room_obj.id if room_obj else None,
+            day=day_val,
+            slot_ids=target_slot_ids,
+        )
+
+        if not prop_res.get("success"):
+            diag_lines = "\n".join(f"- {d}" for d in prop_res.get("diagnostics", [])) if prop_res.get("diagnostics") else "- Locked unaffected assignments prevented finding an open slot/room."
+            reply = (
+                f"Minimal-Perturbation Rescheduling Infeasible.\n\n"
+                f"The constraint solver could not find an alternative room/slot that satisfies all hard constraints "
+                f"while preserving all {impact_res.get('unaffected_count')} unaffected class sessions.\n\n"
+                f"Solver Diagnostics:\n{diag_lines}\n\n"
+                f"Status: The prior published timetable #{impact_res.get('source_version_id')} remains active and untouched.\n\n"
+                f"Recommendation: Review available alternative time slots or allow ripple rescheduling if additional sections can shift."
+            )
+            return {
+                "intent": "TIMETABLE_RESCHEDULING",
+                "selected_agent": "scheduling_agent",
+                "action_type": "RESCHEDULING_INFEASIBLE",
+                "final_response": sanitize_plain_english(reply),
+                "tool_calls": tool_calls,
+                "sources": ["Google OR-Tools CP-SAT Solver", "Timetable Version Register"],
+                "success": False,
+            }
+
+        # 6. Format Revision Diff & Approval Request
+        diff_lines = []
+        for d in prop_res.get("diff_items", []):
+            diff_lines.append(
+                f"- **{d['course_code']}** ({d['section_name']}): {d['old_slot_label']} [{d['old_room_number']}] -> "
+                f"**{d['new_slot_label']} [{d['new_room_number']}]** ({d['change_type']})"
+            )
+        diff_text = "\n".join(diff_lines) if diff_lines else "- No explicit relocations."
+
+        reply = (
+            f"### Minimal-Perturbation Rescheduling Proposal Generated\n\n"
+            f"**Disruption Summary:** {impact_res.get('summary')}\n\n"
+            f"**Preservation & Impact Metrics:**\n"
+            f"- **Preserved Assignments:** {prop_res.get('preserved_count')} classes locked in place (unchanged)\n"
+            f"- **Relocated Assignments:** {prop_res.get('changed_count')} class(es) shifted\n"
+            f"- **Hard-Constraint Violations:** 0 (100% compliant)\n"
+            f"- **Impacted Students:** ~{impact_res.get('impacted_student_count', 0)} students\n\n"
+            f"**Proposed Schedule Adjustments:**\n"
+            f"{diff_text}\n\n"
+            f"---\n"
+            f"**Administrator Authorization Required:**\n"
+            f"The original published timetable (#{impact_res.get('source_version_id')}) remains active until this proposal is approved.\n\n"
+            f"To publish this revision and dispatch targeted notifications to affected faculty and students, type:\n"
+            f"`confirm {prop_res.get('proposal_id')}`"
+        )
+
+        return {
+            "intent": "TIMETABLE_RESCHEDULING",
+            "selected_agent": "scheduling_agent",
+            "action_type": "PROPOSAL_CREATED",
+            "final_response": sanitize_plain_english(reply),
+            "proposal_id": prop_res.get("proposal_id"),
+            "tool_calls": tool_calls,
+            "sources": ["Google OR-Tools CP-SAT Solver", "Timetable Validator", "Disruption Service"],
             "success": True,
         }
 

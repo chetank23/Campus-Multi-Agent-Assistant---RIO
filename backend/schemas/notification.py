@@ -26,6 +26,21 @@ class NotificationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class NotificationOutboxResponse(BaseModel):
+    id: int
+    notification_id: int
+    user_id: int
+    status: str
+    retry_count: int
+    max_retries: int
+    last_error: Optional[str] = None
+    created_at: datetime.datetime
+    sent_at: Optional[datetime.datetime] = None
+    last_attempt_at: Optional[datetime.datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class NotificationUnreadCountResponse(BaseModel):
     unread_count: int
 

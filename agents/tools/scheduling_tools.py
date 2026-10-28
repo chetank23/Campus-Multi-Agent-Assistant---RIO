@@ -709,3 +709,134 @@ def update_faculty_availability_data(
         "message": f"Successfully updated availability for {faculty_name} on {db_day} ({slot_desc}) to {avail_status}.",
     }
 
+
+def analyze_disruption_impact_data(
+    db: Session,
+    disruption_type: str,
+    reason: str,
+    faculty_id: Optional[int] = None,
+    room_id: Optional[int] = None,
+    day: Optional[str] = None,
+    slot_ids: Optional[List[int]] = None,
+    source_version_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Authoritative disruption impact assessment tool for the Scheduling Agent.
+    Identifies affected timetable entries and recipients without modifying timetable state.
+    """
+    from backend.services.disruption_service import DisruptionSpec, analyze_disruption_impact
+
+    spec = DisruptionSpec(
+        disruption_type=disruption_type,
+        reason=reason,
+        faculty_id=faculty_id,
+        room_id=room_id,
+        day=day,
+        slot_ids=slot_ids,
+        source_version_id=source_version_id,
+    )
+    try:
+        impact = analyze_disruption_impact(db, spec)
+        return {
+            "success": True,
+            "source_version_id": impact.source_version_id,
+            "source_version_number": impact.source_version_number,
+            "total_entries": impact.total_entries_count,
+            "affected_count": impact.affected_count,
+            "unaffected_count": impact.unaffected_count,
+            "impacted_student_count": impact.impacted_student_count,
+            "impacted_faculty_ids": impact.impacted_faculty_ids,
+            "impacted_section_ids": impact.impacted_section_ids,
+            "summary": impact.summary,
+            "affected_entries": [e.model_dump() for e in impact.affected_entries],
+        }
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
+
+
+def create_rescheduling_proposal_data(
+    db: Session,
+    disruption_type: str,
+    reason: str,
+    admin_user: User,
+    faculty_id: Optional[int] = None,
+    room_id: Optional[int] = None,
+    day: Optional[str] = None,
+    slot_ids: Optional[List[int]] = None,
+    source_version_id: Optional[int] = None,
+    allow_ripple: bool = False,
+) -> Dict[str, Any]:
+    """
+    Generates a minimal-perturbation revision proposal using OR-Tools CP-SAT.
+    Preserves unaffected entries as locked assignments, heavily penalizes deviations,
+    and returns a revision diff awaiting administrator approval.
+    """
+    from backend.services.disruption_service import DisruptionSpec, create_rescheduling_proposal
+
+    spec = DisruptionSpec(
+        disruption_type=disruption_type,
+        reason=reason,
+        faculty_id=faculty_id,
+        room_id=room_id,
+        day=day,
+        slot_ids=slot_ids,
+        source_version_id=source_version_id,
+        allow_ripple=allow_ripple,
+    )
+    try:
+        prop_res = create_rescheduling_proposal(db=db, spec=spec, current_user=admin_user)
+        return {
+            "success": prop_res.success,
+            "proposal_id": prop_res.proposal_id,
+            "status": prop_res.status,
+            "message": prop_res.message,
+            "source_version_id": prop_res.source_version_id,
+            "preserved_count": prop_res.preserved_count,
+            "changed_count": prop_res.changed_count,
+            "diff_items": [d.model_dump() for d in prop_res.diff_items],
+            "hard_violations": prop_res.hard_violations,
+            "expires_at": prop_res.expires_at,
+            "diagnostics": prop_res.diagnostics,
+            "error": prop_res.error,
+        }
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
+
+
+def confirm_rescheduling_proposal_data(
+    db: Session,
+    proposal_id: str,
+    admin_user: User,
+) -> Dict[str, Any]:
+    """
+    Publishes an approved minimal-perturbation timetable revision and dispatches targeted notifications.
+    """
+    from backend.services.disruption_service import execute_publish_rescheduled_proposal
+
+    try:
+        pub_res = execute_publish_rescheduled_proposal(db=db, proposal_id=proposal_id, current_user=admin_user)
+        return {
+            "success": pub_res.success,
+            "new_version_id": pub_res.new_version_id,
+            "old_version_id": pub_res.old_version_id,
+            "status": pub_res.status,
+            "message": pub_res.message,
+            "published_at": pub_res.published_at,
+            "changed_count": pub_res.changed_count,
+            "preserved_count": pub_res.preserved_count,
+            "notifications": pub_res.notifications,
+            "error": pub_res.error,
+        }
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
+
+

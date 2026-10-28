@@ -139,3 +139,36 @@ class AgentProposal(Base):
     expires_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
 
     user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id])
+
+
+class NotificationOutbox(Base):
+    __tablename__ = "notification_outbox"
+    __table_args__ = (
+        Index("ix_notification_outbox_status", "status"),
+        Index("ix_notification_outbox_user_id", "user_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    notification_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("notifications.id", name="fk_no_notification_id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", name="fk_no_user_id", ondelete="CASCADE"), nullable=False
+    )
+    channel: Mapped[str] = mapped_column(String(20), default="SSE", server_default="'SSE'")
+    status: Mapped[str] = mapped_column(
+        String(20), default="PENDING", server_default="'PENDING'"
+    )  # 'PENDING', 'SENT', 'FAILED', 'DEAD_LETTER'
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    max_retries: Mapped[int] = mapped_column(Integer, default=3, server_default="3")
+    last_attempt_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    payload: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=utc_now, server_default=func.now()
+    )
+    sent_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+
+    notification: Mapped["Notification"] = relationship("Notification")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+

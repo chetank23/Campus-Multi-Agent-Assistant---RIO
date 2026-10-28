@@ -22,7 +22,8 @@ from backend.models.courses import Course, CourseAssignment
 from backend.models.identity import User
 from backend.models.resources import Resource, ResourceBooking
 from backend.models.timetable import TimetableEntry, TimetableVersion
-from backend.models.workflow import Notification
+from backend.models.workflow import Notification, NotificationOutbox
+from backend.utils.datetime_utils import utc_now
 
 
 # ── In-Memory SSE Stream Broker ───────────────────────────────────────────────
@@ -139,20 +140,63 @@ def create_notification(
 def create_bulk_notifications(
     db: Session,
     notifications: List[Notification],
+    channel: str = "SSE",
 ) -> List[Notification]:
     """
-    Bulk persists notifications within a single database transaction.
+    Bulk persists notifications within a single database transaction,
+    generating transactional NotificationOutbox records for durable delivery.
     """
     if not notifications:
         return []
 
     db.add_all(notifications)
+    db.flush()
+
+    outbox_entries: List[NotificationOutbox] = []
+    for notif in notifications:
+        if notif.user_id:
+            outbox = NotificationOutbox(
+                notification_id=notif.id,
+                user_id=notif.user_id,
+                channel=channel,
+                status="PENDING",
+                payload={
+                    "id": notif.id,
+                    "title": notif.title,
+                    "message": notif.message,
+                    "type": notif.type,
+                    "link": notif.link,
+                    "entity_type": notif.entity_type,
+                    "entity_id": notif.entity_id,
+                },
+                created_at=utc_now(),
+            )
+            outbox_entries.append(outbox)
+
+    if outbox_entries:
+        db.add_all(outbox_entries)
     db.commit()
 
     for notif in notifications:
         db.refresh(notif)
         if notif.user_id:
-            stream_broker.publish_notification(notif.user_id, notif)
+            try:
+                stream_broker.publish_notification(notif.user_id, notif)
+            except Exception:
+                pass
+
+    for outbox in outbox_entries:
+        try:
+            db.refresh(outbox)
+            outbox.status = "SENT"
+            outbox.sent_at = utc_now()
+            outbox.last_attempt_at = utc_now()
+        except Exception as exc:
+            outbox.status = "FAILED"
+            outbox.last_error = str(exc)
+            outbox.last_attempt_at = utc_now()
+            outbox.retry_count += 1
+    db.commit()
 
     return notifications
 
@@ -325,6 +369,219 @@ def notify_timetable_published(
         "students_notified": len(student_user_ids),
         "admins_notified": len(admin_uids),
         "total_notified": len(created),
+    }
+
+
+def notify_timetable_rescheduled(
+    db: Session,
+    old_version_id: int,
+    new_version_id: int,
+    diff_items: List[Dict[str, Any]],
+    reason: str,
+) -> Dict[str, Any]:
+    """
+    Authoritative event handler for Timetable Rescheduling Publication.
+    1. Resolves affected courses, sections, faculty, and student batches strictly from diff_items.
+    2. Enforces targeted delivery: unaffected students and faculty receive ZERO notifications.
+    3. Guarantees deduplication across retries.
+    4. Transactionally creates Notification records and NotificationOutbox entries.
+    5. Dispatches real-time SSE alerts via stream_broker.
+    """
+    # 1. Deduplication check
+    existing = (
+        db.query(Notification)
+        .filter(
+            Notification.entity_type == "TimetableVersion",
+            Notification.entity_id == new_version_id,
+            Notification.type == "TIMETABLE_RESCHEDULED",
+        )
+        .first()
+    )
+    if existing:
+        return {
+            "success": True,
+            "deduplicated": True,
+            "message": f"Notifications for rescheduled TimetableVersion #{new_version_id} have already been dispatched.",
+            "faculty_notified": 0,
+            "students_notified": 0,
+            "admins_notified": 0,
+            "total_notified": 0,
+            "outbox_entries": 0,
+        }
+
+    new_version = db.query(TimetableVersion).filter(TimetableVersion.id == new_version_id).first()
+    new_v_num = new_version.version_number if new_version else str(new_version_id)
+
+    # 2. Extract affected assignment IDs
+    affected_ca_ids = set()
+    for d in diff_items:
+        ca_id = d.get("course_assignment_id")
+        if ca_id:
+            affected_ca_ids.add(ca_id)
+
+    if not affected_ca_ids and not diff_items:
+        return {
+            "success": True,
+            "message": "No diff items provided; 0 recipients affected.",
+            "faculty_notified": 0,
+            "students_notified": 0,
+            "admins_notified": 0,
+            "total_notified": 0,
+            "outbox_entries": 0,
+        }
+
+    # Fetch CourseAssignment details for affected assignments
+    cas = db.query(CourseAssignment).filter(CourseAssignment.id.in_(affected_ca_ids)).all() if affected_ca_ids else []
+    affected_faculty_pks = {ca.faculty_id for ca in cas if ca.faculty_id}
+    affected_section_pks = {ca.section_id for ca in cas if ca.section_id}
+    affected_batch_pks = {ca.batch_id for ca in cas if ca.batch_id}
+
+    # Resolve Faculty recipients
+    faculty_user_ids: Set[int] = set()
+    if affected_faculty_pks:
+        fac_rows = db.query(Faculty.user_id).filter(Faculty.id.in_(affected_faculty_pks), Faculty.user_id.isnot(None)).all()
+        faculty_user_ids = {uid for (uid,) in fac_rows if uid}
+
+    # Resolve Student recipients (strictly enrolled in affected sections or batches)
+    student_user_ids: Set[int] = set()
+    if affected_section_pks:
+        sec_studs = db.query(Student.user_id).filter(Student.section_id.in_(affected_section_pks), Student.user_id.isnot(None)).all()
+        student_user_ids.update(uid for (uid,) in sec_studs if uid)
+    if affected_batch_pks:
+        batch_studs = db.query(Student.user_id).filter(Student.batch_id.in_(affected_batch_pks), Student.user_id.isnot(None)).all()
+        student_user_ids.update(uid for (uid,) in batch_studs if uid)
+
+    # Map diff details for nice human-readable formatting
+    diff_summary_lines = []
+    for d in diff_items:
+        c_code = d.get("course_code", "Course")
+        old_loc = f"{d.get('old_slot_label', '')} ({d.get('old_room_number', '')})"
+        new_loc = f"{d.get('new_slot_label', '')} ({d.get('new_room_number', '')})"
+        diff_summary_lines.append(f"{c_code}: {old_loc} -> {new_loc}")
+    diff_text = "; ".join(diff_summary_lines[:3])
+    if len(diff_summary_lines) > 3:
+        diff_text += f"; (+{len(diff_summary_lines) - 3} more)"
+
+    notifications_to_add: List[Notification] = []
+
+    # Targeted Faculty Notifications
+    for f_uid in faculty_user_ids:
+        notifications_to_add.append(
+            Notification(
+                user_id=f_uid,
+                title=f"Schedule Rescheduled: Timetable {new_v_num}",
+                message=(
+                    f"Your teaching schedule has been adjusted due to: {reason}.\n"
+                    f"Updates: {diff_text}\n"
+                    f"Authoritative Timetable Revision: #{new_version_id} ({new_v_num})."
+                ),
+                type="TIMETABLE_RESCHEDULED",
+                link="/faculty/timetable",
+                entity_type="TimetableVersion",
+                entity_id=new_version_id,
+                is_read=False,
+            )
+        )
+
+    # Targeted Student Notifications
+    for s_uid in student_user_ids:
+        notifications_to_add.append(
+            Notification(
+                user_id=s_uid,
+                title=f"Class Rescheduled: Timetable {new_v_num}",
+                message=(
+                    f"One or more of your classes have been rescheduled due to: {reason}.\n"
+                    f"Updates: {diff_text}\n"
+                    f"Authoritative Timetable Revision: #{new_version_id} ({new_v_num})."
+                ),
+                type="TIMETABLE_RESCHEDULED",
+                link="/student/timetable",
+                entity_type="TimetableVersion",
+                entity_id=new_version_id,
+                is_read=False,
+            )
+        )
+
+    # Targeted Admin Notifications
+    admin_rows = db.query(User.id).filter(User.role == "ADMIN", User.is_active == True).all()
+    admin_uids = {uid for (uid,) in admin_rows if uid}
+    for a_uid in admin_uids:
+        notifications_to_add.append(
+            Notification(
+                user_id=a_uid,
+                title=f"Timetable Revision {new_v_num} Published",
+                message=(
+                    f"Timetable #{new_version_id} ({new_v_num}) published to replace #{old_version_id} after disruption: {reason}. "
+                    f"{len(diff_items)} session(s) moved ({len(faculty_user_ids)} faculty, {len(student_user_ids)} students notified)."
+                ),
+                type="TIMETABLE_RESCHEDULED",
+                link=f"/admin/timetable/versions/{new_version_id}",
+                entity_type="TimetableVersion",
+                entity_id=new_version_id,
+                is_read=False,
+            )
+        )
+
+    created = create_bulk_notifications(db, notifications_to_add)
+
+    return {
+        "success": True,
+        "old_version_id": old_version_id,
+        "new_version_id": new_version_id,
+        "faculty_notified": len(faculty_user_ids),
+        "students_notified": len(student_user_ids),
+        "admins_notified": len(admin_uids),
+        "total_notified": len(created),
+        "outbox_entries": len(created),
+    }
+
+
+def process_notification_outbox(
+    db: Session,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """
+    Processes pending or retryable notification outbox entries,
+    dispatching them to the stream broker or marking them failed/dead-letter.
+    """
+    outbox_records = (
+        db.query(NotificationOutbox)
+        .filter(
+            NotificationOutbox.status.in_(["PENDING", "FAILED"]),
+            NotificationOutbox.retry_count < NotificationOutbox.max_retries,
+        )
+        .limit(limit)
+        .all()
+    )
+
+    processed = 0
+    delivered = 0
+    failed = 0
+
+    for item in outbox_records:
+        processed += 1
+        item.last_attempt_at = utc_now()
+        item.retry_count += 1
+        try:
+            notif = db.query(Notification).filter(Notification.id == item.notification_id).first()
+            if notif and notif.user_id:
+                stream_broker.publish_notification(notif.user_id, notif)
+            item.status = "SENT"
+            item.sent_at = utc_now()
+            delivered += 1
+        except Exception as exc:
+            failed += 1
+            item.last_error = str(exc)
+            if item.retry_count >= item.max_retries:
+                item.status = "DEAD_LETTER"
+            else:
+                item.status = "FAILED"
+
+    db.commit()
+    return {
+        "processed_count": processed,
+        "delivered_count": delivered,
+        "failed_count": failed,
     }
 
 

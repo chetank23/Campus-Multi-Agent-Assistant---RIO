@@ -18,7 +18,7 @@ from backend.config import ALGORITHM, SECRET_KEY
 from backend.database import get_db
 from backend.dependencies import get_current_user, require_role
 from backend.models.identity import User
-from backend.models.workflow import Notification
+from backend.models.workflow import Notification, NotificationOutbox
 from backend.schemas.notification import (
     BroadcastAnnouncementRequest,
     FacultyClassUpdateRequest,
@@ -26,10 +26,12 @@ from backend.schemas.notification import (
     NotificationMarkReadResponse,
     NotificationResponse,
     NotificationUnreadCountResponse,
+    NotificationOutboxResponse,
 )
 from backend.services.notification_service import (
     broadcast_announcement,
     notify_faculty_class_update,
+    process_notification_outbox,
     stream_broker,
 )
 
@@ -275,3 +277,48 @@ def faculty_class_update(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=message)
 
     return {"success": True, "message": message, "students_notified": count}
+
+
+# ── Durable Notification Outbox (Admin Management & Retry Queue) ─────────────
+
+@router.get("/outbox", response_model=List[NotificationOutboxResponse])
+def get_notification_outbox(
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (PENDING, SENT, FAILED, DEAD_LETTER)"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    admin_user: User = Depends(require_role("ADMIN")),
+    db: Session = Depends(get_db),
+):
+    """
+    ADMIN only: Inspects the durable notification outbox queue.
+    """
+    query = db.query(NotificationOutbox)
+    if status_filter:
+        query = query.filter(NotificationOutbox.status == status_filter.upper())
+
+    records = (
+        query.order_by(NotificationOutbox.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return records
+
+
+@router.post("/outbox/process")
+def process_outbox_queue(
+    limit: int = Query(50, ge=1, le=500),
+    admin_user: User = Depends(require_role("ADMIN")),
+    db: Session = Depends(get_db),
+):
+    """
+    ADMIN only: Manually or worker-triggered processing of pending/retryable outbox records.
+    Delivers un-sent messages and moves repeatedly failed messages to DEAD_LETTER after max_retries.
+    """
+    stats = process_notification_outbox(db=db, limit=limit)
+    return {
+        "success": True,
+        "message": f"Processed {stats['processed_count']} outbox record(s): {stats['delivered_count']} delivered, {stats['failed_count']} failed.",
+        "stats": stats,
+    }
+

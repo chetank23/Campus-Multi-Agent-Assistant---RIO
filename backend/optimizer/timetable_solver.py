@@ -1,5 +1,5 @@
 import time
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional, Any
 from collections import defaultdict
 from pydantic import BaseModel
 from ortools.sat.python import cp_model
@@ -14,7 +14,13 @@ class SolverResult(BaseModel):
     diagnostics: List[str] = []
 
 class TimetableSolver:
-    def __init__(self, opt_input: OptimizerInput, time_limit: int = 60, strategy: str = "BALANCED"):
+    def __init__(self, opt_input: OptimizerInput, time_limit: int = 60, strategy: str = "BALANCED", previous_entries: Optional[List[Any]] = None, locked_assignments: Optional[List[Any]] = None, disrupted_assignments: Optional[List[Any]] = None, allow_ripple: bool = False, perturbation_penalty_slot: int = 500, perturbation_penalty_room: int = 200):
+        self.previous_entries = previous_entries or []
+        self.locked_assignments = locked_assignments or []
+        self.disrupted_assignments = disrupted_assignments or []
+        self.allow_ripple = allow_ripple
+        self.perturbation_penalty_slot = perturbation_penalty_slot
+        self.perturbation_penalty_room = perturbation_penalty_room
         self.input = opt_input
         self.time_limit = time_limit
         self.strategy = (strategy or "BALANCED").upper()
@@ -229,6 +235,33 @@ class TimetableSolver:
                 if len(vars_in_slot) > 1:
                     self.model.add_at_most_one(vars_in_slot)
                 
+        # F. Minimal-Perturbation Constraints (Locked and Disrupted assignments)
+        if self.locked_assignments:
+            for item in self.locked_assignments:
+                if isinstance(item, tuple):
+                    a_id, h_type, r_id, t_id = item
+                elif isinstance(item, dict):
+                    a_id, h_type, r_id, t_id = item["course_assignment_id"], item["hour_type"], item["room_id"], item["slot_id"]
+                else:
+                    a_id, h_type, r_id, t_id = item.course_assignment_id, item.hour_type, item.room_id, item.slot_id
+                key = (a_id, h_type, r_id, t_id)
+                if key in self.x:
+                    self.model.add(self.x[key] == 1)
+                else:
+                    return False, f"Locked assignment #{a_id} ({h_type}) in room #{r_id} at slot #{t_id} cannot be satisfied under current constraints."
+
+        if self.disrupted_assignments:
+            for item in self.disrupted_assignments:
+                if isinstance(item, tuple):
+                    a_id, h_type, r_id, t_id = item
+                elif isinstance(item, dict):
+                    a_id, h_type, r_id, t_id = item["course_assignment_id"], item["hour_type"], item["room_id"], item["slot_id"]
+                else:
+                    a_id, h_type, r_id, t_id = item.course_assignment_id, item.hour_type, item.room_id, item.slot_id
+                key = (a_id, h_type, r_id, t_id)
+                if key in self.x:
+                    self.model.add(self.x[key] == 0)
+
         self._build_soft_constraints()
             
         return True, "Model built successfully"
@@ -432,6 +465,32 @@ class TimetableSolver:
                 self.model.add(room_change_penalty == total_rooms_used - is_active_day)
                 
                 objective_terms.append(room_change_penalty * W_ROOM_CHANGE)
+
+        # 7. Minimal Perturbation Objective: Penalize deviations from baseline schedule
+        if self.previous_entries:
+            prev_by_assignment = defaultdict(list)
+            for pe in self.previous_entries:
+                if isinstance(pe, tuple):
+                    pa_id, ph_type, pr_id, pt_id = pe
+                elif isinstance(pe, dict):
+                    pa_id, ph_type, pr_id, pt_id = pe["course_assignment_id"], pe["hour_type"], pe["room_id"], pe["slot_id"]
+                else:
+                    pa_id, ph_type, pr_id, pt_id = pe.course_assignment_id, pe.hour_type, pe.room_id, pe.slot_id
+                prev_by_assignment[(pa_id, ph_type)].append((pr_id, pt_id))
+
+            for (a_id, h_type, r_id, t_id), v in self.x.items():
+                prev_locs = prev_by_assignment.get((a_id, h_type), [])
+                if prev_locs:
+                    if (r_id, t_id) not in prev_locs:
+                        slot_matched = any(pt == t_id for (pr, pt) in prev_locs)
+                        room_matched = any(pr == r_id for (pr, pt) in prev_locs)
+                        penalty = 0
+                        if not slot_matched:
+                            penalty += self.perturbation_penalty_slot
+                        if not room_matched:
+                            penalty += self.perturbation_penalty_room
+                        if penalty > 0:
+                            objective_terms.append(v * penalty)
 
         if objective_terms:
             self.model.minimize(sum(objective_terms))

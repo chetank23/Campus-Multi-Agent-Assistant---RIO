@@ -49,7 +49,7 @@ INSERT_ORDER = [
 
 # All tables in reverse dependency order for safe TRUNCATE
 TRUNCATE_ORDER = [
-    "audit_logs", "notifications", "change_requests", "resource_bookings",
+    "notification_outbox", "agent_proposals", "audit_logs", "notifications", "change_requests", "resource_bookings",
     "timetable_entries", "timetable_versions", 
     "resources", "academic_calendar", "faculty_availability", "time_slots",
     "labs", "rooms", "buildings",
