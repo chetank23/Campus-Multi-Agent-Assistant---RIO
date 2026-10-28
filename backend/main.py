@@ -5,9 +5,30 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import IntegrityError
 
 from backend.routes import (
-    buildings, rooms, labs, auth, department, program, academic_year, semester, section, batch, student,
-    faculty, course, course_assignment, elective_group, elective_group_course,
-    time_slot, faculty_availability, academic_calendar, timetable, resources, chat, notifications, disruptions
+    academic_calendar,
+    academic_year,
+    auth,
+    batch,
+    buildings,
+    chat,
+    course,
+    course_assignment,
+    department,
+    disruptions,
+    elective_group,
+    elective_group_course,
+    faculty,
+    faculty_availability,
+    labs,
+    notifications,
+    program,
+    resources,
+    rooms,
+    section,
+    semester,
+    student,
+    time_slot,
+    timetable,
 )
 
 app = FastAPI(title="Campus AI System")

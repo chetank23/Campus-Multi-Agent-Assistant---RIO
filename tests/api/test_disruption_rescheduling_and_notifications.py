@@ -177,6 +177,7 @@ def test_disruption_impact_analysis_faculty_leave(admin_token, published_timetab
         )
         assert len(entries) > 0
         target_entry = entries[0]
+        assert target_entry.slot is not None
         fac_id = target_entry.faculty_id
         target_day = target_entry.slot.day
 
@@ -207,6 +208,7 @@ def test_disruption_impact_analysis_faculty_leave(admin_token, published_timetab
     # Verify source timetable is completely unchanged
     with Session(engine) as db:
         v = db.query(TimetableVersion).filter(TimetableVersion.id == published_timetable).first()
+        assert v is not None
         assert v.status == "PUBLISHED"
 
 
@@ -222,6 +224,7 @@ def test_disruption_impact_analysis_room_maintenance(admin_token, published_time
             .first()
         )
         assert entry is not None
+        assert entry.slot is not None
         room_id = entry.room_id
         day = entry.slot.day
 
@@ -251,6 +254,7 @@ def test_disruption_impact_no_affect(admin_token, published_timetable):
     with Session(engine) as db:
         # Use Sunday where no classes are scheduled
         entry = db.query(TimetableEntry).filter(TimetableEntry.version_id == published_timetable).first()
+        assert entry is not None
         fac_id = entry.faculty_id
 
     spec = {
@@ -289,6 +293,8 @@ def test_minimal_perturbation_rescheduling_proposal(admin_token, published_timet
             .filter(TimetableEntry.version_id == published_timetable)
             .first()
         )
+        assert entry is not None
+        assert entry.slot is not None
         fac_id = entry.faculty_id
         target_slot_id = entry.slot_id
         target_day = entry.slot.day
@@ -330,6 +336,7 @@ def test_minimal_perturbation_rescheduling_proposal(admin_token, published_timet
     # Verify source published timetable is untouched
     with Session(engine) as db:
         v = db.query(TimetableVersion).filter(TimetableVersion.id == published_timetable).first()
+        assert v is not None
         assert v.status == "PUBLISHED"
 
 
@@ -350,6 +357,8 @@ def test_proposal_confirmation_and_atomic_publication(admin_token, published_tim
             .filter(TimetableEntry.version_id == published_timetable)
             .first()
         )
+        assert entry is not None
+        assert entry.slot is not None
         fac_id = entry.faculty_id
         target_slot_id = entry.slot_id
         target_day = entry.slot.day
@@ -388,9 +397,11 @@ def test_proposal_confirmation_and_atomic_publication(admin_token, published_tim
     # 3. Verify Database State
     with Session(engine) as db:
         old_v = db.query(TimetableVersion).filter(TimetableVersion.id == published_timetable).first()
+        assert old_v is not None
         assert old_v.status == "ARCHIVED", "Prior timetable must be archived"
 
         new_v = db.query(TimetableVersion).filter(TimetableVersion.id == new_v_id).first()
+        assert new_v is not None
         assert new_v.status == "PUBLISHED", "New revision must be published"
         assert new_v.published_at is not None
 
@@ -419,6 +430,7 @@ def test_single_use_idempotency_blocks_duplicate_confirmation(admin_token):
     active_vid = get_active_published_version_id()
     with Session(engine) as db:
         entry = db.query(TimetableEntry).filter(TimetableEntry.version_id == active_vid).first()
+        assert entry is not None
         fac_id = entry.faculty_id
 
     # Create fresh proposal
@@ -452,7 +464,10 @@ def test_expired_proposal_rejection(admin_token):
     active_vid = get_active_published_version_id()
     with Session(engine) as db:
         admin_u = db.query(User).filter(User.role == "ADMIN").first()
+        assert admin_u is not None
+        assert admin_u is not None
         entry = db.query(TimetableEntry).filter(TimetableEntry.version_id == active_vid).first()
+        assert entry is not None
         spec = DisruptionSpec(
             disruption_type="FACULTY_LEAVE",
             reason="Expiration test",
@@ -465,6 +480,7 @@ def test_expired_proposal_rejection(admin_token):
 
         # Manually backdate expiration to 1 hour ago
         ap = db.query(AgentProposal).filter(AgentProposal.proposal_id == prop_id).first()
+        assert ap is not None
         ap.expires_at = utc_now() - datetime.timedelta(hours=1)
         db.commit()
 
@@ -630,12 +646,20 @@ def test_scheduling_agent_disruption_intake_and_confirmation():
     active_vid = get_active_published_version_id()
     with Session(engine) as db:
         admin_u = db.query(User).filter(User.role == "ADMIN").first()
+        assert admin_u is not None
+        assert admin_u is not None
         entry = (
             db.query(TimetableEntry)
             .join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id)
             .filter(TimetableEntry.version_id == active_vid)
             .first()
         )
+        assert entry is not None
+        assert entry.faculty is not None
+        assert entry.faculty.user is not None
+        assert entry.faculty.user.name is not None
+        assert entry.slot is not None
+        assert entry.slot.day is not None
         fac_name = entry.faculty.user.name.split()[0]
         day_text = entry.slot.day.lower()
 
@@ -679,6 +703,7 @@ def test_scheduling_agent_ambiguous_disruption_clarification(published_timetable
     """
     with Session(engine) as db:
         admin_u = db.query(User).filter(User.role == "ADMIN").first()
+        assert admin_u is not None
 
         state: AgentState = {
             "message": "A faculty member reported sick leave, please reschedule.",

@@ -229,7 +229,7 @@ with engine.connect() as conn:
         "SELECT COUNT(*) FROM information_schema.table_constraints "
         "WHERE constraint_type='CHECK' AND table_schema='public'"
     )).scalar()
-    check(f"CHECK constraint count >= 8", ck_count >= 8, f"found {ck_count}")
+    check(f"CHECK constraint count >= 8", bool(ck_count is not None and ck_count >= 8), f"found {ck_count}")
 
     # Verify critical CHECK constraints exist by name
     ck_names = {r[0] for r in conn.execute(text(

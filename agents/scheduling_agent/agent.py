@@ -464,12 +464,13 @@ def run_scheduling_agent(
             if r_match:
                 r_num_part = r_match.group(1).lower()
                 room_obj = db.query(Room).filter(
-                    (Room.room_number.ilike(f"%{r_num_part}%")) | (Room.name.ilike(f"%{r_num_part}%"))
+                    Room.room_number.ilike(f"%{r_num_part}%")
                 ).first()
             if not room_obj:
                 all_rooms = db.query(Room).all()
                 for r in all_rooms:
-                    if (r.room_number and r.room_number.lower() in msg_lower) or (r.name and r.name.lower() in msg_lower):
+                    r_num_str = (r.room_number or "").lower()
+                    if r_num_str and r_num_str in msg_lower:
                         room_obj = r
                         break
 

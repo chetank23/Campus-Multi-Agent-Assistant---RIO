@@ -110,7 +110,7 @@ def seed_database(dataset_name):
         print("\n=== LOAD SUMMARY ===")
         for table_name in TRUNCATE_ORDER[::-1]: # regular order
             count = session.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
-            if count > 0:
+            if count is not None and count > 0:
                 print(f"  {table_name:25s} : {count}")
                 
         print("\nSeed successful!")

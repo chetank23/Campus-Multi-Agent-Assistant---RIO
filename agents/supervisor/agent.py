@@ -408,8 +408,10 @@ def run_composite_booking_supervision(
     req_start, req_end = parse_time_interval(message)
     res_details = extract_resource_details(message)
 
-    tool_calls: List[Dict[str, Any]] = list(state.get("tool_calls", []))
-    sources: List[str] = list(state.get("sources", []))
+    raw_tc = state.get("tool_calls")
+    tool_calls: List[Dict[str, Any]] = list(raw_tc) if raw_tc is not None else []
+    raw_src = state.get("sources")
+    sources: List[str] = list(raw_src) if raw_src is not None else []
 
     # Clarification if missing critical date/time/resource
     missing_elements: List[str] = []
@@ -436,7 +438,7 @@ def run_composite_booking_supervision(
         }
 
     # 1. Execute Resource Allocation Agent for booking proposal or alternatives
-    res_agent_result = run_resource_agent(state=dict(state), db=db, user=user)
+    res_agent_result = run_resource_agent(state=state, db=db, user=user)
     res_reply = res_agent_result.get("final_response") or ""
     res_tool_calls = res_agent_result.get("tool_calls") or []
     res_proposal = res_agent_result.get("proposal")

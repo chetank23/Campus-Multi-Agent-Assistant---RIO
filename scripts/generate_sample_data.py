@@ -335,7 +335,7 @@ def generate_data(dataset_name):
         # Add realistic dates (just offsets from start_date for simplicity in sample data)
         # Assuming start_date is in 'YYYY-MM-DD' string format
         import datetime
-        start_dt = datetime.datetime.strptime(sem["start_date"], "%Y-%m-%d")
+        start_dt = datetime.datetime.strptime(str(sem["start_date"]), "%Y-%m-%d")
         
         # Holiday 1
         h1_dt = (start_dt + datetime.timedelta(days=30)).strftime("%Y-%m-%d")

@@ -24,6 +24,8 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from unittest.mock import MagicMock
+from sqlalchemy.orm import Session
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -215,8 +217,9 @@ class ResourceAgentBenchmark:
             password_hash="mock",
         )
 
-        app_res_student = execute_approve_booking_data(db=None, booking_id=1, user=mock_student)
-        rej_res_faculty = execute_reject_booking_data(db=None, booking_id=1, user=mock_faculty, reason="Not admin")
+        mock_db = MagicMock(spec=Session)
+        app_res_student = execute_approve_booking_data(db=mock_db, booking_id=1, user=mock_student)
+        rej_res_faculty = execute_reject_booking_data(db=mock_db, booking_id=1, user=mock_faculty, reason="Not admin")
 
         pass_role_guard = (
             app_res_student.get("success") is False

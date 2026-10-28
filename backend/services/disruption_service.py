@@ -58,14 +58,14 @@ class DisruptionSpec(BaseModel):
 class DisruptionImpactItem(BaseModel):
     entry_id: int
     course_assignment_id: int
-    course_id: int
+    course_id: Optional[int] = None
     course_code: str
     course_name: str
-    faculty_id: int
+    faculty_id: Optional[int] = None
     faculty_name: str
-    room_id: int
+    room_id: Optional[int] = None
     room_number: str
-    slot_id: int
+    slot_id: Optional[int] = None
     slot_label: str
     day: str
     section_id: Optional[int] = None
@@ -231,11 +231,16 @@ def analyze_disruption_impact(
                     reason_desc = f"Session relocation requested: {spec.reason}"
 
         if is_affected:
-            c_name = e.course.course_name if e.course else "Unknown Course"
-            c_code = e.course.course_code if e.course else f"C#{e.course_id}"
-            f_name = e.faculty.user.name if (e.faculty and e.faculty.user) else f"Faculty #{e.faculty_id}"
-            r_num = e.room.room_number if e.room else f"Room #{e.room_id}"
-            slot_label = f"{e.slot.day} {e.slot.start_time.strftime('%H:%M')}-{e.slot.end_time.strftime('%H:%M')}" if (e.slot and e.slot.start_time and e.slot.end_time) else f"Slot #{e.slot_id}"
+            c_name = (e.course.course_name if e.course and e.course.course_name else None) or "Unknown Course"
+            c_code = (e.course.course_code if e.course and e.course.course_code else None) or f"C#{e.course_id or 0}"
+            f_name = (e.faculty.user.name if e.faculty and e.faculty.user and e.faculty.user.name else None) or f"Faculty #{e.faculty_id or 0}"
+            r_num = (e.room.room_number if e.room and e.room.room_number else None) or f"Room #{e.room_id or 0}"
+            slot_label = (
+                f"{e.slot.day} {e.slot.start_time.strftime('%H:%M')}-{e.slot.end_time.strftime('%H:%M')}"
+                if (e.slot and e.slot.day and e.slot.start_time and e.slot.end_time)
+                else f"Slot #{e.slot_id or 0}"
+            )
+            day_str = e.slot.day if (e.slot and e.slot.day) else "UNKNOWN"
             sec_name = e.section.section_name if e.section else None
             student_count = e.section.student_count if e.section else (e.batch.student_count if e.batch else 0)
 
@@ -252,7 +257,7 @@ def analyze_disruption_impact(
                     room_number=r_num,
                     slot_id=e.slot_id,
                     slot_label=slot_label,
-                    day=e.slot.day if e.slot else "UNKNOWN",
+                    day=day_str,
                     section_id=e.section_id,
                     section_name=sec_name,
                     batch_id=e.batch_id,
@@ -376,6 +381,10 @@ def create_rescheduling_proposal(
             "course_id": e.course_id,
             "faculty_id": e.faculty_id,
             "section_id": e.section_id,
+            "course_code": (e.course.course_code if e.course and e.course.course_code else None) or f"C#{e.course_id or 0}",
+            "course_name": (e.course.course_name if e.course and e.course.course_name else None) or "Course",
+            "faculty_name": (e.faculty.user.name if e.faculty and e.faculty.user and e.faculty.user.name else None) or f"Faculty #{e.faculty_id or 0}",
+            "section_name": (e.section.section_name if e.section and e.section.section_name else None) or f"Sec #{e.section_id or 0}",
         })
 
     # Locked vs Disrupted
@@ -476,25 +485,42 @@ def create_rescheduling_proposal(
         if candidate:
             unmatched_new.remove(candidate)
 
-            ca = ca_map.get(mp["course_assignment_id"])
-            c = courses_map.get(ca.course_id) if ca else courses_map.get(mp.get("course_id"))
-            c_code = c.course_code if hasattr(c, "course_code") else f"C#{getattr(c, 'id', '')}"
-            c_name = getattr(c, "course_name", "Course")
+            ca_id = mp.get("course_assignment_id")
+            ca = ca_map.get(ca_id) if ca_id is not None else None
 
-            old_s = slots_map.get(mp["slot_id"])
-            new_s = slots_map.get(candidate.slot_id)
-            old_r = rooms_map.get(mp["room_id"])
-            new_r = rooms_map.get(candidate.room_id)
+            c_code = str(mp.get("course_code") or f"C#{mp.get('course_id') or 0}")
+            c_name = str(mp.get("course_name") or "Course")
+            fac_name = str(mp.get("faculty_name") or (f"Faculty #{ca.faculty_id}" if ca and ca.faculty_id else "Faculty"))
+            sec_name = str(mp.get("section_name") or (getattr(sec_map.get(ca.section_id), "section_name", "") if ca and ca.section_id and ca.section_id in sec_map else ""))
 
-            old_s_lbl = f"{old_s.day} {old_s.start_time.strftime('%H:%M')}-{old_s.end_time.strftime('%H:%M')}" if old_s else f"Slot #{mp['slot_id']}"
-            new_s_lbl = f"{new_s.day} {new_s.start_time.strftime('%H:%M')}-{new_s.end_time.strftime('%H:%M')}" if new_s else f"Slot #{candidate.slot_id}"
-            old_r_num = getattr(old_r, "room_number", f"Room #{mp['room_id']}")
-            new_r_num = getattr(new_r, "room_number", f"Room #{candidate.room_id}")
+            old_s_id = mp.get("slot_id")
+            new_s_id = candidate.slot_id
+            old_r_id = mp.get("room_id")
+            new_r_id = candidate.room_id
 
-            change_type = "RESCHEDULED_BOTH" if (mp["slot_id"] != candidate.slot_id and mp["room_id"] != candidate.room_id) else ("RESCHEDULED_TIME" if mp["slot_id"] != candidate.slot_id else "RESCHEDULED_ROOM")
+            old_s = slots_map.get(old_s_id) if old_s_id is not None else None
+            new_s = slots_map.get(new_s_id) if new_s_id is not None else None
+            old_r = rooms_map.get(old_r_id) if old_r_id is not None else None
+            new_r = rooms_map.get(new_r_id) if new_r_id is not None else None
 
-            sec = sec_map.get(ca.section_id) if (ca and ca.section_id) else None
-            sec_name = getattr(sec, "section_name", f"Sec #{ca.section_id if ca else ''}")
+            old_s_lbl = (
+                f"{old_s.day} {old_s.start_time.strftime('%H:%M')}-{old_s.end_time.strftime('%H:%M')}"
+                if (old_s and old_s.day and old_s.start_time and old_s.end_time)
+                else f"Slot #{old_s_id or 0}"
+            )
+            new_s_lbl = (
+                f"{new_s.day} {new_s.start_time.strftime('%H:%M')}-{new_s.end_time.strftime('%H:%M')}"
+                if (new_s and new_s.day and new_s.start_time and new_s.end_time)
+                else f"Slot #{new_s_id}"
+            )
+            old_r_num = getattr(old_r, "room_number", None) or f"Room #{old_r_id or 0}"
+            new_r_num = getattr(new_r, "room_number", None) or f"Room #{new_r_id}"
+
+            change_type = (
+                "RESCHEDULED_BOTH"
+                if (mp["slot_id"] != candidate.slot_id and mp["room_id"] != candidate.room_id)
+                else ("RESCHEDULED_TIME" if mp["slot_id"] != candidate.slot_id else "RESCHEDULED_ROOM")
+            )
 
             diff_items.append(
                 TimetableDiffItem(
@@ -502,7 +528,7 @@ def create_rescheduling_proposal(
                     course_assignment_id=mp["course_assignment_id"],
                     course_code=c_code,
                     course_name=c_name,
-                    faculty_name=f"Faculty #{ca.faculty_id if ca else ''}",
+                    faculty_name=fac_name,
                     section_name=sec_name,
                     hour_type=mp["hour_type"],
                     old_slot_id=mp["slot_id"],

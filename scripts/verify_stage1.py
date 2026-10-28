@@ -62,7 +62,7 @@ with engine.connect() as conn:
     print(f"\n{'='*55}")
     print(f"  FOREIGN KEYS: {fk_count} total")
     print(f"{'='*55}")
-    fk_ok = PASS if fk_count > 0 else FAIL
+    fk_ok = PASS if (fk_count is not None and fk_count > 0) else FAIL
     print(f"  FK count > 0: {fk_ok}")
 
     # ── CHECK constraints ─────────────────────────────────────────
@@ -72,7 +72,7 @@ with engine.connect() as conn:
             "WHERE constraint_type='CHECK' AND table_schema='public'"
         )
     ).scalar()
-    print(f"\n  CHECK constraints: {ck_count}  {PASS if ck_count > 0 else FAIL}")
+    print(f"\n  CHECK constraints: {ck_count}  {PASS if (ck_count is not None and ck_count > 0) else FAIL}")
 
     # ── Alembic version ───────────────────────────────────────────
     ver = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()

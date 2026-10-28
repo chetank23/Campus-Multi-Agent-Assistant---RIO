@@ -31,6 +31,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from agents.supervisor.agent import classify_intent, supervisor_node
+from agents.state.state import AgentState
 
 
 def normalize_intent(intent: str) -> str:
@@ -68,7 +69,7 @@ class QueryBenchmark:
 
             t0 = time.time()
             classified_raw = classify_intent(query)
-            state = {
+            state: AgentState = {
                 "message": query,
                 "user_id": 1,
                 "role": role,

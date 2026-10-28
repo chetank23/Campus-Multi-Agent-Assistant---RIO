@@ -87,6 +87,13 @@ def base_entities():
         slots = db.query(TimeSlot).filter(TimeSlot.slot_type == "CLASS").limit(4).all()
         admin = db.query(User).filter(User.role == "ADMIN").first()
 
+        assert ac_year is not None
+        assert dept is not None
+        assert prog is not None
+        assert sem is not None
+        assert sec is not None
+        assert admin is not None
+
         # Ensure batch exists
         batch = db.query(Batch).filter(Batch.section_id == sec.id).first()
         if not batch:
@@ -989,6 +996,7 @@ def test_scenario_15_regression_for_previously_working_functionality(admin_token
 
     with Session(engine) as db:
         v_check = db.query(TimetableVersion).filter(TimetableVersion.id == vid).first()
+        assert v_check is not None
         assert v_check.status == "REVIEWED"
 
     # 2. Non-admin cannot publish (403 Forbidden)
@@ -998,6 +1006,7 @@ def test_scenario_15_regression_for_previously_working_functionality(admin_token
     # 3. Finalized/Published versions reject entry editing with 409
     with Session(engine) as db:
         v_pub = db.query(TimetableVersion).filter(TimetableVersion.id == vid).first()
+        assert v_pub is not None
         v_pub.status = "PUBLISHED"
         db.commit()
 

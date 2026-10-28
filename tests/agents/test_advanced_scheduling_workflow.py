@@ -23,6 +23,7 @@ Covers all 16 required scenarios from Section 7 of the specification:
 """
 
 import time
+import datetime
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
@@ -160,8 +161,8 @@ def test_05_hard_constraints_remain_enforced_during_conversational_revisions():
     # Verify all strategies retain hard constraints (zero double booking, capacity)
     for strat in ["BALANCED", "FACULTY_COMFORT", "ROOM_EFFICIENCY", "LAB_PREFERENCE"]:
         slots = [
-            OptTimeSlot(id=1, day="MON", start_time="09:00:00", end_time="10:00:00", slot_type="CLASS"),
-            OptTimeSlot(id=2, day="MON", start_time="10:00:00", end_time="11:00:00", slot_type="BREAK"),
+            OptTimeSlot(id=1, day="MON", start_time=datetime.time(9, 0), end_time=datetime.time(10, 0), slot_type="CLASS"),
+            OptTimeSlot(id=2, day="MON", start_time=datetime.time(10, 0), end_time=datetime.time(11, 0), slot_type="BREAK"),
         ]
         dummy_input = OptimizerInput(
             scope=GenerationScope(department_id=1, program_id=1, semester_id=1, academic_year_id=1),

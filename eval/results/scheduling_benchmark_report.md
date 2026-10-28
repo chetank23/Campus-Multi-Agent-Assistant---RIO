@@ -1,6 +1,6 @@
 # Academic Timetable Scheduling Benchmark Report
 
-**Execution Timestamp**: 2026-10-28 15:52:49Z  
+**Execution Timestamp**: 2026-10-28 18:48:24Z  
 **Random Seed**: `42`  
 **Total Scenarios Evaluated**: 16  
 
@@ -18,22 +18,22 @@
 
 | # | Scenario ID | Status | Generated | Hard Violations | Soft Score | Runtime (s) | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1 | `SCENARIO_01_FEASIBLE_BASIC` | `OPTIMAL` | Yes | 0 | 100.0 | 0.089 | PASS (Feasible & 0 Blocker) |
-| 2 | `SCENARIO_02_MULTI_COURSE` | `OPTIMAL` | Yes | 0 | 95.7 | 0.072 | PASS (Feasible & 0 Blocker) |
-| 3 | `SCENARIO_03_FACULTY_CONFLICT` | `INFEASIBLE` | No | 0 | N/A | 0.005 | PASS (Expected INFEASIBLE) |
-| 4 | `SCENARIO_04_ROOM_COLLISION` | `OPTIMAL` | Yes | 0 | 100.0 | 0.013 | PASS (Feasible & 0 Blocker) |
-| 5 | `SCENARIO_05_SECTION_CONFLICT` | `OPTIMAL` | Yes | 0 | 100.0 | 0.014 | PASS (Feasible & 0 Blocker) |
+| 1 | `SCENARIO_01_FEASIBLE_BASIC` | `OPTIMAL` | Yes | 0 | 100.0 | 0.021 | PASS (Feasible & 0 Blocker) |
+| 2 | `SCENARIO_02_MULTI_COURSE` | `OPTIMAL` | Yes | 0 | 95.7 | 0.071 | PASS (Feasible & 0 Blocker) |
+| 3 | `SCENARIO_03_FACULTY_CONFLICT` | `INFEASIBLE` | No | 0 | N/A | 0.003 | PASS (Expected INFEASIBLE) |
+| 4 | `SCENARIO_04_ROOM_COLLISION` | `OPTIMAL` | Yes | 0 | 100.0 | 0.008 | PASS (Feasible & 0 Blocker) |
+| 5 | `SCENARIO_05_SECTION_CONFLICT` | `OPTIMAL` | Yes | 0 | 100.0 | 0.020 | PASS (Feasible & 0 Blocker) |
 | 6 | `SCENARIO_06_CAPACITY` | `INFEASIBLE_AT_BUILD` | No | 0 | N/A | 0.000 | PASS (Expected INFEASIBLE_AT_BUILD) |
-| 7 | `SCENARIO_07_FACULTY_AVAILABILITY` | `INFEASIBLE_AT_BUILD` | No | 0 | N/A | 0.003 | PASS (Expected INFEASIBLE_AT_BUILD) |
+| 7 | `SCENARIO_07_FACULTY_AVAILABILITY` | `INFEASIBLE_AT_BUILD` | No | 0 | N/A | 0.000 | PASS (Expected INFEASIBLE_AT_BUILD) |
 | 8 | `SCENARIO_08_LAB_SUITABILITY` | `INFEASIBLE_AT_BUILD` | No | 0 | N/A | 0.000 | PASS (Expected INFEASIBLE_AT_BUILD) |
-| 9 | `SCENARIO_09_BREAK_EXCLUSION` | `OPTIMAL` | Yes | 0 | 79.5 | 0.011 | PASS (Feasible & 0 Blocker) |
-| 10 | `SCENARIO_10_OVERLAPPING_INTERVALS` | `OPTIMAL` | Yes | 0 | 100.0 | 0.023 | PASS (Feasible & 0 Blocker) |
+| 9 | `SCENARIO_09_BREAK_EXCLUSION` | `OPTIMAL` | Yes | 0 | 79.5 | 0.015 | PASS (Feasible & 0 Blocker) |
+| 10 | `SCENARIO_10_OVERLAPPING_INTERVALS` | `OPTIMAL` | Yes | 0 | 100.0 | 0.007 | PASS (Feasible & 0 Blocker) |
 | 11 | `SCENARIO_11_TIGHT_CAPACITY` | `OPTIMAL` | Yes | 0 | 100.0 | 0.005 | PASS (Feasible & 0 Blocker) |
-| 12 | `SCENARIO_12_INFEASIBLE` | `INFEASIBLE` | No | 0 | N/A | 0.004 | PASS (Expected INFEASIBLE) |
-| 13 | `SCENARIO_13_TIMEOUT` | `UNKNOWN` | No | 0 | N/A | 1.662 | PASS (Expected UNKNOWN) |
-| 14 | `SCENARIO_14_SOFT_PREFERENCES` | `OPTIMAL` | Yes | 0 | 100.0 | 0.011 | PASS (Feasible & 0 Blocker) |
+| 12 | `SCENARIO_12_INFEASIBLE` | `INFEASIBLE` | No | 0 | N/A | 0.003 | PASS (Expected INFEASIBLE) |
+| 13 | `SCENARIO_13_TIMEOUT` | `UNKNOWN` | No | 0 | N/A | 1.583 | PASS (Expected UNKNOWN) |
+| 14 | `SCENARIO_14_SOFT_PREFERENCES` | `OPTIMAL` | Yes | 0 | 100.0 | 0.009 | PASS (Feasible & 0 Blocker) |
 | 15 | `SCENARIO_15_FAILED_THEN_REGENERATE` | `OPTIMAL` | Yes | 0 | 100.0 | 0.007 | PASS (Feasible & 0 Blocker) |
-| 16 | `SCENARIO_16_PUBLICATION_SAFEGUARD` | `OPTIMAL` | Yes | 4 | 0.0 | 0.014 | PASS (Safeguard Blocked Publication) |
+| 16 | `SCENARIO_16_PUBLICATION_SAFEGUARD` | `OPTIMAL` | Yes | 4 | 0.0 | 0.022 | PASS (Safeguard Blocked Publication) |
 
 ## Infeasibility & Diagnostics Inspection
 

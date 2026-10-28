@@ -14,7 +14,18 @@ class SolverResult(BaseModel):
     diagnostics: List[str] = []
 
 class TimetableSolver:
-    def __init__(self, opt_input: OptimizerInput, time_limit: int = 60, strategy: str = "BALANCED", previous_entries: Optional[List[Any]] = None, locked_assignments: Optional[List[Any]] = None, disrupted_assignments: Optional[List[Any]] = None, allow_ripple: bool = False, perturbation_penalty_slot: int = 500, perturbation_penalty_room: int = 200):
+    def __init__(
+        self,
+        opt_input: OptimizerInput,
+        time_limit: int = 60,
+        strategy: str = "BALANCED",
+        previous_entries: Optional[List[Any]] = None,
+        locked_assignments: Optional[List[Any]] = None,
+        disrupted_assignments: Optional[List[Any]] = None,
+        allow_ripple: bool = False,
+        perturbation_penalty_slot: int = 500,
+        perturbation_penalty_room: int = 200,
+    ):
         self.previous_entries = previous_entries or []
         self.locked_assignments = locked_assignments or []
         self.disrupted_assignments = disrupted_assignments or []

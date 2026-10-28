@@ -1,7 +1,7 @@
 {
   "benchmark_name": "RIO-MJP Query Intent & Routing Benchmark",
   "mode": "unit",
-  "timestamp": "2026-10-28 15:52:49Z",
+  "timestamp": "2026-10-28 18:48:10Z",
   "total_queries": 55,
   "correct_intents": 55,
   "intent_accuracy_percent": 100.0,
@@ -141,7 +141,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.005
+      "latency_seconds": 0.00434
     },
     {
       "id": "QQ-002",
@@ -155,7 +155,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00016
+      "latency_seconds": 0.00018
     },
     {
       "id": "QQ-003",
@@ -169,7 +169,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00017
+      "latency_seconds": 0.0001
     },
     {
       "id": "QQ-004",
@@ -183,7 +183,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00071
+      "latency_seconds": 0.00042
     },
     {
       "id": "QQ-005",
@@ -197,7 +197,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00016
+      "latency_seconds": 0.00011
     },
     {
       "id": "QQ-006",
@@ -211,7 +211,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00014
+      "latency_seconds": 0.00012
     },
     {
       "id": "QQ-007",
@@ -225,7 +225,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00012
+      "latency_seconds": 0.00011
     },
     {
       "id": "QQ-008",
@@ -239,7 +239,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.0001
+      "latency_seconds": 0.00011
     },
     {
       "id": "QQ-009",
@@ -253,7 +253,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00012
+      "latency_seconds": 0.0001
     },
     {
       "id": "QQ-010",
@@ -267,7 +267,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00014
+      "latency_seconds": 0.00011
     },
     {
       "id": "QQ-011",
@@ -281,7 +281,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00012
+      "latency_seconds": 0.0001
     },
     {
       "id": "QQ-012",
@@ -295,7 +295,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00018
+      "latency_seconds": 0.00015
     },
     {
       "id": "QQ-013",
@@ -309,7 +309,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00019
+      "latency_seconds": 0.00018
     },
     {
       "id": "QQ-014",
@@ -323,7 +323,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00018
+      "latency_seconds": 0.00021
     },
     {
       "id": "QQ-015",
@@ -337,7 +337,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00024
+      "latency_seconds": 0.00022
     },
     {
       "id": "QQ-016",
@@ -351,7 +351,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00019
+      "latency_seconds": 0.00017
     },
     {
       "id": "QQ-017",
@@ -379,7 +379,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00018
+      "latency_seconds": 0.00016
     },
     {
       "id": "QQ-019",
@@ -393,7 +393,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 8e-05
+      "latency_seconds": 9e-05
     },
     {
       "id": "QQ-020",
@@ -421,7 +421,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00012
+      "latency_seconds": 0.00013
     },
     {
       "id": "QQ-022",
@@ -435,7 +435,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 6e-05
+      "latency_seconds": 7e-05
     },
     {
       "id": "QQ-023",
@@ -449,7 +449,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 6e-05
+      "latency_seconds": 7e-05
     },
     {
       "id": "QQ-024",
@@ -519,7 +519,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 8e-05
+      "latency_seconds": 4e-05
     },
     {
       "id": "QQ-029",
@@ -533,7 +533,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 3e-05
+      "latency_seconds": 4e-05
     },
     {
       "id": "QQ-030",
@@ -547,7 +547,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 3e-05
+      "latency_seconds": 2e-05
     },
     {
       "id": "QQ-031",
@@ -575,7 +575,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 5e-05
+      "latency_seconds": 4e-05
     },
     {
       "id": "QQ-033",
@@ -589,7 +589,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 3e-05
+      "latency_seconds": 2e-05
     },
     {
       "id": "QQ-034",
@@ -603,7 +603,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 5e-05
+      "latency_seconds": 4e-05
     },
     {
       "id": "QQ-035",
@@ -631,7 +631,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 5e-05
+      "latency_seconds": 2e-05
     },
     {
       "id": "QQ-037",
@@ -645,7 +645,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 5e-05
+      "latency_seconds": 6e-05
     },
     {
       "id": "QQ-038",
@@ -659,7 +659,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 5e-05
+      "latency_seconds": 6e-05
     },
     {
       "id": "QQ-039",
@@ -701,7 +701,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 9e-05
+      "latency_seconds": 0.0001
     },
     {
       "id": "QQ-042",
@@ -715,7 +715,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 9e-05
+      "latency_seconds": 0.00011
     },
     {
       "id": "QQ-043",
@@ -729,7 +729,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 8e-05
+      "latency_seconds": 0.0001
     },
     {
       "id": "QQ-044",
@@ -743,7 +743,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 7e-05
+      "latency_seconds": 8e-05
     },
     {
       "id": "QQ-045",
@@ -757,7 +757,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 8e-05
+      "latency_seconds": 9e-05
     },
     {
       "id": "QQ-046",
@@ -771,7 +771,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 8e-05
+      "latency_seconds": 0.0001
     },
     {
       "id": "QQ-047",
@@ -785,7 +785,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00049
+      "latency_seconds": 0.00051
     },
     {
       "id": "QQ-048",
@@ -799,7 +799,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00012
+      "latency_seconds": 0.00014
     },
     {
       "id": "QQ-049",
@@ -813,7 +813,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00013
+      "latency_seconds": 0.00017
     },
     {
       "id": "QQ-050",
@@ -827,7 +827,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00012
+      "latency_seconds": 0.00014
     },
     {
       "id": "QQ-051",
@@ -841,7 +841,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 4e-05
+      "latency_seconds": 8e-05
     },
     {
       "id": "QQ-052",
@@ -855,7 +855,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00011
+      "latency_seconds": 0.00017
     },
     {
       "id": "QQ-053",
@@ -869,7 +869,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00012
+      "latency_seconds": 0.00041
     },
     {
       "id": "QQ-054",
@@ -883,7 +883,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.0001
+      "latency_seconds": 0.00018
     },
     {
       "id": "QQ-055",
@@ -897,7 +897,7 @@
       "intent_match": true,
       "routing_match": true,
       "passed": true,
-      "latency_seconds": 0.00011
+      "latency_seconds": 0.00016
     }
   ]
 }

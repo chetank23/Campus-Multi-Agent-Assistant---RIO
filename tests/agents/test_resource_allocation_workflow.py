@@ -140,7 +140,13 @@ def test_02_conflict_with_published_timetable_entry(db_session: Session, student
         db_session.add(tt_entry)
         db_session.commit()
     else:
-        slot = tt_entry.slot
+        if tt_entry.slot is not None:
+            slot = tt_entry.slot
+
+    assert slot is not None
+    assert slot.day is not None
+    assert slot.start_time is not None
+    assert slot.end_time is not None
 
     res = Resource(
         name=f"Room {room.room_number}",
@@ -317,6 +323,10 @@ def test_07_automatic_identification_of_available_alternative_time(db_session: S
     res = Resource(name=f"Room {room.room_number}", resource_type="LAB", capacity=room.capacity, status="ACTIVE")
     db_session.add(res)
     db_session.commit()
+
+    assert slot.day is not None
+    assert slot.start_time is not None
+    assert slot.end_time is not None
 
     day_map = {"MON": 0, "TUE": 1, "WED": 2, "THU": 3, "FRI": 4, "SAT": 5, "SUN": 6,
                "MONDAY": 0, "TUESDAY": 1, "WEDNESDAY": 2, "THURSDAY": 3, "FRIDAY": 4}
@@ -510,6 +520,9 @@ def test_14_recheck_alternative_availability_before_confirmation(
     res = Resource(name="Recheck Facility", resource_type="SEMINAR_HALL", capacity=100, status="ACTIVE")
     db_session.add(res)
     db_session.commit()
+
+    assert res.name is not None
+    assert res.resource_type is not None
 
     b_date = datetime.date.today() + datetime.timedelta(days=26)
     st = datetime.time(11, 0)
