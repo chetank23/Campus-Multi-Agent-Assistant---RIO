@@ -1,0 +1,48 @@
+{
+  "title": "RIO-MJP Master Benchmark & Evaluation Report",
+  "git_commit": "cd35a34bc0cd7cd761e84c35092ca11821e9a4db",
+  "git_branch": "main",
+  "mode": "unit",
+  "timestamp": "2026-10-28 15:52:47Z",
+  "elapsed_seconds": 16.15,
+  "benchmarks": {
+    "scheduling": {
+      "total_scenarios": 16,
+      "total_generated": 10,
+      "zero_violation_timetables": 10,
+      "scheduling_accuracy_percent": 100.0,
+      "infeasible_count": 2,
+      "infeasible_at_build_count": 3,
+      "timeout_count": 1
+    },
+    "query_and_routing": {
+      "total_queries": 55,
+      "intent_accuracy_percent": 100.0,
+      "routing_accuracy_percent": 100.0,
+      "failed_count": 0,
+      "avg_latency_seconds": 0.0
+    },
+    "resource_agent": {
+      "total_tests": 7,
+      "passed_tests": 7,
+      "failed_tests": 0,
+      "pass_rate_percent": 100.0
+    },
+    "pytest_safeguards": {
+      "eval_unit_suite": {
+        "suite": "tests/eval/test_scheduling_benchmark_unit.py",
+        "passed": true,
+        "return_code": 0,
+        "duration_seconds": 6.7,
+        "output_tail": ".........                                                                [100%]\n9 passed in 4.54s"
+      },
+      "api_safeguards_suite": {
+        "suite": "tests/api/test_timetable_validation_safeguards.py",
+        "passed": true,
+        "return_code": 0,
+        "duration_seconds": 7.14,
+        "output_tail": "...............                                                          [100%]\n15 passed in 4.74s"
+      }
+    }
+  }
+}

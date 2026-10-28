@@ -1,0 +1,494 @@
+{
+  "benchmark_name": "RIO-MJP Timetable Solver 16-Scenario Benchmark",
+  "seed": 42,
+  "timestamp": "2026-10-28 15:52:49Z",
+  "total_scenarios": 16,
+  "total_generated": 10,
+  "zero_violation_timetables": 10,
+  "scheduling_accuracy_percent": 100.0,
+  "infeasible_count": 2,
+  "infeasible_at_build_count": 3,
+  "timeout_count": 1,
+  "scenarios": [
+    {
+      "scenario_id": "SCENARIO_01_FEASIBLE_BASIC",
+      "description": "1 faculty, 1 section, 1 course (3 theory hours), 2 classrooms, 10 time slots",
+      "solver_status": "OPTIMAL",
+      "timetable_generated": true,
+      "validation_valid": true,
+      "hard_violation_count": 0,
+      "soft_score": 100.0,
+      "runtime_seconds": 0.0891,
+      "diagnostic_outcome": [],
+      "entries_count": 3,
+      "score_details": {
+        "total_score": 100.0,
+        "hard_violations": 0,
+        "soft_violations": 0,
+        "room_utilization_pct": 15.0,
+        "faculty_workload_balance": 0.0,
+        "student_gap_minutes_avg": 0.0,
+        "faculty_gap_quality": 1.0,
+        "student_gap_quality": 1.0,
+        "preferred_slot_quality": 1.0,
+        "room_change_quality": 1.0,
+        "late_lab_quality": 1.0,
+        "workload_balance_quality": 1.0
+      },
+      "input_characteristics": {
+        "n_faculty": 1,
+        "n_sections": 1,
+        "n_courses": 1,
+        "n_rooms": 2,
+        "n_slots": 10
+      }
+    },
+    {
+      "scenario_id": "SCENARIO_02_MULTI_COURSE",
+      "description": "2 faculty, 2 sections, 3 courses (3 hours each), 4 classrooms, 15 time slots",
+      "solver_status": "OPTIMAL",
+      "timetable_generated": true,
+      "validation_valid": true,
+      "hard_violation_count": 0,
+      "soft_score": 95.67,
+      "runtime_seconds": 0.072,
+      "diagnostic_outcome": [],
+      "entries_count": 9,
+      "score_details": {
+        "total_score": 95.67,
+        "hard_violations": 0,
+        "soft_violations": 0,
+        "room_utilization_pct": 15.0,
+        "faculty_workload_balance": 1.5,
+        "student_gap_minutes_avg": 0.0,
+        "faculty_gap_quality": 1.0,
+        "student_gap_quality": 1.0,
+        "preferred_slot_quality": 1.0,
+        "room_change_quality": 1.0,
+        "late_lab_quality": 1.0,
+        "workload_balance_quality": 0.8125
+      },
+      "input_characteristics": {
+        "n_faculty": 2,
+        "n_sections": 2,
+        "n_courses": 3,
+        "n_rooms": 4,
+        "n_slots": 15
+      }
+    },
+    {
+      "scenario_id": "SCENARIO_03_FACULTY_CONFLICT",
+      "description": "1 faculty assigned to 2 courses (6 total hours), but only 4 slots exist (solver detects conflict)",
+      "solver_status": "INFEASIBLE",
+      "timetable_generated": false,
+      "validation_valid": false,
+      "hard_violation_count": 0,
+      "soft_score": 0.0,
+      "runtime_seconds": 0.0046,
+      "diagnostic_outcome": [
+        "No feasible timetable exists with the current constraints.",
+        "Faculty availability shortage: Faculty ID 1 needs 6 teaching hours but only provided 0 available slots. Suggest adding 6 more available slots for this faculty."
+      ],
+      "entries_count": 0,
+      "score_details": {},
+      "input_characteristics": {
+        "n_faculty": 1,
+        "n_sections": 2,
+        "n_courses": 2,
+        "n_rooms": 2,
+        "n_slots": 4
+      }
+    },
+    {
+      "scenario_id": "SCENARIO_04_ROOM_COLLISION",
+      "description": "2 courses needing same room type, only 1 room, 6 slots (solver must separate them)",
+      "solver_status": "OPTIMAL",
+      "timetable_generated": true,
+      "validation_valid": true,
+      "hard_violation_count": 0,
+      "soft_score": 100.0,
+      "runtime_seconds": 0.0131,
+      "diagnostic_outcome": [],
+      "entries_count": 6,
+      "score_details": {
+        "total_score": 100.0,
+        "hard_violations": 0,
+        "soft_violations": 0,
+        "room_utilization_pct": 100.0,
+        "faculty_workload_balance": 0.0,
+        "student_gap_minutes_avg": 0.0,
+        "faculty_gap_quality": 1.0,
+        "student_gap_quality": 1.0,
+        "preferred_slot_quality": 1.0,
+        "room_change_quality": 1.0,
+        "late_lab_quality": 1.0,
+        "workload_balance_quality": 1.0
+      },
+      "input_characteristics": {
+        "n_faculty": 2,
+        "n_sections": 2,
+        "n_courses": 2,
+        "n_rooms": 1,
+        "n_slots": 6
+      }
+    },
+    {
+      "scenario_id": "SCENARIO_05_SECTION_CONFLICT",
+      "description": "1 section, 2 courses, both need theory slots (solver must prevent section overlap)",
+      "solver_status": "OPTIMAL",
+      "timetable_generated": true,
+      "validation_valid": true,
+      "hard_violation_count": 0,
+      "soft_score": 100.0,
+      "runtime_seconds": 0.0139,
+      "diagnostic_outcome": [],
+      "entries_count": 4,
+      "score_details": {
+        "total_score": 100.0,
+        "hard_violations": 0,
+        "soft_violations": 0,
+        "room_utilization_pct": 33.33,
+        "faculty_workload_balance": 0.0,
+        "student_gap_minutes_avg": 0.0,
+        "faculty_gap_quality": 1.0,
+        "student_gap_quality": 1.0,
+        "preferred_slot_quality": 1.0,
+        "room_change_quality": 1.0,
+        "late_lab_quality": 1.0,
+        "workload_balance_quality": 1.0
+      },
+      "input_characteristics": {
+        "n_faculty": 2,
+        "n_sections": 1,
+        "n_courses": 2,
+        "n_rooms": 2,
+        "n_slots": 6
+      }
+    },
+    {
+      "scenario_id": "SCENARIO_06_CAPACITY",
+      "description": "Room capacity 30, section has 50 students (expect INFEASIBLE_AT_BUILD)",
+      "solver_status": "INFEASIBLE_AT_BUILD",
+      "timetable_generated": false,
+      "validation_valid": false,
+      "hard_violation_count": 0,
+      "soft_score": 0.0,
+      "runtime_seconds": 0.0004,
+      "diagnostic_outcome": [
+        "No eligible rooms for THEORY of course 1",
+        "Faculty availability shortage: Faculty ID 1 needs 3 teaching hours but only provided 0 available slots. Suggest adding 3 more available slots for this faculty."
+      ],
+      "entries_count": 0,
+      "score_details": {},
+      "input_characteristics": {
+        "n_faculty": 1,
+        "n_sections": 1,
+        "n_courses": 1,
+        "n_rooms": 1,
+        "n_slots": 10
+      }
+    },
+    {
+      "scenario_id": "SCENARIO_07_FACULTY_AVAILABILITY",
+      "description": "Faculty marked UNAVAILABLE for all but 2 slots; course needs 3 theory hours (expect INFEASIBLE_AT_BUILD)",
+      "solver_status": "INFEASIBLE_AT_BUILD",
+      "timetable_generated": false,
+      "validation_valid": false,
+      "hard_violation_count": 0,
+      "soft_score": 0.0,
+      "runtime_seconds": 0.0028,
+      "diagnostic_outcome": [
+        "Not enough available slots for faculty 1 teaching 1",
+        "Faculty availability shortage: Faculty ID 1 needs 3 teaching hours but only provided 2 available slots. Suggest adding 1 more available slots for this faculty."
+      ],
+      "entries_count": 0,
+      "score_details": {},
+      "input_characteristics": {
+        "n_faculty": 1,
+        "n_sections": 1,
+        "n_courses": 1,
+        "n_rooms": 1,
+        "n_slots": 10
+      }
+    },
+    {
+      "scenario_id": "SCENARIO_08_LAB_SUITABILITY",
+      "description": "Practical course, only classrooms available without lab designation (expect INFEASIBLE_AT_BUILD)",
+      "solver_status": "INFEASIBLE_AT_BUILD",
+      "timetable_generated": false,
+      "validation_valid": false,
+      "hard_violation_count": 0,
+      "soft_score": 0.0,
+      "runtime_seconds": 0.0002,
+      "diagnostic_outcome": [
+        "No eligible rooms for PRACTICAL of course 1",
+        "Faculty availability shortage: Faculty ID 1 needs 3 teaching hours but only provided 0 available slots. Suggest adding 3 more available slots for this faculty.",
+        "Lab capacity shortage: Need 3 lab room-slots but only 0 are available. Suggest adding 3 more slots or lab rooms."
+      ],
+      "entries_count": 0,
+      "score_details": {},
+      "input_characteristics": {
+        "n_faculty": 1,
+        "n_sections": 1,
+        "n_courses": 1,
+        "n_rooms": 1,
+        "n_slots": 10
+      }
+    },
+    {
+      "scenario_id": "SCENARIO_09_BREAK_EXCLUSION",
+      "description": "Time slots include BREAK and LUNCH types; solver must exclude them from schedule",
+      "solver_status": "OPTIMAL",
+      "timetable_generated": true,
+      "validation_valid": true,
+      "hard_violation_count": 0,
+      "soft_score": 79.49,
+      "runtime_seconds": 0.0107,
+      "diagnostic_outcome": [],
+      "entries_count": 3,
+      "score_details": {
+        "total_score": 79.49,
+        "hard_violations": 0,
+        "soft_violations": 4,
+        "room_utilization_pct": 50.0,
+        "faculty_workload_balance": 0.0,
+        "student_gap_minutes_avg": 120.0,
+        "faculty_gap_quality": 0.3333,
+        "student_gap_quality": 0.3333,
+        "preferred_slot_quality": 1.0,
+        "room_change_quality": 1.0,
+        "late_lab_quality": 1.0,
+        "workload_balance_quality": 1.0
+      },
+      "input_characteristics": {
+        "n_faculty": 1,
+        "n_sections": 1,
+        "n_courses": 1,
+        "n_rooms": 1,
+        "n_slots": 6
+      }
+    },
+    {
+      "scenario_id": "SCENARIO_10_OVERLAPPING_INTERVALS",
+      "description": "Two slots with overlapping time intervals on same day; solver prevents double-booking",
+      "solver_status": "OPTIMAL",
+      "timetable_generated": true,
+      "validation_valid": true,
+      "hard_violation_count": 0,
+      "soft_score": 100.0,
+      "runtime_seconds": 0.0226,
+      "diagnostic_outcome": [],
+      "entries_count": 2,
+      "score_details": {
+        "total_score": 100.0,
+        "hard_violations": 0,
+        "soft_violations": 0,
+        "room_utilization_pct": 25.0,
+        "faculty_workload_balance": 0.0,
+        "student_gap_minutes_avg": 0.0,
+        "faculty_gap_quality": 1.0,
+        "student_gap_quality": 1.0,
+        "preferred_slot_quality": 1.0,
+        "room_change_quality": 1.0,
+        "late_lab_quality": 1.0,
+        "workload_balance_quality": 1.0
+      },
+      "input_characteristics": {
+        "n_faculty": 1,
+        "n_sections": 1,
+        "n_courses": 2,
+        "n_rooms": 2,
+        "n_slots": 4
+      }
+    },
+    {
+      "scenario_id": "SCENARIO_11_TIGHT_CAPACITY",
+      "description": "Exactly enough slots (3) and rooms (1) for 3 required hours; tight but feasible",
+      "solver_status": "OPTIMAL",
+      "timetable_generated": true,
+      "validation_valid": true,
+      "hard_violation_count": 0,
+      "soft_score": 100.0,
+      "runtime_seconds": 0.0052,
+      "diagnostic_outcome": [],
+      "entries_count": 3,
+      "score_details": {
+        "total_score": 100.0,
+        "hard_violations": 0,
+        "soft_violations": 0,
+        "room_utilization_pct": 100.0,
+        "faculty_workload_balance": 0.0,
+        "student_gap_minutes_avg": 0.0,
+        "faculty_gap_quality": 1.0,
+        "student_gap_quality": 1.0,
+        "preferred_slot_quality": 1.0,
+        "room_change_quality": 1.0,
+        "late_lab_quality": 1.0,
+        "workload_balance_quality": 1.0
+      },
+      "input_characteristics": {
+        "n_faculty": 1,
+        "n_sections": 1,
+        "n_courses": 1,
+        "n_rooms": 1,
+        "n_slots": 3
+      }
+    },
+    {
+      "scenario_id": "SCENARIO_12_INFEASIBLE",
+      "description": "More required hours (6) than available room-slots (4); solver proves INFEASIBLE",
+      "solver_status": "INFEASIBLE",
+      "timetable_generated": false,
+      "validation_valid": false,
+      "hard_violation_count": 0,
+      "soft_score": 0.0,
+      "runtime_seconds": 0.004,
+      "diagnostic_outcome": [
+        "No feasible timetable exists with the current constraints.",
+        "Room capacity shortage: Need 6 room-slots but only 4 are available. Suggest adding 2 more slots or rooms.",
+        "Faculty availability shortage: Faculty ID 1 needs 3 teaching hours but only provided 0 available slots. Suggest adding 3 more available slots for this faculty.",
+        "Faculty availability shortage: Faculty ID 2 needs 3 teaching hours but only provided 0 available slots. Suggest adding 3 more available slots for this faculty."
+      ],
+      "entries_count": 0,
+      "score_details": {},
+      "input_characteristics": {
+        "n_faculty": 2,
+        "n_sections": 2,
+        "n_courses": 2,
+        "n_rooms": 1,
+        "n_slots": 4
+      }
+    },
+    {
+      "scenario_id": "SCENARIO_13_TIMEOUT",
+      "description": "Large combinatorial stress problem with time_limit=1s; expect graceful UNKNOWN status",
+      "solver_status": "UNKNOWN",
+      "timetable_generated": false,
+      "validation_valid": false,
+      "hard_violation_count": 0,
+      "soft_score": 0.0,
+      "runtime_seconds": 1.6616,
+      "diagnostic_outcome": [
+        "Solver reached time limit without finding a solution."
+      ],
+      "entries_count": 0,
+      "score_details": {},
+      "input_characteristics": {
+        "n_faculty": 15,
+        "n_sections": 15,
+        "n_courses": 45,
+        "n_rooms": 4,
+        "n_slots": 40
+      }
+    },
+    {
+      "scenario_id": "SCENARIO_14_SOFT_PREFERENCES",
+      "description": "Faculty has PREFERRED slots; solver optimizes and measures preferred_slot_quality",
+      "solver_status": "OPTIMAL",
+      "timetable_generated": true,
+      "validation_valid": true,
+      "hard_violation_count": 0,
+      "soft_score": 100.0,
+      "runtime_seconds": 0.011,
+      "diagnostic_outcome": [],
+      "entries_count": 2,
+      "score_details": {
+        "total_score": 100.0,
+        "hard_violations": 0,
+        "soft_violations": 0,
+        "room_utilization_pct": 33.33,
+        "faculty_workload_balance": 0.0,
+        "student_gap_minutes_avg": 0.0,
+        "faculty_gap_quality": 1.0,
+        "student_gap_quality": 1.0,
+        "preferred_slot_quality": 1.0,
+        "room_change_quality": 1.0,
+        "late_lab_quality": 1.0,
+        "workload_balance_quality": 1.0
+      },
+      "input_characteristics": {
+        "n_faculty": 1,
+        "n_sections": 1,
+        "n_courses": 1,
+        "n_rooms": 1,
+        "n_slots": 6
+      }
+    },
+    {
+      "scenario_id": "SCENARIO_15_FAILED_THEN_REGENERATE",
+      "description": "First attempt infeasible, second relaxed attempt feasible; two runs logged",
+      "solver_status": "OPTIMAL",
+      "timetable_generated": true,
+      "validation_valid": true,
+      "hard_violation_count": 0,
+      "soft_score": 100.0,
+      "runtime_seconds": 0.0069,
+      "diagnostic_outcome": [
+        "Attempt 1 Result: status=INFEASIBLE_AT_BUILD, message=Not enough available slots for faculty 1 teaching 1",
+        "Attempt 2 Recovery: status=OPTIMAL, entries=5"
+      ],
+      "entries_count": 5,
+      "score_details": {
+        "total_score": 100.0,
+        "hard_violations": 0,
+        "soft_violations": 0,
+        "room_utilization_pct": 83.33,
+        "faculty_workload_balance": 0.0,
+        "student_gap_minutes_avg": 0.0,
+        "faculty_gap_quality": 1.0,
+        "student_gap_quality": 1.0,
+        "preferred_slot_quality": 1.0,
+        "room_change_quality": 1.0,
+        "late_lab_quality": 1.0,
+        "workload_balance_quality": 1.0
+      },
+      "input_characteristics": {
+        "n_faculty": 1,
+        "n_sections": 1,
+        "n_courses": 1,
+        "n_rooms": 1,
+        "n_slots": 6
+      },
+      "sub_runs": [
+        {
+          "run": 1,
+          "status": "INFEASIBLE_AT_BUILD",
+          "feasible": false,
+          "time_seconds": 0.0002
+        },
+        {
+          "run": 2,
+          "status": "OPTIMAL",
+          "feasible": true,
+          "time_seconds": 0.0067
+        }
+      ]
+    },
+    {
+      "scenario_id": "SCENARIO_16_PUBLICATION_SAFEGUARD",
+      "description": "Deliberate hard blocker injected into entries; verify validate_timetable rejects publication",
+      "solver_status": "OPTIMAL",
+      "timetable_generated": true,
+      "validation_valid": false,
+      "hard_violation_count": 4,
+      "publication_safeguard_verified": true,
+      "soft_score": 0.0,
+      "runtime_seconds": 0.0138,
+      "diagnostic_outcome": [
+        "Deliberate injection: Duplicate entry at slot #6",
+        "Validation result: is_valid=False, blocker_count=4",
+        "Publication safeguard active: True",
+        "Detected violation codes: ['FACULTY_OVERLAP', 'ROOM_OVERLAP', 'SECTION_OVERLAP', 'INSUFFICIENT_HOURS']"
+      ],
+      "entries_count": 4,
+      "score_details": {},
+      "input_characteristics": {
+        "n_faculty": 1,
+        "n_sections": 1,
+        "n_courses": 1,
+        "n_rooms": 2,
+        "n_slots": 10
+      }
+    }
+  ]
+}
