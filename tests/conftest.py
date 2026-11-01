@@ -119,9 +119,15 @@ def validate_and_build_test_urls(
                     f"the application database name in DATABASE_URL.\n"
                     f"Tests must use a distinct test database name (e.g., '{test_db}_test')."
                 )
-        except Exception as e:
-            if "CRITICAL" in str(e):
-                raise
+        except RuntimeError:
+            # Preserve explicit safety violations raised above.
+            raise
+        except Exception as exc:
+            # A malformed application URL makes database identity impossible
+            # to establish; fail closed rather than allowing destructive tests.
+            raise RuntimeError(
+                "CRITICAL CONFIGURATION ERROR: DATABASE_URL could not be parsed as a valid database URL."
+            ) from exc
 
     # The test fixture drops and recreates test_schema and the seed script
     # truncates tables. Keep the entire pytest lifecycle local-only; an opt-in
@@ -188,52 +194,61 @@ def setup_test_database():
     """
     clean_url, schema_url = get_test_urls()
 
-    # 1. Connect exclusively to the validated test database to manage test_schema
-    engine = create_engine(clean_url, isolation_level="AUTOCOMMIT")
-    with engine.connect() as conn:
-        conn.execute(text("DROP SCHEMA IF EXISTS test_schema CASCADE"))
-        conn.execute(text("CREATE SCHEMA test_schema"))
+    # Keep engine references available for cleanup even when setup fails midway.
+    engine = None
+    schema_engine = None
+    try:
+        # 1. Connect exclusively to the validated test database to manage test_schema
+        engine = create_engine(clean_url, isolation_level="AUTOCOMMIT")
+        with engine.connect() as conn:
+            conn.execute(text("DROP SCHEMA IF EXISTS test_schema CASCADE"))
+            conn.execute(text("CREATE SCHEMA test_schema"))
 
-    # 2. Run Alembic migrations against the test database with search_path=test_schema
-    alembic_cfg = Config("alembic.ini")
-    # This explicit marker is required by env.py for test-database migrations.
-    alembic_cfg.attributes["allow_test_database_migrations"] = True
-    # ConfigParser treats percent signs as interpolation markers; escape them in URLs.
-    alembic_cfg.set_main_option("sqlalchemy.url", schema_url.replace("%", "%%"))
-    command.upgrade(alembic_cfg, "head")
+        # 2. Run Alembic migrations against the test database with search_path=test_schema
+        alembic_cfg = Config("alembic.ini")
+        # This explicit marker is required by env.py for test-database migrations.
+        alembic_cfg.attributes["allow_test_database_migrations"] = True
+        # ConfigParser treats percent signs as interpolation markers; escape them in URLs.
+        alembic_cfg.set_main_option("sqlalchemy.url", schema_url.replace("%", "%%"))
+        command.upgrade(alembic_cfg, "head")
 
-    # 3. Seed test data explicitly into the test database
-    sub_env = os.environ.copy()
-    sub_env["DATABASE_URL"] = schema_url
-    sub_env["TEST_DATABASE_URL"] = schema_url
-    sub_env["TEST_PASSWORD"] = "Test@1234"
-    sub_env["IS_TEST_RUN"] = "true"
+        # 3. Seed test data explicitly into the test database
+        sub_env = os.environ.copy()
+        sub_env["DATABASE_URL"] = schema_url
+        sub_env["TEST_DATABASE_URL"] = schema_url
+        sub_env["TEST_PASSWORD"] = "Test@1234"
+        sub_env["IS_TEST_RUN"] = "true"
 
-    subprocess.run(
-        [sys.executable, "scripts/seed_database.py", "--dataset", "A"],
-        env=sub_env,
-        check=True,
-    )
+        subprocess.run(
+            [sys.executable, "scripts/seed_database.py", "--dataset", "A"],
+            env=sub_env,
+            check=True,
+        )
 
-    # 4. Reset sequences for test_schema
-    schema_engine = create_engine(schema_url)
-    with schema_engine.begin() as conn:
-        conn.execute(text("""
-            DO $$
-            DECLARE
-                seq RECORD;
-            BEGIN
-                FOR seq IN 
-                    SELECT c.relname as seq_name, t.relname as table_name 
-                    FROM pg_class c 
-                    JOIN pg_depend d ON d.objid = c.oid 
-                    JOIN pg_class t ON d.refobjid = t.oid 
-                    JOIN pg_namespace n ON n.oid = c.relnamespace 
-                    WHERE c.relkind = 'S' AND n.nspname = 'test_schema'
-                LOOP
-                    EXECUTE 'SELECT setval(''test_schema.' || seq.seq_name || ''', COALESCE((SELECT MAX(id) FROM test_schema.' || seq.table_name || '), 1), true)';
-                END LOOP;
-            END $$;
-        """))
+        # 4. Reset sequences for test_schema
+        schema_engine = create_engine(schema_url)
+        with schema_engine.begin() as conn:
+            conn.execute(text("""
+                DO $
+                DECLARE
+                    seq RECORD;
+                BEGIN
+                    FOR seq IN
+                        SELECT c.relname as seq_name, t.relname as table_name
+                        FROM pg_class c
+                        JOIN pg_depend d ON d.objid = c.oid
+                        JOIN pg_class t ON d.refobjid = t.oid
+                        JOIN pg_namespace n ON n.oid = c.relnamespace
+                        WHERE c.relkind = 'S' AND n.nspname = 'test_schema'
+                    LOOP
+                        EXECUTE 'SELECT setval(''test_schema.' || seq.seq_name || ''', COALESCE((SELECT MAX(id) FROM test_schema.' || seq.table_name || '), 1), true)';
+                    END LOOP;
+                END $;
+            """))
 
-    yield
+        yield
+    finally:
+        if schema_engine is not None:
+            schema_engine.dispose()
+        if engine is not None:
+            engine.dispose()
