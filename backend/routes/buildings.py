@@ -5,17 +5,19 @@ import csv
 import io
 
 from backend.database import get_db
+from backend.dependencies import get_current_user, require_role
+from backend.models.identity import User
 from backend.models.space_time import Building
 from backend.schemas.building import BuildingCreate, BuildingUpdate, BuildingResponse
 
 router = APIRouter(prefix="/buildings", tags=["Buildings"])
 
 @router.get("/", response_model=List[BuildingResponse])
-def get_buildings(db: Session = Depends(get_db)):
+def get_buildings(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)): 
     return db.query(Building).all()
 
 @router.post("/", response_model=BuildingResponse)
-def create_building(building: BuildingCreate, db: Session = Depends(get_db)):
+def create_building(building: BuildingCreate, admin_user: User = Depends(require_role("ADMIN")), db: Session = Depends(get_db)): 
     db_building = Building(**building.model_dump())
     db.add(db_building)
     db.commit()
@@ -23,14 +25,14 @@ def create_building(building: BuildingCreate, db: Session = Depends(get_db)):
     return db_building
 
 @router.get("/{building_id}", response_model=BuildingResponse)
-def get_building(building_id: int, db: Session = Depends(get_db)):
+def get_building(building_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)): 
     db_building = db.query(Building).filter(Building.id == building_id).first()
     if not db_building:
         raise HTTPException(status_code=404, detail="Building not found")
     return db_building
 
 @router.put("/{building_id}", response_model=BuildingResponse)
-def update_building(building_id: int, building: BuildingUpdate, db: Session = Depends(get_db)):
+def update_building(building_id: int, building: BuildingUpdate, admin_user: User = Depends(require_role("ADMIN")), db: Session = Depends(get_db)): 
     db_building = db.query(Building).filter(Building.id == building_id).first()
     if not db_building:
         raise HTTPException(status_code=404, detail="Building not found")
@@ -41,7 +43,7 @@ def update_building(building_id: int, building: BuildingUpdate, db: Session = De
     return db_building
 
 @router.delete("/{building_id}")
-def delete_building(building_id: int, db: Session = Depends(get_db)):
+def delete_building(building_id: int, admin_user: User = Depends(require_role("ADMIN")), db: Session = Depends(get_db)): 
     db_building = db.query(Building).filter(Building.id == building_id).first()
     if not db_building:
         raise HTTPException(status_code=404, detail="Building not found")
@@ -50,7 +52,7 @@ def delete_building(building_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 @router.post("/import")
-def import_buildings_preview(file: UploadFile = File(...)):
+def import_buildings_preview(file: UploadFile = File(...), admin_user: User = Depends(require_role("ADMIN"))):
     content = file.file.read().decode("utf-8")
     reader = csv.DictReader(io.StringIO(content))
     
@@ -93,7 +95,7 @@ def import_buildings_preview(file: UploadFile = File(...)):
     return {"valid_rows": valid_rows, "errors": errors}
 
 @router.post("/import/confirm")
-def import_buildings_confirm(rows: List[BuildingCreate], db: Session = Depends(get_db)):
+def import_buildings_confirm(rows: List[BuildingCreate], admin_user: User = Depends(require_role("ADMIN")), db: Session = Depends(get_db)): 
     inserted = []
     for row in rows:
         db_building = Building(**row.model_dump())
