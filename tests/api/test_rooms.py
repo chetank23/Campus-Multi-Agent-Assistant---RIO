@@ -25,6 +25,17 @@ def override_get_db():
 app.dependency_overrides[get_db] = override_get_db
 client = TestClient(app, raise_server_exceptions=False)
 
+
+def admin_headers(test_client=client):
+    with TestingSessionLocal() as db:
+        email = db.execute(
+            __import__("sqlalchemy").text("SELECT email FROM users WHERE role = 'ADMIN' LIMIT 1")
+        ).scalar()
+    assert email
+    login = test_client.post("/auth/login", json={"email": email, "password": "Test@1234"})
+    assert login.status_code == 200
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
 @pytest.fixture(autouse=True)
 def test_building():
     # Setup
@@ -46,6 +57,7 @@ def test_create_room(test_building):
     client_raise = TestClient(app, raise_server_exceptions=True)
     response = client_raise.post(
         "/rooms/",
+        headers=admin_headers(client_raise),
         json={"building_id": test_building.id, "room_number": "101", "capacity": 30, "room_type": "CLASSROOM"}
     )
     if response.status_code != 200:
@@ -59,6 +71,7 @@ def test_create_room(test_building):
 def test_invalid_capacity(test_building):
     response = client.post(
         "/rooms/",
+        headers=admin_headers(),
         json={"building_id": test_building.id, "room_number": "102", "capacity": 0, "room_type": "CLASSROOM"}
     )
     assert response.status_code == 422 # Pydantic validation error
@@ -89,7 +102,7 @@ def test_csv_import_validation(test_building):
 {test_building.id},104,30,INVALID_TYPE
 """
     files = {"file": ("test.csv", csv_content.encode("utf-8"), "text/csv")}
-    response = client.post("/rooms/import", files=files)
+    response = client.post("/rooms/import", files=files, headers=admin_headers())
     assert response.status_code == 200
     data = response.json()
     
