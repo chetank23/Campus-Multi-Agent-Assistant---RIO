@@ -66,6 +66,15 @@ def test_change_request_submission_listing_and_admin_review():
     assert reviewed.json()["status"] == "APPROVED"
     assert reviewed.json()["review_note"] == "Approved after review."
 
+    audit = client.get(
+        "/admin/audit-logs",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        params={"action": "CHANGE_REQUEST_APPROVED"},
+    )
+    assert audit.status_code == 200
+    assert audit.json()["total"] >= 1
+    assert any(row["entity_id"] == request_id for row in audit.json()["items"])
+
     replay_review = client.patch(
         f"/change-requests/{request_id}/review",
         headers={"Authorization": f"Bearer {admin_token}"},
