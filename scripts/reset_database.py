@@ -34,6 +34,20 @@ def reset_database():
         print("ERROR: DATABASE_URL could not be parsed as a valid database URL.", file=sys.stderr)
         sys.exit(1)
 
+    # These scripts perform broad TRUNCATE operations. Keep them local-only:
+    # confirmation flags must never make a hosted/production database eligible.
+    db_host = (parsed.host or "").strip().lower()
+    local_hosts = {"localhost", "127.0.0.1", "::1"}
+    if db_host not in local_hosts:
+        print("=" * 70, file=sys.stderr)
+        print("CRITICAL SAFETY VIOLATION: REMOTE DATABASE TARGET BLOCKED", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        print(f"This destructive script only supports local PostgreSQL hosts; target host is '{db_host or 'unspecified'}'.", file=sys.stderr)
+        print("CONFIRM_DB_RESET and CONFIRM_DEV_SEED_RESET cannot override this restriction.", file=sys.stderr)
+        print("Use a separately reviewed, explicitly scoped procedure for hosted database maintenance.", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        sys.exit(1)
+
     db_name = (parsed.database or "").strip()
     if not db_name:
         print("ERROR: DATABASE_URL must include an explicit database name.", file=sys.stderr)
