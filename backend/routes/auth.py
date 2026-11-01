@@ -4,7 +4,7 @@ from backend.database import get_db
 from backend.models.identity import User
 from backend.schemas.auth import LoginRequest, TokenResponse, UserResponse
 from backend.core.security import verify_password, create_access_token, create_refresh_token
-from backend.config import REFRESH_TOKEN_EXPIRE_DAYS, SECRET_KEY, ALGORITHM
+from backend.config import REFRESH_TOKEN_EXPIRE_DAYS, SECRET_KEY, ALGORITHM, COOKIE_SECURE
 from backend.dependencies import get_current_user
 import jwt
 
@@ -38,7 +38,7 @@ def login(request: LoginRequest, response: Response, db: Session = Depends(get_d
         httponly=True,
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         samesite="lax",
-        secure=False, # Set to True in production with HTTPS
+        secure=COOKIE_SECURE,
     )
 
     return {"access_token": access_token, "token_type": "bearer"}
@@ -52,6 +52,8 @@ def refresh_token(request: Request, response: Response, db: Session = Depends(ge
 
     try:
         payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("token_type") != "refresh":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
         user_id_raw = payload.get("sub")
         if user_id_raw is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
@@ -64,7 +66,16 @@ def refresh_token(request: Request, response: Response, db: Session = Depends(ge
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
 
     new_access_token = create_access_token(data={"sub": str(user.id)})
-    # Optionally rotate refresh token as well, for now just issue new access token.
+    new_refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    response.set_cookie(
+        key="refresh_token",
+        value=new_refresh_token,
+        httponly=True,
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        samesite="lax",
+        secure=COOKIE_SECURE,
+        path="/auth",
+    )
 
     return {"access_token": new_access_token, "token_type": "bearer"}
 
@@ -78,7 +89,8 @@ def logout(response: Response):
         httponly=True,
         max_age=0,
         samesite="lax",
-        secure=False,
+        secure=COOKIE_SECURE,
+        path="/auth",
     )
     return {"message": "Logged out successfully"}
 
