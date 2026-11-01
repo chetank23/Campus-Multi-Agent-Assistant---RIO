@@ -35,10 +35,28 @@ def reset_database():
         sys.exit(1)
 
     db_name = (parsed.database or "").strip()
-    is_test_run = os.environ.get("IS_TEST_RUN") == "true"
+    if not db_name:
+        print("ERROR: DATABASE_URL must include an explicit database name.", file=sys.stderr)
+        sys.exit(1)
+
+    is_test_run = os.environ.get("IS_TEST_RUN", "").strip().lower() == "true"
     is_test_db = "test" in db_name.lower()
 
-    if not (is_test_run or is_test_db):
+    # IS_TEST_RUN is a context flag, not permission to bypass target validation.
+    # Even test-invoked resets must point to a database explicitly named as a test DB.
+    if is_test_run and not is_test_db:
+        print("=" * 70, file=sys.stderr)
+        print("CRITICAL SAFETY VIOLATION: TEST RUN TARGET IS NOT A TEST DATABASE", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        print(f"IS_TEST_RUN=true, but DATABASE_URL targets '{db_name}'.", file=sys.stderr)
+        print("The database name must contain 'test' before a test reset is permitted.", file=sys.stderr)
+        print("Refusing to execute destructive TRUNCATE operations.", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        sys.exit(1)
+
+    if is_test_db:
+        print(f"[reset_database] Target test database: '{db_name}'.")
+    else:
         confirm = os.environ.get("CONFIRM_DB_RESET", "").strip().lower()
         if confirm != "yes":
             print("=" * 70, file=sys.stderr)
@@ -54,8 +72,6 @@ def reset_database():
             print("=" * 70, file=sys.stderr)
             sys.exit(1)
         print(f"[reset_database] Target database: '{db_name}' (CONFIRM_DB_RESET=yes authorized).")
-    else:
-        print(f"[reset_database] Target test database: '{db_name}'.")
 
     engine = create_engine(db_url)
     Session = sessionmaker(bind=engine)
