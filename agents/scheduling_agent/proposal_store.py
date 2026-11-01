@@ -226,8 +226,12 @@ class ProposalStore:
                             self._proposals[parent_proposal_id].superseded = True
                             self._proposals[parent_proposal_id].superseded_by = new_id
                         return True, revised, ""
-            except Exception:
-                pass
+            except Exception as exc:
+                # Database state is authoritative; never fall back to a potentially
+                # stale in-memory proposal after a persistence-layer failure.
+                raise RuntimeError(
+                    "Proposal storage is temporarily unavailable; retry the operation."
+                ) from exc
 
             # Fallback to in-memory revision if DB was not reachable
             parent = self._proposals.get(parent_proposal_id)
@@ -301,8 +305,12 @@ class ProposalStore:
                             return prop
                         else:
                             return None
-            except Exception:
-                pass
+            except Exception as exc:
+                # Database state is authoritative; never fall back to a potentially
+                # stale in-memory proposal after a persistence-layer failure.
+                raise RuntimeError(
+                    "Proposal storage is temporarily unavailable; retry the operation."
+                ) from exc
 
             return self._proposals.get(proposal_id)
 
@@ -340,8 +348,12 @@ class ProposalStore:
                         prop = self._proposal_from_db(ap)
                         self._proposals[proposal_id] = prop
                         return True, prop, ""
-            except Exception:
-                pass
+            except Exception as exc:
+                # Database state is authoritative; never fall back to a potentially
+                # stale in-memory proposal after a persistence-layer failure.
+                raise RuntimeError(
+                    "Proposal storage is temporarily unavailable; retry the operation."
+                ) from exc
 
             # In-memory fallback
             proposal = self._proposals.get(proposal_id)
@@ -388,8 +400,12 @@ class ProposalStore:
                         prop = self._proposal_from_db(ap)
                         self._proposals[prop.proposal_id] = prop
                         return prop
-            except Exception:
-                pass
+            except Exception as exc:
+                # Database state is authoritative; never fall back to a potentially
+                # stale in-memory proposal after a persistence-layer failure.
+                raise RuntimeError(
+                    "Proposal storage is temporarily unavailable; retry the operation."
+                ) from exc
 
             now = time.time()
             user_props = [
@@ -413,8 +429,12 @@ class ProposalStore:
                     if ap and not ap.consumed:
                         ap.superseded = True
                         db.commit()
-            except Exception:
-                pass
+            except Exception as exc:
+                # Database state is authoritative; never fall back to a potentially
+                # stale in-memory proposal after a persistence-layer failure.
+                raise RuntimeError(
+                    "Proposal storage is temporarily unavailable; retry the operation."
+                ) from exc
 
             p = self._proposals.get(proposal_id)
             if p and p.user_id == user_id and not p.consumed:
