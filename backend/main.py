@@ -8,6 +8,7 @@ from backend.routes import (
     academic_calendar,
     academic_year,
     auth,
+    audit_logs,
     batch,
     buildings,
     chat,
@@ -72,6 +73,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(audit_logs.router)
 app.include_router(change_requests.router)
 app.include_router(buildings.router)
 app.include_router(rooms.router)
