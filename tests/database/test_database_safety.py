@@ -86,7 +86,7 @@ def test_rejects_same_database_name_as_application_even_on_different_host(monkey
 def test_rejects_remote_test_database_by_default(monkeypatch):
     monkeypatch.delenv("ALLOW_REMOTE_TEST_DATABASE", raising=False)
 
-    with pytest.raises(RuntimeError, match="Remote test databases are blocked by default"):
+    with pytest.raises(RuntimeError, match="Remote test databases cannot be enabled through an environment-variable override"):
         validate_and_build_test_urls(
             "postgresql+psycopg://tester:secret@db.example.com:5432/campus_ai_test",
             "postgresql+psycopg://app:secret@localhost:5432/campus_ai",
@@ -96,7 +96,7 @@ def test_rejects_remote_test_database_by_default(monkeypatch):
 def test_rejects_remote_test_database_even_with_environment_override(monkeypatch):
     monkeypatch.setenv("ALLOW_REMOTE_TEST_DATABASE", "true")
 
-    with pytest.raises(RuntimeError, match="Remote test databases cannot be enabled"):
+    with pytest.raises(RuntimeError, match="Remote test databases cannot be enabled through an environment-variable override"):
         validate_and_build_test_urls(
             "postgresql+psycopg://tester:secret@db.example.com:5432/campus_ai_test",
             "postgresql+psycopg://app:secret@localhost:5432/campus_ai",
