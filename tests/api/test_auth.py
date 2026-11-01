@@ -77,6 +77,11 @@ def test_refresh_token_success(get_seeded_users):
     assert rotated_cookie
     assert rotated_cookie != original_refresh_token
 
+    # A rotated token is single-use: replaying the old cookie is rejected.
+    fresh_client.cookies.set("refresh_token", original_refresh_token)
+    replay_resp = fresh_client.post("/auth/refresh")
+    assert replay_resp.status_code == 401
+
 def test_refresh_token_missing_cookie():
     fresh_client = TestClient(app)
     response = fresh_client.post("/auth/refresh")
@@ -90,14 +95,23 @@ def test_refresh_token_invalid_cookie():
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid or expired refresh token"
 
-def test_logout_clears_cookie():
+def test_logout_clears_cookie_and_revokes_session(get_seeded_users):
     fresh_client = TestClient(app)
+    email = get_seeded_users["ADMIN"]
+    login_resp = fresh_client.post("/auth/login", json={"email": email, "password": "Test@1234"})
+    old_refresh_token = fresh_client.cookies.get("refresh_token")
+    assert old_refresh_token
+
     response = fresh_client.post("/auth/logout")
     assert response.status_code == 200
     assert response.json()["message"] == "Logged out successfully"
     set_cookie = response.headers.get("set-cookie", "")
     assert "refresh_token=" in set_cookie
     assert "max-age=0" in set_cookie.lower() or "expires=" in set_cookie.lower()
+
+    fresh_client.cookies.set("refresh_token", old_refresh_token)
+    revoked_resp = fresh_client.post("/auth/refresh")
+    assert revoked_resp.status_code == 401
 
 
 def test_access_token_cannot_be_used_as_refresh_token(get_seeded_users):
@@ -108,3 +122,11 @@ def test_access_token_cannot_be_used_as_refresh_token(get_seeded_users):
     fresh_client.cookies.set("refresh_token", access_token)
     response = fresh_client.post("/auth/refresh")
     assert response.status_code == 401
+
+
+def test_login_rate_limit_blocks_repeated_invalid_attempts():
+    fresh_client = TestClient(app)
+    payload = {"email": "rate-limit-check@example.com", "password": "incorrect"}
+    responses = [fresh_client.post("/auth/login", json=payload) for _ in range(9)]
+    assert all(response.status_code == 401 for response in responses[:8])
+    assert responses[8].status_code == 429
