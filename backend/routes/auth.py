@@ -39,6 +39,7 @@ def login(request: LoginRequest, response: Response, db: Session = Depends(get_d
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         samesite="lax",
         secure=COOKIE_SECURE,
+        path="/auth",
     )
 
     return {"access_token": access_token, "token_type": "bearer"}
