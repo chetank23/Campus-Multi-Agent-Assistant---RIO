@@ -39,6 +39,22 @@ if not custom_url:
         raise RuntimeError("DATABASE_URL environment variable is required for migrations.")
     config.set_main_option("sqlalchemy.url", database_url)
 
+# Validate the final migration target regardless of whether it came from
+# alembic.ini, an explicit Alembic Config override, or DATABASE_URL.
+from sqlalchemy.engine import make_url  # noqa: E402
+
+migration_url = config.get_main_option("sqlalchemy.url")
+try:
+    parsed_migration_url = make_url(migration_url)
+except Exception as exc:
+    raise RuntimeError("Alembic migration target must be a valid SQLAlchemy URL.") from exc
+
+if parsed_migration_url.get_backend_name() not in ("postgresql", "postgres"):
+    raise RuntimeError("Alembic migrations are supported only for PostgreSQL targets.")
+
+if not (parsed_migration_url.database or "").strip():
+    raise RuntimeError("Alembic migration target must include an explicit database name.")
+
 # Set up Python logging from alembic.ini [loggers] section
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
