@@ -61,11 +61,13 @@ def _resolve_stream_user(
 
     try:
         payload = jwt.decode(raw_token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("token_type") != "access":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
         sub = payload.get("sub")
         if not sub:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
         user_id = int(sub)
-    except jwt.PyJWTError:
+    except (jwt.PyJWTError, ValueError, TypeError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
 
     user = db.query(User).filter(User.id == user_id).first()
