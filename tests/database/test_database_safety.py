@@ -93,16 +93,14 @@ def test_rejects_remote_test_database_by_default(monkeypatch):
         )
 
 
-def test_allows_remote_test_database_only_with_explicit_opt_in(monkeypatch):
+def test_rejects_remote_test_database_even_with_environment_override(monkeypatch):
     monkeypatch.setenv("ALLOW_REMOTE_TEST_DATABASE", "true")
 
-    clean_url, schema_url = validate_and_build_test_urls(
-        "postgresql+psycopg://tester:secret@db.example.com:5432/campus_ai_test",
-        "postgresql+psycopg://app:secret@localhost:5432/campus_ai",
-    )
-
-    assert "db.example.com" in clean_url
-    assert "test_schema" in schema_url
+    with pytest.raises(RuntimeError, match="Remote test databases cannot be enabled"):
+        validate_and_build_test_urls(
+            "postgresql+psycopg://tester:secret@db.example.com:5432/campus_ai_test",
+            "postgresql+psycopg://app:secret@localhost:5432/campus_ai",
+        )
 
 
 def test_rejects_malformed_application_database_url(monkeypatch):
