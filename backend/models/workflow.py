@@ -52,6 +52,7 @@ class ChangeRequest(Base):
     status: Mapped[str] = mapped_column(
         String(20), default="PENDING", server_default="'PENDING'"
     )
+    review_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reviewed_by: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id", name="fk_cr_reviewed_by"), nullable=True
     )
