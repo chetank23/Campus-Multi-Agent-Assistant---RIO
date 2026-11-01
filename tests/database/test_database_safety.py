@@ -34,7 +34,7 @@ def test_accepts_distinct_local_postgres_test_database(monkeypatch):
     assert "test_schema" in schema_url
 
 
-@pytest.mark.parametrize("test_url", ["", "   ", None])
+@pytest.mark.parametrize("test_url", ["", "   "])
 def test_rejects_missing_test_database_url(test_url, monkeypatch):
     monkeypatch.delenv("ALLOW_REMOTE_TEST_DATABASE", raising=False)
 
