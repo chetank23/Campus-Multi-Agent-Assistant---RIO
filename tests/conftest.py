@@ -123,6 +123,30 @@ def validate_and_build_test_urls(
             if "CRITICAL" in str(e):
                 raise
 
+    # Remote test databases require an additional explicit opt-in. This prevents a
+    # database merely named "*test" on a hosted/production server from being
+    # treated as disposable by default.
+    host = (test_target.host or "localhost").strip().lower()
+    local_hosts = {"localhost", "127.0.0.1", "::1"}
+    allow_remote = os.environ.get("ALLOW_REMOTE_TEST_DATABASE", "").strip().lower() == "true"
+    if host not in local_hosts and not allow_remote:
+        raise RuntimeError(
+            "CRITICAL SAFETY VIOLATION: TEST_DATABASE_URL points to a remote database host. "
+            "Remote test databases are blocked by default. Only set "
+            "ALLOW_REMOTE_TEST_DATABASE=true after verifying that the remote database is "
+            "dedicated, disposable, and isolated from production."
+        )
+
+    # Reject malformed application URLs rather than silently skipping comparison.
+    if app_raw:
+        try:
+            app_target = make_url(app_raw)
+        except Exception:
+            raise RuntimeError(
+                "CRITICAL CONFIGURATION ERROR: DATABASE_URL could not be parsed; "
+                "refusing to validate the test database without a valid application target."
+            )
+
     # Clean URL (without search_path options, for dropping/creating the schema)
     clean_url = test_target.render_as_string(hide_password=False)
 
