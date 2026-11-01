@@ -46,6 +46,9 @@ if SECRET_KEY.lower() in _SECRET_PLACEHOLDERS or len(SECRET_KEY.encode("utf-8"))
 ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = 20
 REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+# Secure cookies are mandatory in production; local HTTP development may opt out.
+ENVIRONMENT: str = os.environ.get("ENVIRONMENT", "development").strip().lower()
+COOKIE_SECURE: bool = ENVIRONMENT == "production" or os.environ.get("COOKIE_SECURE", "false").strip().lower() in {"1", "true", "yes"}
 
 # SQLAlchemy 2.0 engine
 # pool_pre_ping=True keeps the connection alive on Windows where idle
