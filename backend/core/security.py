@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import secrets
 import jwt
 from passlib.context import CryptContext
 from backend.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
@@ -21,6 +22,6 @@ def create_access_token(data: dict) -> str:
 def create_refresh_token(data: dict) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire, "token_type": "refresh"})
+    to_encode.update({"exp": expire, "token_type": "refresh", "jti": secrets.token_urlsafe(32)})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
