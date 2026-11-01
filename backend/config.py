@@ -16,13 +16,33 @@ from sqlalchemy.orm import sessionmaker
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_ENV_PATH)
 
+from sqlalchemy.engine import make_url
+
 DATABASE_URL: str = os.environ.get("DATABASE_URL", "").strip()
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL environment variable is required and must be set")
-_DEFAULT_DEV_SECRET = "super-secret-key-for-dev-change-to-a-long-random-secret-at-least-32-bytes"
-SECRET_KEY: str = os.environ["SECRET_KEY"]
-if not SECRET_KEY or SECRET_KEY == _DEFAULT_DEV_SECRET:
-    raise ValueError("SECRET_KEY must be set in environment and cannot use default placeholder key")
+
+try:
+    _database_url = make_url(DATABASE_URL)
+except Exception as exc:
+    raise RuntimeError("DATABASE_URL must be a valid SQLAlchemy database URL.") from exc
+
+if _database_url.get_backend_name() not in ("postgresql", "postgres"):
+    raise RuntimeError("DATABASE_URL must target PostgreSQL.")
+
+_SECRET_PLACEHOLDERS = {
+    "",
+    "your-32-byte-random-secret-key-here",
+    "super-secret-key-for-dev-change-to-a-long-random-secret-at-least-32-bytes",
+    "change-me",
+    "changeme",
+    "your-secret-key",
+}
+SECRET_KEY: str = os.environ.get("SECRET_KEY", "").strip()
+if SECRET_KEY.lower() in _SECRET_PLACEHOLDERS or len(SECRET_KEY.encode("utf-8")) < 32:
+    raise ValueError(
+        "SECRET_KEY must be configured with a non-placeholder value of at least 32 bytes."
+    )
 ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = 20
 REFRESH_TOKEN_EXPIRE_DAYS: int = 7
