@@ -37,7 +37,9 @@ if not custom_url:
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         raise RuntimeError("DATABASE_URL environment variable is required for migrations.")
-    config.set_main_option("sqlalchemy.url", database_url)
+    # Escape percent signs because ConfigParser interprets them as interpolation markers.
+    escaped_database_url = database_url.replace(chr(37), chr(37) * 2)
+    config.set_main_option("sqlalchemy.url", escaped_database_url)
 
 # Validate the final migration target regardless of whether it came from
 # alembic.ini, an explicit Alembic Config override, or DATABASE_URL.
