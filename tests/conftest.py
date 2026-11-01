@@ -196,6 +196,8 @@ def setup_test_database():
 
     # 2. Run Alembic migrations against the test database with search_path=test_schema
     alembic_cfg = Config("alembic.ini")
+    # This explicit marker is required by env.py for test-database migrations.
+    alembic_cfg.attributes["allow_test_database_migrations"] = True
     # ConfigParser treats percent signs as interpolation markers; escape them in URLs.
     alembic_cfg.set_main_option("sqlalchemy.url", schema_url.replace("%", "%%"))
     command.upgrade(alembic_cfg, "head")
