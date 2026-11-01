@@ -183,8 +183,12 @@ class ResourceProposalStore:
                             return prop
                         else:
                             return None
-            except Exception:
-                pass
+            except Exception as exc:
+                # Database state is authoritative; never fall back to a potentially
+                # stale in-memory proposal after a persistence-layer failure.
+                raise RuntimeError(
+                    "Proposal storage is temporarily unavailable; retry the operation."
+                ) from exc
 
             p = self._proposals.get(proposal_id)
             if p and getattr(p, "superseded", False):
@@ -225,8 +229,12 @@ class ResourceProposalStore:
                         prop = self._proposal_from_db(ap)
                         self._proposals[proposal_id] = prop
                         return True, prop, ""
-            except Exception:
-                pass
+            except Exception as exc:
+                # Database state is authoritative; never fall back to a potentially
+                # stale in-memory proposal after a persistence-layer failure.
+                raise RuntimeError(
+                    "Proposal storage is temporarily unavailable; retry the operation."
+                ) from exc
 
             # In-memory fallback
             proposal = self._proposals.get(proposal_id)
@@ -273,8 +281,12 @@ class ResourceProposalStore:
                         prop = self._proposal_from_db(ap)
                         self._proposals[prop.proposal_id] = prop
                         return prop
-            except Exception:
-                pass
+            except Exception as exc:
+                # Database state is authoritative; never fall back to a potentially
+                # stale in-memory proposal after a persistence-layer failure.
+                raise RuntimeError(
+                    "Proposal storage is temporarily unavailable; retry the operation."
+                ) from exc
 
             now = time.time()
             user_props = [
@@ -300,8 +312,12 @@ class ResourceProposalStore:
                         ap.superseded = True
                         db.commit()
                         db_discarded = True
-            except Exception:
-                pass
+            except Exception as exc:
+                # Database state is authoritative; never fall back to a potentially
+                # stale in-memory proposal after a persistence-layer failure.
+                raise RuntimeError(
+                    "Proposal storage is temporarily unavailable; retry the operation."
+                ) from exc
 
             p = self._proposals.get(proposal_id)
             if p and p.user_id == user_id and not p.consumed:
