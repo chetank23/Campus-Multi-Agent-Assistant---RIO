@@ -67,11 +67,15 @@ def test_refresh_token_success(get_seeded_users):
     assert login_resp.status_code == 200
     assert "refresh_token" in login_resp.cookies
 
+    original_refresh_token = fresh_client.cookies.get("refresh_token")
     refresh_resp = fresh_client.post("/auth/refresh")
     assert refresh_resp.status_code == 200
     data = refresh_resp.json()
     assert "access_token" in data
     assert data["token_type"] == "bearer"
+    rotated_cookie = refresh_resp.cookies.get("refresh_token")
+    assert rotated_cookie
+    assert rotated_cookie != original_refresh_token
 
 def test_refresh_token_missing_cookie():
     fresh_client = TestClient(app)
@@ -94,3 +98,13 @@ def test_logout_clears_cookie():
     set_cookie = response.headers.get("set-cookie", "")
     assert "refresh_token=" in set_cookie
     assert "max-age=0" in set_cookie.lower() or "expires=" in set_cookie.lower()
+
+
+def test_access_token_cannot_be_used_as_refresh_token(get_seeded_users):
+    fresh_client = TestClient(app)
+    email = get_seeded_users["ADMIN"]
+    login_resp = fresh_client.post("/auth/login", json={"email": email, "password": "Test@1234"})
+    access_token = login_resp.json()["access_token"]
+    fresh_client.cookies.set("refresh_token", access_token)
+    response = fresh_client.post("/auth/refresh")
+    assert response.status_code == 401
