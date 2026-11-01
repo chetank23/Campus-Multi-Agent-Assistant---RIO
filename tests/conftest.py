@@ -123,29 +123,18 @@ def validate_and_build_test_urls(
             if "CRITICAL" in str(e):
                 raise
 
-    # Remote test databases require an additional explicit opt-in. This prevents a
-    # database merely named "*test" on a hosted/production server from being
-    # treated as disposable by default.
+    # The test fixture drops and recreates test_schema and the seed script
+    # truncates tables. Keep the entire pytest lifecycle local-only; an opt-in
+    # here would still be unsafe because test setup performs destructive DDL.
     host = (test_target.host or "localhost").strip().lower()
     local_hosts = {"localhost", "127.0.0.1", "::1"}
-    allow_remote = os.environ.get("ALLOW_REMOTE_TEST_DATABASE", "").strip().lower() == "true"
-    if host not in local_hosts and not allow_remote:
+    if host not in local_hosts:
         raise RuntimeError(
             "CRITICAL SAFETY VIOLATION: TEST_DATABASE_URL points to a remote database host. "
-            "Remote test databases are blocked by default. Only set "
-            "ALLOW_REMOTE_TEST_DATABASE=true after verifying that the remote database is "
-            "dedicated, disposable, and isolated from production."
+            "Automated tests are restricted to local PostgreSQL databases because setup "
+            "drops and recreates test_schema and seeds test data. Remote test databases "
+            "cannot be enabled through an environment-variable override."
         )
-
-    # Reject malformed application URLs rather than silently skipping comparison.
-    if app_raw:
-        try:
-            app_target = make_url(app_raw)
-        except Exception:
-            raise RuntimeError(
-                "CRITICAL CONFIGURATION ERROR: DATABASE_URL could not be parsed; "
-                "refusing to validate the test database without a valid application target."
-            )
 
     # Clean URL (without search_path options, for dropping/creating the schema)
     clean_url = test_target.render_as_string(hide_password=False)
