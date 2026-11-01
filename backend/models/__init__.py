@@ -49,6 +49,9 @@ from .timetable import TimetableEntry, TimetableVersion  # noqa: F401
 # Resources
 from .resources import Resource, ResourceBooking  # noqa: F401
 
+# Authentication security
+from .auth_security import LoginRateLimit, RefreshSession  # noqa: F401
+
 # Workflow
 from .workflow import AgentProposal, AuditLog, ChangeRequest, Notification, NotificationOutbox  # noqa: F401
 
@@ -85,5 +88,7 @@ __all__ = [
     "Notification",
     "AuditLog",
     "AgentProposal",
+    "RefreshSession",
+    "LoginRateLimit",
     "NotificationOutbox",
 ]
