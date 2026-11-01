@@ -12,7 +12,7 @@ import datetime
 from sqlalchemy.orm import sessionmaker
 
 load_dotenv(".env")
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql+psycopg://campus_user:campus_password@localhost/campus_ai")
+DATABASE_URL = os.environ["DATABASE_URL"]
 engine = create_engine(DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
