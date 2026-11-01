@@ -109,6 +109,7 @@ def review_change_request(
     old_value = {"status": item.status}
     item.status = body.status
     item.reviewed_by = admin_user.id
+    item.review_note = body.review_note
     db.add(AuditLog(
         user_id=admin_user.id,
         action=f"CHANGE_REQUEST_{body.status}",
@@ -119,6 +120,4 @@ def review_change_request(
     ))
     db.commit()
     db.refresh(item)
-    result = _response(item)
-    result["review_note"] = body.review_note
-    return result
+    return _response(item)
