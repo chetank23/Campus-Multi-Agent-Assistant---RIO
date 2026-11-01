@@ -57,6 +57,14 @@ if parsed_migration_url.get_backend_name() not in ("postgresql", "postgres"):
 if not (parsed_migration_url.database or "").strip():
     raise RuntimeError("Alembic migration target must include an explicit database name.")
 
+# Test databases require an explicit opt-in from the isolated pytest fixture.
+# This prevents a normal Alembic command from migrating a database named for tests.
+migration_database_name = (parsed_migration_url.database or "").lower()
+if "test" in migration_database_name and not config.attributes.get("allow_test_database_migrations", False):
+    raise RuntimeError(
+        "Refusing to run Alembic migrations against a test database without an explicit test-runner override."
+    )
+
 # Set up Python logging from alembic.ini [loggers] section
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
