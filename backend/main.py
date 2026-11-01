@@ -11,6 +11,7 @@ from backend.routes import (
     batch,
     buildings,
     chat,
+    change_requests,
     course,
     course_assignment,
     department,
@@ -71,6 +72,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(change_requests.router)
 app.include_router(buildings.router)
 app.include_router(rooms.router)
 app.include_router(labs.router)
