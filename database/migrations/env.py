@@ -30,9 +30,14 @@ from backend.models import metadata as target_metadata  # noqa: E402
 # ── Alembic config object ────────────────────────────────────────────────────
 config = context.config
 
-# Override sqlalchemy.url from the environment — never hardcoded
-database_url = os.environ["DATABASE_URL"]
-config.set_main_option("sqlalchemy.url", database_url)
+# If a specific URL was already configured (e.g. by test runner via alembic_cfg.set_main_option),
+# preserve it; otherwise read DATABASE_URL from the environment.
+custom_url = config.get_main_option("sqlalchemy.url")
+if not custom_url:
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("DATABASE_URL environment variable is required for migrations.")
+    config.set_main_option("sqlalchemy.url", database_url)
 
 # Set up Python logging from alembic.ini [loggers] section
 if config.config_file_name is not None:

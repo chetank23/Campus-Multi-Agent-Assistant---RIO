@@ -5,6 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
 import sys
@@ -17,10 +18,6 @@ from backend.models import (
     TimeSlot, FacultyAvailability, AcademicCalendar, Resource,
     TimetableVersion, TimetableEntry, ResourceBooking, ChangeRequest, Notification, AuditLog
 )
-
-load_dotenv(".env")
-engine = create_engine(os.environ["DATABASE_URL"])
-Session = sessionmaker(bind=engine)
 
 # Tables in order of dependencies (parents first)
 # Used for inserting
@@ -59,17 +56,78 @@ TRUNCATE_ORDER = [
     "batches", "sections", "semesters", "academic_years", "programs", "departments"
 ]
 
+
+def validate_target_and_get_session():
+    """
+    Validates that the target database is authorized for destructive TRUNCATE operations.
+    - If running under an authorized test run (IS_TEST_RUN=true) or target database name contains 'test':
+      Allowed for automated testing.
+    - If targeting a non-test / development database:
+      Refuses by default. Requires explicit CONFIRM_DEV_SEED_RESET=yes environment variable.
+    """
+    load_dotenv(".env")
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    if not db_url:
+        raise RuntimeError("DATABASE_URL environment variable is required and must be set.")
+
+    try:
+        parsed = make_url(db_url)
+    except Exception:
+        raise RuntimeError("DATABASE_URL could not be parsed as a valid database URL.")
+
+    db_name = (parsed.database or "").strip()
+    is_test_run = os.environ.get("IS_TEST_RUN") == "true"
+    is_test_db = "test" in db_name.lower()
+
+    if is_test_run:
+        if not is_test_db:
+            print("=" * 70, file=sys.stderr)
+            print("CRITICAL SAFETY VIOLATION: IS_TEST_RUN is set, but the target database", file=sys.stderr)
+            print(f"'{db_name}' does not meet the test-database naming rule (must contain 'test').", file=sys.stderr)
+            print("Refusing to execute destructive truncate operation. Aborting.", file=sys.stderr)
+            print("=" * 70, file=sys.stderr)
+            sys.exit(1)
+        print(f"[seed_database] Verified isolated test database target: '{db_name}'.")
+    elif is_test_db:
+        print(f"[seed_database] Targeting test database: '{db_name}'.")
+    else:
+        # Development / non-test database: require explicit confirmation
+        confirm = os.environ.get("CONFIRM_DEV_SEED_RESET", "").strip().lower()
+        if confirm != "yes":
+            print("=" * 70, file=sys.stderr)
+            print("ERROR: DESTRUCTIVE OPERATION GUARD ACTIVATED", file=sys.stderr)
+            print("=" * 70, file=sys.stderr)
+            print(f"scripts/seed_database.py targets non-test database: '{db_name}'", file=sys.stderr)
+            print(f"on host '{parsed.host or 'localhost'}:{parsed.port or 5432}'.", file=sys.stderr)
+            print("Seeding executes TRUNCATE TABLE ... CASCADE across all application tables,", file=sys.stderr)
+            print("which permanently deletes existing development data.", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("To authorize this destructive operation on development data, set:", file=sys.stderr)
+            print("  CONFIRM_DEV_SEED_RESET=yes", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("For tests, configure TEST_DATABASE_URL pointing to a dedicated test database.", file=sys.stderr)
+            print("=" * 70, file=sys.stderr)
+            sys.exit(1)
+        print(f"[seed_database] Target database: '{db_name}' (CONFIRM_DEV_SEED_RESET=yes authorized).")
+
+    engine = create_engine(db_url)
+    return sessionmaker(bind=engine)
+
+
 def clean_value(val):
     if val == "": return None
     if val.lower() == "true": return True
     if val.lower() == "false": return False
     return val
 
+
 def seed_database(dataset_name):
     csv_dir = Path(f"data/sample/{dataset_name}")
     if not csv_dir.exists():
         print(f"Error: Directory {csv_dir} does not exist. Run generator first.")
         return
+
+    Session = validate_target_and_get_session()
 
     with Session() as session:
         # 1. TRUNCATE existing data
@@ -114,6 +172,7 @@ def seed_database(dataset_name):
                 print(f"  {table_name:25s} : {count}")
                 
         print("\nSeed successful!")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Seed database from CSVs")
