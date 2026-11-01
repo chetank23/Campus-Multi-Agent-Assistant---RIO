@@ -155,8 +155,13 @@ class ResourceProposalStore:
                     )
                     db.add(ap)
                     db.commit()
-            except Exception:
-                pass
+            except Exception as exc:
+                # A proposal must never be reported as created unless its
+                # durable record was committed successfully.
+                self._proposals.pop(proposal_id, None)
+                raise RuntimeError(
+                    "Proposal could not be persisted; no confirmation token was issued."
+                ) from exc
 
             return proposal
 
