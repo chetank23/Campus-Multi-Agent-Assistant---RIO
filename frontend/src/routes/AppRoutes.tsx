@@ -51,6 +51,8 @@ import { AdminTimetableVersionsPage } from '@/pages/admin/timetable/AdminTimetab
 import { AdminTimetableReviewPage } from '@/pages/admin/timetable/AdminTimetableReviewPage';
 import { ResourcesPage } from '@/pages/admin/resources/ResourcesPage';
 import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage';
+import { AdminChangeRequestsPage } from '@/pages/admin/AdminChangeRequestsPage';
+import { AdminAuditLogsPage } from '@/pages/admin/AdminAuditLogsPage';
 
 import type { UserRole } from '@/auth/auth.types';
 
@@ -122,9 +124,9 @@ export function AppRoutes() {
           <Route path="/admin/timetable/generate" element={<TimetableGenerationPage />} />
           {/* Stage 7 Resource Allocation & Administration Route */}
           <Route path="/admin/resources" element={<ResourcesPage />} />
-          <Route path="/admin/requests" element={<PlaceholderPage label="Change Requests" />} />
+          <Route path="/admin/requests" element={<AdminChangeRequestsPage />} />
           <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
-          <Route path="/admin/audit" element={<PlaceholderPage label="Audit Logs" />} />
+          <Route path="/admin/audit" element={<AdminAuditLogsPage />} />
         </Route>
       </Route>
 
