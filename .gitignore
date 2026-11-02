@@ -4,6 +4,8 @@ env/
 .env
 .env.*
 !.env.example
+AGENTS.md
+
 
 # Python
 __pycache__/
