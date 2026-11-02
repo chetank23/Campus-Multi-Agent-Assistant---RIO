@@ -81,6 +81,11 @@ def get_events(
     response_model=Dict[str, Any],
     summary="Live & Ongoing Events Dashboard Feed",
 )
+@router.get(
+    "/live-dashboard",
+    response_model=Dict[str, Any],
+    include_in_schema=False,
+)
 def get_live_events_dashboard(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
