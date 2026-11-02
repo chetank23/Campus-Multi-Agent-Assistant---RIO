@@ -1,34 +1,56 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
 from backend.database import get_db
+from backend.dependencies import get_current_user, require_role
+from backend.models.identity import User
 from backend.models.space_time import Lab
 from backend.schemas.lab import LabCreate, LabUpdate, LabResponse
 
 router = APIRouter(prefix="/labs", tags=["Labs"])
 
+
 @router.get("/", response_model=List[LabResponse])
-def get_labs(db: Session = Depends(get_db)):
+def get_labs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     return db.query(Lab).all()
 
+
 @router.post("/", response_model=LabResponse)
-def create_lab(lab: LabCreate, db: Session = Depends(get_db)):
+def create_lab(
+    lab: LabCreate,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_role("ADMIN")),
+):
     db_lab = Lab(**lab.model_dump())
     db.add(db_lab)
     db.commit()
     db.refresh(db_lab)
     return db_lab
 
+
 @router.get("/{lab_id}", response_model=LabResponse)
-def get_lab(lab_id: int, db: Session = Depends(get_db)):
+def get_lab(
+    lab_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     db_lab = db.query(Lab).filter(Lab.id == lab_id).first()
     if not db_lab:
         raise HTTPException(status_code=404, detail="Lab not found")
     return db_lab
 
+
 @router.put("/{lab_id}", response_model=LabResponse)
-def update_lab(lab_id: int, lab: LabUpdate, db: Session = Depends(get_db)):
+def update_lab(
+    lab_id: int,
+    lab: LabUpdate,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_role("ADMIN")),
+):
     db_lab = db.query(Lab).filter(Lab.id == lab_id).first()
     if not db_lab:
         raise HTTPException(status_code=404, detail="Lab not found")
@@ -38,8 +60,13 @@ def update_lab(lab_id: int, lab: LabUpdate, db: Session = Depends(get_db)):
     db.refresh(db_lab)
     return db_lab
 
+
 @router.delete("/{lab_id}")
-def delete_lab(lab_id: int, db: Session = Depends(get_db)):
+def delete_lab(
+    lab_id: int,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_role("ADMIN")),
+):
     db_lab = db.query(Lab).filter(Lab.id == lab_id).first()
     if not db_lab:
         raise HTTPException(status_code=404, detail="Lab not found")
