@@ -44,8 +44,10 @@ import { FacultyPage } from '@/pages/admin/people/FacultyPage';
 import { CoursesPage } from '@/pages/admin/courses/CoursesPage';
 import { BuildingsPage } from '@/pages/admin/campus/BuildingsPage';
 import { RoomsPage } from '@/pages/admin/campus/RoomsPage';
-import { FacultyTimetablePage } from '@/pages/faculty/FacultyTimetablePage';
-import { StudentTimetablePage } from '@/pages/student/StudentTimetablePage';
+import { CalendarTimeSlotsPage } from '@/pages/admin/campus/CalendarTimeSlotsPage';
+import { ImportValidationPage } from '@/pages/admin/data/ImportValidationPage';
+import { ReportsPage } from '@/pages/admin/reports/ReportsPage';
+import { UsersPage } from '@/pages/admin/system/UsersPage';
 import { TimetableGenerationPage } from '@/pages/admin/timetable/TimetableGenerationPage';
 import { AdminTimetableVersionsPage } from '@/pages/admin/timetable/AdminTimetableVersionsPage';
 import { AdminTimetableReviewPage } from '@/pages/admin/timetable/AdminTimetableReviewPage';
@@ -53,6 +55,18 @@ import { ResourcesPage } from '@/pages/admin/resources/ResourcesPage';
 import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage';
 import { AdminChangeRequestsPage } from '@/pages/admin/AdminChangeRequestsPage';
 import { AdminAuditLogsPage } from '@/pages/admin/AdminAuditLogsPage';
+
+import { FacultyTimetablePage } from '@/pages/faculty/FacultyTimetablePage';
+import { FacultyDeptTimetablePage } from '@/pages/faculty/FacultyDeptTimetablePage';
+import { FacultyAvailabilityPage } from '@/pages/faculty/FacultyAvailabilityPage';
+import { FacultyResourcesPage } from '@/pages/faculty/FacultyResourcesPage';
+import { FacultyChangeRequestsPage } from '@/pages/faculty/FacultyChangeRequestsPage';
+import { FacultyNotificationsPage } from '@/pages/faculty/FacultyNotificationsPage';
+
+import { StudentTimetablePage } from '@/pages/student/StudentTimetablePage';
+import { StudentCoursesPage } from '@/pages/student/StudentCoursesPage';
+import { StudentAnnouncementsPage } from '@/pages/student/StudentAnnouncementsPage';
+import { StudentNotificationsPage } from '@/pages/student/StudentNotificationsPage';
 
 import type { UserRole } from '@/auth/auth.types';
 
@@ -105,28 +119,36 @@ export function AppRoutes() {
           }
         >
           <Route path="/admin" element={<AdminDashboard />} />
-          {/* Stage 6B Admin Pages */}
+          {/* Academic Management */}
           <Route path="/admin/academic/departments" element={<DepartmentsPage />} />
           <Route path="/admin/academic/programs" element={<ProgramsPage />} />
           <Route path="/admin/academic/years" element={<AcademicYearsPage />} />
           <Route path="/admin/academic/semesters" element={<SemestersPage />} />
           <Route path="/admin/academic/batches" element={<BatchesPage />} />
           <Route path="/admin/academic/sections" element={<SectionsPage />} />
+          {/* People & Courses */}
           <Route path="/admin/people/students" element={<StudentsPage />} />
           <Route path="/admin/people/faculty" element={<FacultyPage />} />
           <Route path="/admin/courses" element={<CoursesPage />} />
+          {/* Campus Infrastructure */}
           <Route path="/admin/campus/buildings" element={<BuildingsPage />} />
           <Route path="/admin/campus/rooms" element={<RoomsPage />} />
-          {/* Stage 6C/6D Timetable Route */}
+          <Route path="/admin/campus/calendar-slots" element={<CalendarTimeSlotsPage />} />
+          {/* Timetable Engine */}
           <Route path="/admin/timetable" element={<Navigate to="/admin/timetable/versions" replace />} />
           <Route path="/admin/timetable/versions" element={<AdminTimetableVersionsPage />} />
           <Route path="/admin/timetable/versions/:id" element={<AdminTimetableReviewPage />} />
           <Route path="/admin/timetable/generate" element={<TimetableGenerationPage />} />
-          {/* Stage 7 Resource Allocation & Administration Route */}
+          {/* Resource & Operational Administration */}
           <Route path="/admin/resources" element={<ResourcesPage />} />
           <Route path="/admin/requests" element={<AdminChangeRequestsPage />} />
           <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
           <Route path="/admin/audit" element={<AdminAuditLogsPage />} />
+          {/* Data & Analytics */}
+          <Route path="/admin/data/import" element={<ImportValidationPage />} />
+          <Route path="/admin/reports" element={<ReportsPage />} />
+          {/* System Administration */}
+          <Route path="/admin/system/users" element={<UsersPage />} />
         </Route>
       </Route>
 
@@ -141,7 +163,11 @@ export function AppRoutes() {
         >
           <Route path="/faculty" element={<FacultyDashboard />} />
           <Route path="/faculty/timetable" element={<FacultyTimetablePage />} />
-          <Route path="/faculty/dept-timetable" element={<PlaceholderPage label="Department Timetable" />} />
+          <Route path="/faculty/dept-timetable" element={<FacultyDeptTimetablePage />} />
+          <Route path="/faculty/availability" element={<FacultyAvailabilityPage />} />
+          <Route path="/faculty/resources" element={<FacultyResourcesPage />} />
+          <Route path="/faculty/requests" element={<FacultyChangeRequestsPage />} />
+          <Route path="/faculty/notifications" element={<FacultyNotificationsPage />} />
         </Route>
       </Route>
 
@@ -156,6 +182,9 @@ export function AppRoutes() {
         >
           <Route path="/student" element={<StudentDashboard />} />
           <Route path="/student/timetable" element={<StudentTimetablePage />} />
+          <Route path="/student/courses" element={<StudentCoursesPage />} />
+          <Route path="/student/announcements" element={<StudentAnnouncementsPage />} />
+          <Route path="/student/notifications" element={<StudentNotificationsPage />} />
         </Route>
       </Route>
 
@@ -169,28 +198,13 @@ export function AppRoutes() {
 }
 
 /** Professional placeholder for future academic ERP modules. */
-function PlaceholderPage({ label }: { label: string }) {
-  const getMessage = (name: string) => {
-    switch (name) {
-      case 'Audit Logs':
-        return 'Audit log access is not available yet. System audit trails and event telemetry will be enabled in an upcoming release.';
-      case 'Resources':
-        return 'Resource allocation and campus asset tracking is not available yet. Physical and digital asset registers are being configured.';
-      case 'Change Requests':
-        return 'Change request workflow is not available yet. Administrative approval queues and delegation routing are pending release.';
-      case 'Notifications':
-        return 'Notification center is not available yet. Automated alert dispatches and announcement broadcast services are scheduled.';
-      default:
-        return `${label} management is not available yet. Module services will be activated once backend endpoints are deployed.`;
-    }
-  };
-
+export function PlaceholderPage({ label }: { label: string }) {
   return (
     <div className="py-12 max-w-xl mx-auto">
       <EmptyState
         icon={<Clock size={24} className="text-primary-600" />}
         title={`${label} Module`}
-        description={getMessage(label)}
+        description={`${label} management is currently undergoing scheduled updates.`}
       />
     </div>
   );

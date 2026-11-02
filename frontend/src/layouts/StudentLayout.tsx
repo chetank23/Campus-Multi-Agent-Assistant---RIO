@@ -16,6 +16,9 @@ import { useQuery } from '@tanstack/react-query';
 import {
   LayoutGrid,
   CalendarDays,
+  BookOpen,
+  Megaphone,
+  Bell,
   Search,
   Menu,
   X,
@@ -93,6 +96,24 @@ export const StudentLayout: React.FC = () => {
       to: '/student/timetable',
       label: 'My Timetable',
       icon: <CalendarDays size={18} />,
+      end: false,
+    },
+    {
+      to: '/student/courses',
+      label: 'My Courses',
+      icon: <BookOpen size={18} />,
+      end: false,
+    },
+    {
+      to: '/student/announcements',
+      label: 'Announcements',
+      icon: <Megaphone size={18} />,
+      end: false,
+    },
+    {
+      to: '/student/notifications',
+      label: 'Notifications',
+      icon: <Bell size={18} />,
       end: false,
     },
   ];

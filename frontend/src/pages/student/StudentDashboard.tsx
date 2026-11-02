@@ -29,7 +29,7 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import { apiGetMe } from '@/api/auth';
-import { getStudentMyTimetable } from '@/api/timetable';
+import { getStudentMyTimetable, getStudentLiveStatus } from '@/api/timetable';
 import { useAuth } from '@/auth/AuthProvider';
 import { LoadingState } from '@/components/common';
 import { formatTime12h } from '@/utils/timeFormatter';
@@ -61,6 +61,12 @@ export function StudentDashboard() {
     queryKey: ['student', 'my-timetable'],
     queryFn: () => getStudentMyTimetable(),
     staleTime: 60_000,
+  });
+
+  const { data: liveStatus } = useQuery({
+    queryKey: ['student-live-status'],
+    queryFn: getStudentLiveStatus,
+    refetchInterval: 30_000,
   });
 
   const user = me ?? ctxUser;
@@ -149,6 +155,46 @@ export function StudentDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* ── Live Class Real-Time Status Banner ── */}
+      {liveStatus && (liveStatus.ongoing_class || liveStatus.next_class) && (
+        <div className="p-4 sm:p-5 rounded-[24px] bg-gradient-to-r from-[#1E3A8A] to-[#2563EB] text-white shadow-xs flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
+              <Clock size={20} className="text-[#93C5FD]" />
+            </div>
+            <div>
+              {liveStatus.ongoing_class ? (
+                <div className="flex items-center gap-2">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Class Ongoing Now</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-300" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-blue-200">Next Upcoming Class</span>
+                </div>
+              )}
+              <h2 className="text-base sm:text-lg font-black tracking-tight mt-0.5">
+                {liveStatus.ongoing_class
+                  ? `${liveStatus.ongoing_class.course_code}: ${liveStatus.ongoing_class.course_title}`
+                  : `${liveStatus.next_class?.course_code}: ${liveStatus.next_class?.course_title}`}
+              </h2>
+              <p className="text-xs text-blue-100 mt-0.5">
+                {liveStatus.ongoing_class
+                  ? `Room ${liveStatus.ongoing_class.room} · ${formatTime12h(liveStatus.ongoing_class.start_time)} – ${formatTime12h(liveStatus.ongoing_class.end_time)} · Instructor: ${liveStatus.ongoing_class.faculty}`
+                  : `Room ${liveStatus.next_class?.room} · Starts at ${formatTime12h(liveStatus.next_class?.start_time || '')} · Instructor: ${liveStatus.next_class?.faculty}`}
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/student/timetable"
+            className="px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold border border-white/20 transition-colors"
+          >
+            View Live Grid →
+          </Link>
+        </div>
+      )}
+
       {/* ── Main Multi-Panel Layout (Inspired by Reference) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6">
         {/* ══════════════════════════════════════════════════════════════════

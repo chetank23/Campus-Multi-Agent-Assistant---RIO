@@ -114,3 +114,13 @@ class StudentTimetableResponse(BaseModel):
     entries: List[PersonalTimetableEntry] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DepartmentTimetableResponse(BaseModel):
+    department_id: int
+    department_name: str
+    department_code: str
+    total_entries: int
+    entries: List[PersonalTimetableEntry] = []
+
+    model_config = ConfigDict(from_attributes=True)

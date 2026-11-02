@@ -224,3 +224,66 @@ export const getStudentMyTimetable = async (academicYearId?: number): Promise<St
   const response = await apiClient.get('/student/my-timetable', { params });
   return response.data;
 };
+
+export interface DepartmentTimetableResponse {
+  department_id: number;
+  department_name: string;
+  department_code: string;
+  total_entries: number;
+  entries: PersonalTimetableEntry[];
+}
+
+export interface LiveClassItem {
+  course_code: string;
+  course_title: string;
+  room: string;
+  faculty: string;
+  start_time: string;
+  end_time: string;
+  class_status: 'UPCOMING' | 'ONGOING' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED';
+}
+
+export interface LiveStatusResponse {
+  date: string;
+  day: string;
+  current_time: string;
+  ongoing_class: LiveClassItem | null;
+  next_class: LiveClassItem | null;
+  classes: LiveClassItem[];
+}
+
+export interface StudentCourseItem {
+  id: number;
+  course_code: string;
+  course_name: string;
+  course_type: string;
+  credits: number;
+  faculty_name?: string | null;
+  faculty_designation?: string | null;
+  section_name?: string | null;
+}
+
+export const getFacultyDepartmentTimetable = async (params?: {
+  academic_year_id?: number;
+  section_id?: number;
+  semester_id?: number;
+  day?: string;
+}): Promise<DepartmentTimetableResponse> => {
+  const response = await apiClient.get<DepartmentTimetableResponse>('/faculty/department-timetable', { params });
+  return response.data;
+};
+
+export const getFacultyLiveStatus = async (): Promise<LiveStatusResponse> => {
+  const response = await apiClient.get<LiveStatusResponse>('/faculty/live-status');
+  return response.data;
+};
+
+export const getStudentLiveStatus = async (): Promise<LiveStatusResponse> => {
+  const response = await apiClient.get<LiveStatusResponse>('/student/live-status');
+  return response.data;
+};
+
+export const getStudentCourses = async (): Promise<StudentCourseItem[]> => {
+  const response = await apiClient.get<StudentCourseItem[]>('/student/courses');
+  return response.data;
+};

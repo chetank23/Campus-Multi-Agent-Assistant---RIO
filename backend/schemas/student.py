@@ -26,3 +26,16 @@ class StudentResponse(StudentBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class StudentCourseResponse(BaseModel):
+    id: int
+    course_code: str
+    course_name: str
+    course_type: str
+    credits: int
+    faculty_name: Optional[str] = None
+    faculty_designation: Optional[str] = None
+    section_name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)

@@ -14,8 +14,9 @@ import {
   BarChart3,
   ShieldCheck,
   ClipboardList,
-  Settings,
   Boxes,
+  Bell,
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -139,7 +140,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
             {
               label: 'Time Slots & Calendar',
               icon: <Clock size={18} />,
-              to: '/admin/academic/semesters',
+              to: '/admin/campus/calendar-slots',
               implemented: true,
             },
           ],
@@ -150,14 +151,14 @@ function getNavGroups(role: UserRole): NavGroup[] {
             {
               label: 'Import & Validation',
               icon: <UploadCloud size={18} />,
-              to: '/admin/campus/rooms',
+              to: '/admin/data/import',
               implemented: true,
             },
             {
               label: 'Reports & Analytics',
               icon: <BarChart3 size={18} />,
-              to: '/admin/resources',
-              implemented: false,
+              to: '/admin/reports',
+              implemented: true,
             },
           ],
         },
@@ -167,8 +168,8 @@ function getNavGroups(role: UserRole): NavGroup[] {
             {
               label: 'Users & Roles',
               icon: <ShieldCheck size={18} />,
-              to: '/admin/audit',
-              implemented: false,
+              to: '/admin/system/users',
+              implemented: true,
             },
             {
               label: 'Change Requests',
@@ -177,16 +178,16 @@ function getNavGroups(role: UserRole): NavGroup[] {
               implemented: true,
             },
             {
+              label: 'Notifications',
+              icon: <Bell size={18} />,
+              to: '/admin/notifications',
+              implemented: true,
+            },
+            {
               label: 'Audit Logs',
               icon: <ClipboardList size={18} />,
               to: '/admin/audit',
               implemented: true,
-            },
-            {
-              label: 'Settings',
-              icon: <Settings size={18} />,
-              to: '/admin/resources',
-              implemented: false,
             },
           ],
         },
@@ -203,7 +204,16 @@ function getNavGroups(role: UserRole): NavGroup[] {
           groupTitle: 'SCHEDULES & TEACHING',
           items: [
             { label: 'My Timetable', icon: <CalendarDays size={18} />, to: '/faculty/timetable', implemented: true },
-            { label: 'Dept. Timetable', icon: <Building2 size={18} />, to: '/faculty/dept-timetable', implemented: false },
+            { label: 'Dept. Timetable', icon: <Building2 size={18} />, to: '/faculty/dept-timetable', implemented: true },
+            { label: 'My Availability', icon: <Clock size={18} />, to: '/faculty/availability', implemented: true },
+          ],
+        },
+        {
+          groupTitle: 'REQUESTS & OPERATIONS',
+          items: [
+            { label: 'Campus Resources', icon: <Boxes size={18} />, to: '/faculty/resources', implemented: true },
+            { label: 'Change Requests', icon: <ClipboardList size={18} />, to: '/faculty/requests', implemented: true },
+            { label: 'Notifications', icon: <Bell size={18} />, to: '/faculty/notifications', implemented: true },
           ],
         },
       ];
@@ -219,6 +229,14 @@ function getNavGroups(role: UserRole): NavGroup[] {
           groupTitle: 'ACADEMIC SCHEDULE',
           items: [
             { label: 'My Timetable', icon: <CalendarDays size={18} />, to: '/student/timetable', implemented: true },
+            { label: 'My Courses', icon: <BookOpen size={18} />, to: '/student/courses', implemented: true },
+          ],
+        },
+        {
+          groupTitle: 'COMMUNICATION & ALERTS',
+          items: [
+            { label: 'Announcements', icon: <ClipboardList size={18} />, to: '/student/announcements', implemented: true },
+            { label: 'Notifications', icon: <Bell size={18} />, to: '/student/notifications', implemented: true },
           ],
         },
       ];

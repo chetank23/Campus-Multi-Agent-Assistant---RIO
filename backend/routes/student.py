@@ -4,10 +4,11 @@ from typing import List, Optional
 
 from backend.database import get_db
 from backend.models.academic import Student, Faculty
+from backend.models.courses import Course, CourseAssignment
 from backend.models.identity import User
 from backend.models.timetable import TimetableVersion, TimetableEntry
 from backend.models.space_time import Room, TimeSlot
-from backend.schemas.student import StudentCreate, StudentUpdate, StudentResponse
+from backend.schemas.student import StudentCreate, StudentUpdate, StudentResponse, StudentCourseResponse
 from backend.schemas.timetable import StudentTimetableResponse, PersonalTimetableEntry
 from backend.dependencies import get_current_user, require_role, require_department_scope
 
@@ -175,6 +176,74 @@ def get_student_my_timetable_singular(
     current_user: User = Depends(require_role("STUDENT")),
 ):
     return _get_student_my_timetable_handler(academic_year_id, db, current_user)
+
+
+def _get_student_courses_handler(db: Session, current_user: User) -> List[StudentCourseResponse]:
+    stu = db.query(Student).filter(Student.user_id == current_user.id).first()
+    if not stu:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student profile not found")
+
+    assignments = (
+        db.query(CourseAssignment)
+        .options(
+            joinedload(CourseAssignment.course),
+            joinedload(CourseAssignment.faculty).joinedload(Faculty.user),
+            joinedload(CourseAssignment.section),
+        )
+        .filter(CourseAssignment.section_id == stu.section_id)
+        .all()
+    )
+    results = []
+    seen_courses = set()
+    for ca in assignments:
+        if not ca.course or ca.course.id in seen_courses:
+            continue
+        seen_courses.add(ca.course.id)
+        fac_name = ca.faculty.user.name if (ca.faculty and ca.faculty.user) else None
+        fac_desig = ca.faculty.designation if ca.faculty else None
+        sec_name = ca.section.section_name if ca.section else None
+        results.append(
+            StudentCourseResponse(
+                id=ca.course.id,
+                course_code=ca.course.course_code,
+                course_name=ca.course.course_name,
+                course_type=ca.course.course_type,
+                credits=ca.course.credits or 3,
+                faculty_name=fac_name,
+                faculty_designation=fac_desig,
+                section_name=sec_name,
+            )
+        )
+    return results
+
+
+@router.get("/my-courses", response_model=List[StudentCourseResponse])
+def get_student_courses_plural(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("STUDENT")),
+):
+    return _get_student_courses_handler(db, current_user)
+
+
+@student_router.get("/courses", response_model=List[StudentCourseResponse])
+def get_student_courses_singular(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("STUDENT")),
+):
+    return _get_student_courses_handler(db, current_user)
+
+
+@router.get("/live-status")
+@student_router.get("/live-status")
+def get_student_live_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("STUDENT")),
+):
+    """
+    Evaluates real-time class status (ongoing, upcoming, completed) for authenticated student.
+    """
+    from agents.tools.student_tools import get_class_status_data
+    return get_class_status_data(db=db, user=current_user)
 
 
 

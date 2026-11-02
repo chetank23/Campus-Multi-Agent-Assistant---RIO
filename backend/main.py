@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from backend.routes import (
     academic_calendar,
     academic_year,
+    analytics,
     auth,
     audit_logs,
     batch,
@@ -15,6 +16,7 @@ from backend.routes import (
     change_requests,
     course,
     course_assignment,
+    data_import,
     department,
     disruptions,
     elective_group,
@@ -31,6 +33,7 @@ from backend.routes import (
     student,
     time_slot,
     timetable,
+    users,
 )
 
 app = FastAPI(title="Campus AI System")
@@ -99,3 +102,6 @@ app.include_router(resources.router)
 app.include_router(chat.router)
 app.include_router(notifications.router)
 app.include_router(disruptions.router)
+app.include_router(users.router)
+app.include_router(analytics.router)
+app.include_router(data_import.router)

@@ -32,7 +32,7 @@ def check(role: str, endpoint_name: str, expected_status: int, actual_status: in
     else:
         FAIL_COUNT += 1
         tag = "[FAIL]"
-    msg = f"{tag:6} | {role:10} | {endpoint_name:35} | Status {actual_status} (Expected {expected_status}) | {detail}"
+    msg = f"{tag:6} | {role:10} | {endpoint_name:40} | Status {actual_status} (Expected {expected_status}) | {detail}"
     print(msg)
     TEST_LOGS.append((tag, role, endpoint_name, actual_status, expected_status, detail))
 
@@ -46,10 +46,10 @@ def login(email: str, password: str = "Test@1234"):
 
 
 def run_role_verification():
-    print("=" * 105)
-    print("RIO-MJP ROLE COMMUNICATION & FULL API 200-STATUS VERIFICATION")
+    print("=" * 110)
+    print("RIO-MJP ROLE COMPLETION & FULL API 200-STATUS VERIFICATION")
     print(f"Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 105)
+    print("=" * 110)
 
     # =========================================================================
     # 1. ADMIN ROLE VERIFICATION (admin@campus.edu)
@@ -106,6 +106,38 @@ def run_role_verification():
     r = client.get("/admin/audit-logs", headers=admin_headers)
     check("ADMIN", "GET /admin/audit-logs", 200, r.status_code, f"Returned {len(r.json().get('items', r.json()))} audit log records")
 
+    # Users & Roles Management (Phase 2)
+    r = client.get("/users", headers=admin_headers)
+    check("ADMIN", "GET /users", 200, r.status_code, f"Total users: {r.json().get('total')}, page items: {len(r.json().get('items', []))}")
+
+    r = client.get("/users", headers=admin_headers, params={"role": "FACULTY", "limit": 10})
+    check("ADMIN", "GET /users (filtered by role)", 200, r.status_code, f"Returned {len(r.json().get('items', []))} faculty records")
+
+    # Reports & Analytics (Phase 2)
+    r = client.get("/admin/analytics/overview", headers=admin_headers)
+    overview_data = r.json()
+    check("ADMIN", "GET /admin/analytics/overview", 200, r.status_code, f"People: {overview_data.get('people', {}).get('total_users')}, Courses: {overview_data.get('academic', {}).get('total_courses')}")
+
+    r = client.get("/admin/analytics/department-progress", headers=admin_headers)
+    check("ADMIN", "GET /admin/analytics/department-progress", 200, r.status_code, f"Progress for {len(r.json())} departments")
+
+    # Data Import & Validation (Phase 2)
+    preview_payload = {
+        "entity_type": "rooms",
+        "rows": [
+            {"room_number": "MB-TEST-99", "building_id": 1, "capacity": 50, "room_type": "CLASSROOM"}
+        ]
+    }
+    r = client.post("/admin/import/preview", headers=admin_headers, json=preview_payload)
+    check("ADMIN", "POST /admin/import/preview", 200, r.status_code, f"Valid rows: {r.json().get('valid_rows_count')}, Error rows: {r.json().get('error_rows_count')}")
+
+    # Calendar & Time Slots (Phase 2)
+    r = client.get("/academic-calendar/", headers=admin_headers)
+    check("ADMIN", "GET /academic-calendar/", 200, r.status_code, f"Returned {len(r.json())} academic events")
+
+    r = client.get("/time-slots/", headers=admin_headers)
+    check("ADMIN", "GET /time-slots/", 200, r.status_code, f"Returned {len(r.json())} timetable slots")
+
     # Notifications
     r = client.get("/notifications", headers=admin_headers)
     check("ADMIN", "GET /notifications", 200, r.status_code, f"Feed returned {len(r.json())} items")
@@ -123,7 +155,7 @@ def run_role_verification():
     # =========================================================================
     # 2. FACULTY ROLE VERIFICATION (allison.hill@campus.edu)
     # =========================================================================
-    print("-" * 105)
+    print("-" * 110)
     fac_token, fac_login_res = login("allison.hill@campus.edu")
     check("FACULTY", "POST /auth/login", 200, fac_login_res.status_code, "Token issued successfully")
     fac_headers = {"Authorization": f"Bearer {fac_token}"}
@@ -132,9 +164,19 @@ def run_role_verification():
     res = client.get("/auth/me", headers=fac_headers)
     check("FACULTY", "GET /auth/me", 200, res.status_code, f"Identity: {res.json().get('email')} (role={res.json().get('role')})")
 
-    # Timetable
+    # Timetable & Live Status (Phase 3)
     r = client.get("/faculty/my-timetable", headers=fac_headers)
     check("FACULTY", "GET /faculty/my-timetable", 200, r.status_code, f"Teaching hours: {r.json().get('total_teaching_hours')}, entries: {len(r.json().get('entries', []))}")
+
+    r = client.get("/faculty/department-timetable", headers=fac_headers)
+    check("FACULTY", "GET /faculty/department-timetable", 200, r.status_code, f"Dept: {r.json().get('department_name')}, total entries: {r.json().get('total_entries')}")
+
+    r = client.get("/faculty/live-status", headers=fac_headers)
+    check("FACULTY", "GET /faculty/live-status", 200, r.status_code, f"Live status: {r.json().get('status')}")
+
+    # Availability (Phase 3)
+    r = client.get("/faculty-availability/", headers=fac_headers)
+    check("FACULTY", "GET /faculty-availability/", 200, r.status_code, f"Availability entries: {len(r.json())}")
 
     # Resources
     r = client.get("/resources", headers=fac_headers)
@@ -167,7 +209,7 @@ def run_role_verification():
     # =========================================================================
     # 3. STUDENT ROLE VERIFICATION (monica.herrera@campus.edu)
     # =========================================================================
-    print("-" * 105)
+    print("-" * 110)
     stu_token, stu_login_res = login("monica.herrera@campus.edu")
     check("STUDENT", "POST /auth/login", 200, stu_login_res.status_code, "Token issued successfully")
     stu_headers = {"Authorization": f"Bearer {stu_token}"}
@@ -176,12 +218,21 @@ def run_role_verification():
     res = client.get("/auth/me", headers=stu_headers)
     check("STUDENT", "GET /auth/me", 200, res.status_code, f"Identity: {res.json().get('email')} (role={res.json().get('role')})")
 
-    # Timetable
+    # Timetable & Live Status (Phase 4)
     r = client.get("/student/my-timetable", headers=stu_headers)
     check("STUDENT", "GET /student/my-timetable", 200, r.status_code, f"Class hours: {r.json().get('total_class_hours')}, entries: {len(r.json().get('entries', []))}")
 
     r = client.get("/students/my-timetable", headers=stu_headers)
     check("STUDENT", "GET /students/my-timetable (alias)", 200, r.status_code, f"Class hours: {r.json().get('total_class_hours')}")
+
+    r = client.get("/student/courses", headers=stu_headers)
+    check("STUDENT", "GET /student/courses", 200, r.status_code, f"Returned {len(r.json())} enrolled courses")
+
+    r = client.get("/students/my-courses", headers=stu_headers)
+    check("STUDENT", "GET /students/my-courses (alias)", 200, r.status_code, f"Returned {len(r.json())} enrolled courses")
+
+    r = client.get("/student/live-status", headers=stu_headers)
+    check("STUDENT", "GET /student/live-status", 200, r.status_code, f"Live status: {r.json().get('status')}")
 
     # Resources
     r = client.get("/resources", headers=stu_headers)
@@ -214,9 +265,9 @@ def run_role_verification():
     # =========================================================================
     # 4. CROSS-ROLE COMMUNICATION INTACTNESS
     # =========================================================================
-    print("-" * 105)
+    print("-" * 110)
     print("TESTING CROSS-ROLE COMMUNICATION CHANNELS")
-    print("-" * 105)
+    print("-" * 110)
 
     # 4A. Admin broadcasts campus announcement -> Verified in Faculty & Student notifications
     announcement_title = f"Test Campus Announcement {datetime.datetime.now().strftime('%H%M%S')}"
@@ -272,9 +323,9 @@ def run_role_verification():
     # =========================================================================
     # 5. STRICT RBAC ACCESS CONTROL INTEGRITY
     # =========================================================================
-    print("-" * 105)
+    print("-" * 110)
     print("TESTING STRICT ROLE AUTHORIZATION BARRIERS")
-    print("-" * 105)
+    print("-" * 110)
     # Student blocked from admin broadcast (403)
     r = client.post("/notifications/admin/broadcast", headers=stu_headers, json=broadcast_payload)
     check("STUDENT", "Forbidden Admin Broadcast", 403, r.status_code, "Enforced 403 Forbidden")
@@ -287,6 +338,18 @@ def run_role_verification():
     r = client.get("/admin/audit-logs", headers=stu_headers)
     check("STUDENT", "Forbidden Audit Logs", 403, r.status_code, "Enforced 403 Forbidden")
 
+    # Student blocked from user management (403)
+    r = client.get("/users", headers=stu_headers)
+    check("STUDENT", "Forbidden User Administration", 403, r.status_code, "Enforced 403 Forbidden")
+
+    # Student blocked from analytics overview (403)
+    r = client.get("/admin/analytics/overview", headers=stu_headers)
+    check("STUDENT", "Forbidden Analytics Overview", 403, r.status_code, "Enforced 403 Forbidden")
+
+    # Student blocked from import preview (403)
+    r = client.post("/admin/import/preview", headers=stu_headers, json=preview_payload)
+    check("STUDENT", "Forbidden Data Import", 403, r.status_code, "Enforced 403 Forbidden")
+
     # Faculty blocked from admin broadcast (403)
     r = client.post("/notifications/admin/broadcast", headers=fac_headers, json=broadcast_payload)
     check("FACULTY", "Forbidden Admin Broadcast", 403, r.status_code, "Enforced 403 Forbidden")
@@ -295,6 +358,18 @@ def run_role_verification():
     r = client.get("/admin/audit-logs", headers=fac_headers)
     check("FACULTY", "Forbidden Audit Logs", 403, r.status_code, "Enforced 403 Forbidden")
 
+    # Faculty blocked from user management (403)
+    r = client.get("/users", headers=fac_headers)
+    check("FACULTY", "Forbidden User Administration", 403, r.status_code, "Enforced 403 Forbidden")
+
+    # Faculty blocked from analytics overview (403)
+    r = client.get("/admin/analytics/overview", headers=fac_headers)
+    check("FACULTY", "Forbidden Analytics Overview", 403, r.status_code, "Enforced 403 Forbidden")
+
+    # Faculty blocked from import preview (403)
+    r = client.post("/admin/import/preview", headers=fac_headers, json=preview_payload)
+    check("FACULTY", "Forbidden Data Import", 403, r.status_code, "Enforced 403 Forbidden")
+
     # Unauthenticated blocked (401)
     r = client.get("/auth/me")
     check("ANONYMOUS", "Unauthorized /auth/me", 401, r.status_code, "Enforced 401 Unauthorized")
@@ -302,9 +377,12 @@ def run_role_verification():
     r = client.get("/departments/")
     check("ANONYMOUS", "Unauthorized /departments/", 401, r.status_code, "Enforced 401 Unauthorized")
 
-    print("=" * 105)
+    r = client.get("/users")
+    check("ANONYMOUS", "Unauthorized /users", 401, r.status_code, "Enforced 401 Unauthorized")
+
+    print("=" * 110)
     print(f"VERIFICATION RESULTS: {PASS_COUNT} PASSED, {FAIL_COUNT} FAILED")
-    print("=" * 105)
+    print("=" * 110)
 
     if FAIL_COUNT > 0:
         sys.exit(1)

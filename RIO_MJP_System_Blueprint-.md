@@ -1162,38 +1162,49 @@ Preserve the existing RIO-MJP design system and role-specific portal layouts. Ne
 
 ## 22.2 Student portal
 
-Target capabilities:
+**Status:** Completed and Verified (Role Completion Milestone).
 
-- Student dashboard and permitted academic summary.
-- Own published timetable.
-- Class status derived from actual published timetable and current time.
-- Permitted room/course information.
-- Notifications/announcements when implemented.
-- Campus Assistant.
+Implemented capabilities:
+
+- Student dashboard with real-time class status banner and quick academic metrics.
+- Own published timetable view (`/student/timetable`) with deterministic schedule resolution.
+- Live class status (`/student/live-status`) derived from actual published timetable entries and current time.
+- Enrolled courses catalog (`/student/courses` and `/students/my-courses`) scoped to student's section.
+- Campus announcements feed (`/student/announcements`) with circular filters.
+- Notification center (`/student/notifications`) with read/unread tracking and real-time alerts.
+- Integrated AI Campus Assistant drawer with grounded conversational guidance.
 
 A student must never see an unpublished draft through their personal timetable API, chat tool, or frontend state.
 
 ## 22.3 Faculty portal
 
-Target capabilities:
+**Status:** Completed and Verified (Role Completion Milestone).
 
-- Faculty dashboard and personal schedule.
-- Permitted department timetable view.
-- Availability submission where the current API supports it.
-- Resource requests and change requests when their workflows are implemented.
-- Notifications when implemented.
-- Campus Assistant.
+Implemented capabilities:
+
+- Faculty dashboard with personal schedule summary and today's schedule agenda.
+- Department timetable view (`/faculty/dept-timetable`) strictly isolated to the faculty's home department.
+- Teaching availability management (`/faculty/availability` via `/faculty-availability/`) with preference scoring (1-5) and conflict protection.
+- Campus resource reservations (`/faculty/resources` via `/resources/bookings`) with real-time conflict checking.
+- Formal academic change request petitions (`/faculty/requests` via `/change-requests`) for swaps, room adjustments, and availability changes.
+- Notification center (`/faculty/notifications`) with class updates, broadcast alerts, and read mutations.
+- Integrated AI Campus Assistant drawer with role-scoped faculty tools.
 
 ## 22.4 Admin portal
 
-Target capabilities:
+**Status:** Completed and Verified (Role Completion Milestone).
 
-- Academic master data.
-- Faculty/course assignments and campus infrastructure.
-- Resource inventory and booking approval.
-- Timetable generation, review, edit, validate, finalize, publish, and version history.
-- Change requests, notifications, audit logs, and system settings as their modules are completed.
-- Campus Assistant with clear confirmation UI for consequential actions.
+Implemented capabilities:
+
+- Academic master data (Departments, Programs, Academic Years, Semesters, Batches, Sections).
+- People & Infrastructure (Students roster, Faculty directory, Course catalog, Buildings, Rooms & Labs).
+- Timetable Engine (OR-Tools generation, conflicts analysis, review/editing matrix, version history, publishing).
+- Institutional Calendar & Time Slots (`/admin/campus/calendar-slots` via `/academic-calendar/` and `/time-slots/`).
+- Staged Data Ingestion & Validation (`/admin/data/import` via `/admin/import/preview` and `/admin/import/commit`).
+- Reports & Analytics console (`/admin/reports` via `/admin/analytics/overview` and `/admin/analytics/department-progress`).
+- Users & Role Access Control (`/admin/system/users` via `/users` CRUD, active toggling, and password reset).
+- Operational governance (Resource booking approvals, Change Request approval queue, and immutable Audit Logs).
+- Integrated AI Campus Assistant with confirmation states for consequential operations.
 
 ## 22.5 Assistant UX
 
