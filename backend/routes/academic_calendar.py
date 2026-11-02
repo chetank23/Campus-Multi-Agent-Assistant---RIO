@@ -10,12 +10,13 @@ from backend.dependencies import get_current_user
 
 router = APIRouter(prefix="/academic-calendar", tags=["Academic Calendar"])
 
-@router.get("/", response_model=List[AcademicCalendarResponse])
+@router.get("", response_model=List[AcademicCalendarResponse])
+@router.get("/", response_model=List[AcademicCalendarResponse], include_in_schema=False)
 def get_academic_calendars(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return db.query(AcademicCalendar).all()
+    return db.query(AcademicCalendar).order_by(AcademicCalendar.date.asc()).all()
 
 @router.get("/{ac_id}", response_model=AcademicCalendarResponse)
 def get_academic_calendar(
@@ -28,7 +29,8 @@ def get_academic_calendar(
         raise HTTPException(status_code=404, detail="Academic calendar event not found")
     return ac
 
-@router.post("/", response_model=AcademicCalendarResponse)
+@router.post("", response_model=AcademicCalendarResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=AcademicCalendarResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 def create_academic_calendar(
     ac: AcademicCalendarCreate,
     db: Session = Depends(get_db),

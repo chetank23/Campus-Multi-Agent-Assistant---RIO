@@ -193,6 +193,19 @@ def update_user(
                 detail="You cannot revoke your own ADMIN role.",
             )
 
+    # Last active ADMIN protection guard
+    if target.role == "ADMIN" and (body.is_active is False or (body.role and body.role != "ADMIN")):
+        active_admins = (
+            db.query(User)
+            .filter(User.role == "ADMIN", User.is_active.is_(True))
+            .count()
+        )
+        if target.is_active and active_admins <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot deactivate or demote the last active ADMIN in the system.",
+            )
+
     if body.department_id is not None:
         if body.department_id > 0:
             dept = db.query(Department).filter(Department.id == body.department_id).first()

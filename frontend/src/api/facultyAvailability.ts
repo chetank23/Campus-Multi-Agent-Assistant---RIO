@@ -38,3 +38,4 @@ export const facultyAvailabilityApi = {
     await apiClient.delete(`/faculty-availability/${id}`);
   },
 };
+

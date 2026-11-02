@@ -59,15 +59,15 @@ class ImportCommitResponse(BaseModel):
     message: str
 
 
-@router.post("/preview", response_model=ImportPreviewResponse)
-def preview_import(
-    body: ImportPreviewRequest,
-    admin_user: User = Depends(require_role("ADMIN")),
-    db: Session = Depends(get_db),
-):
+def _validate_import_rows(
+    entity_type: EntityType,
+    rows: List[Dict[str, Any]],
+    db: Session,
+) -> tuple[List[Dict[str, Any]], List[RowError]]:
     """
-    Validates institutional data rows before commit.
-    Checks missing fields, type constraints, foreign key validity, and database duplicates.
+    Core validation engine for institutional import data rows.
+    Validates missing fields, types, foreign key existence, payload uniqueness,
+    and database conflict prevention.
     """
     errors: List[RowError] = []
     valid_rows: List[Dict[str, Any]] = []
@@ -75,16 +75,15 @@ def preview_import(
     # Cache foreign keys for performance
     buildings_cache = {b.id: b for b in db.query(Building).all()}
     departments_cache = {d.id: d for d in db.query(Department).all()}
-    departments_code_cache = {d.department_code.upper(): d.id for d in db.query(Department).all()}
     sections_cache = {s.id: s for s in db.query(Section).all()}
 
     # Track duplicates within incoming payload
     seen_identifiers = set()
 
-    for idx, row in enumerate(body.rows):
+    for idx, row in enumerate(rows):
         row_has_error = False
 
-        if body.entity_type == "rooms":
+        if entity_type == "rooms":
             room_num = str(row.get("room_number", "")).strip()
             bld_id = row.get("building_id")
             cap = row.get("capacity")
@@ -97,7 +96,6 @@ def preview_import(
                 errors.append(RowError(row_index=idx, field="room_number", message=f"Duplicate room '{room_num}' in payload."))
                 row_has_error = True
             else:
-                # DB duplicate check
                 existing = db.query(Room).filter(Room.room_number.ilike(room_num)).first()
                 if existing:
                     errors.append(RowError(row_index=idx, field="room_number", message=f"Room '{room_num}' already exists in database."))
@@ -134,7 +132,7 @@ def preview_import(
                     "room_type": rtype,
                 })
 
-        elif body.entity_type == "courses":
+        elif entity_type == "courses":
             code = str(row.get("course_code", "")).strip().upper()
             name = str(row.get("course_name", "")).strip()
             dept_id = row.get("department_id")
@@ -180,7 +178,7 @@ def preview_import(
                     "credits": int(credits_val) if str(credits_val).isdigit() else 3,
                 })
 
-        elif body.entity_type == "faculty":
+        elif entity_type == "faculty":
             fid = str(row.get("faculty_id", "")).strip().upper()
             name = str(row.get("name", "")).strip()
             email = str(row.get("email", "")).strip().lower()
@@ -231,7 +229,7 @@ def preview_import(
                     "designation": desig,
                 })
 
-        elif body.entity_type == "students":
+        elif entity_type == "students":
             sid = str(row.get("student_id", "")).strip().upper()
             name = str(row.get("name", "")).strip()
             email = str(row.get("email", "")).strip().lower()
@@ -291,6 +289,21 @@ def preview_import(
                     "section_id": int(sec_id),
                 })
 
+    return valid_rows, errors
+
+
+@router.post("/preview", response_model=ImportPreviewResponse)
+def preview_import(
+    body: ImportPreviewRequest,
+    admin_user: User = Depends(require_role("ADMIN")),
+    db: Session = Depends(get_db),
+):
+    """
+    Validates institutional data rows before commit.
+    Checks missing fields, type constraints, foreign key validity, and database duplicates.
+    """
+    valid_rows, errors = _validate_import_rows(body.entity_type, body.rows, db)
+
     return ImportPreviewResponse(
         entity_type=body.entity_type,
         total_rows=len(body.rows),
@@ -309,13 +322,21 @@ def commit_import(
 ):
     """
     Executes explicit Admin commit of validated institutional records in an atomic transaction.
+    Re-validates rows to ensure integrity and prevents altered/invalid payloads.
     """
+    valid_rows, errors = _validate_import_rows(body.entity_type, body.rows, db)
+    if errors:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot commit import: {len(errors)} validation error(s) found in payload. Row {errors[0].row_index}: {errors[0].message}",
+        )
+
     from backend.core.security import get_password_hash
 
     count = 0
     try:
         if body.entity_type == "rooms":
-            for r in body.rows:
+            for r in valid_rows:
                 room = Room(
                     room_number=r["room_number"],
                     building_id=r["building_id"],
@@ -326,7 +347,7 @@ def commit_import(
                 count += 1
 
         elif body.entity_type == "courses":
-            for r in body.rows:
+            for r in valid_rows:
                 course = Course(
                     course_code=r["course_code"],
                     course_name=r["course_name"],
@@ -338,7 +359,7 @@ def commit_import(
                 count += 1
 
         elif body.entity_type == "faculty":
-            for r in body.rows:
+            for r in valid_rows:
                 # 1. Create User
                 user = User(
                     name=r["name"],
@@ -362,7 +383,7 @@ def commit_import(
                 count += 1
 
         elif body.entity_type == "students":
-            for r in body.rows:
+            for r in valid_rows:
                 # 1. Create User
                 user = User(
                     name=r["name"],
@@ -399,9 +420,16 @@ def commit_import(
     except Exception as e:
         db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Import failed during commit: {str(e)}",
         )
+
+    return ImportCommitResponse(
+        success=True,
+        entity_type=body.entity_type,
+        imported_count=count,
+        message=f"Successfully imported {count} {body.entity_type} records.",
+    )
 
     return ImportCommitResponse(
         success=True,

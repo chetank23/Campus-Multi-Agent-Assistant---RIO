@@ -71,3 +71,4 @@ export const timeSlotsApi = {
     await apiClient.delete(`/time-slots/${id}`);
   },
 };
+

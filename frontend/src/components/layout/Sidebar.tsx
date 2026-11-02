@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { AdminSidebar } from './AdminSidebar';
 import {
   LayoutDashboard,
   GraduationCap,
@@ -249,7 +250,7 @@ interface SidebarProps {
   onCloseMobile?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ role, mobileOpen = false, onCloseMobile }) => {
+const LegacySidebar: React.FC<SidebarProps> = ({ role, mobileOpen = false, onCloseMobile }) => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
@@ -276,7 +277,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, mobileOpen = false, onCl
     <div className="flex flex-col h-full bg-[#10243A] text-[#F4F7FB] border-r border-[#2B4057] select-none">
       {/* Brand Header */}
       <div className="h-[70px] flex items-center justify-between px-5 border-b border-[#2B4057] shrink-0 bg-[#10243A]">
-        <Link to={role === 'ADMIN' ? '/admin' : role === 'FACULTY' ? '/faculty' : '/student'} className="flex items-center gap-3 min-w-0 group">
+        <Link to={role === 'FACULTY' ? '/faculty' : '/student'} className="flex items-center gap-3 min-w-0 group">
           <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0 text-[#36BDB2] group-hover:scale-105 transition-transform">
             <GraduationCap size={22} className="text-[#36BDB2]" />
           </div>
@@ -462,4 +463,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ role, mobileOpen = false, onCl
       )}
     </>
   );
+};
+
+export const Sidebar: React.FC<SidebarProps> = ({ role, mobileOpen = false, onCloseMobile }) => {
+  if (role === 'ADMIN') {
+    return <AdminSidebar mobileOpen={mobileOpen} onCloseMobile={onCloseMobile} />;
+  }
+  return <LegacySidebar role={role} mobileOpen={mobileOpen} onCloseMobile={onCloseMobile} />;
 };
