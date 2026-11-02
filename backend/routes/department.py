@@ -95,7 +95,12 @@ def delete_department(
 
 # CSV import endpoints similar to building/room
 @router.post("/import")
-def import_departments_preview(file: UploadFile = File(...)):
+def import_departments_preview(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     content = file.file.read().decode("utf-8")
     reader = csv.DictReader(io.StringIO(content))
 
