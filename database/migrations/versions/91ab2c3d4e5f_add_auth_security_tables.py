@@ -37,7 +37,6 @@ def upgrade() -> None:
         sa.Column("attempts", sa.Integer(), server_default="0", nullable=False),
         sa.Column("blocked_until", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("key_hash"),
     )
     op.create_index("ix_login_rate_limits_key_hash", "login_rate_limits", ["key_hash"], unique=True)
 
