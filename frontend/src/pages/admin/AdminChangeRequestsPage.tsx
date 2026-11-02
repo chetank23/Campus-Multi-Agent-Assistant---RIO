@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, X, RefreshCw } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { getPendingChangeRequests, reviewChangeRequest } from '@/api/workflows';
 
 export function AdminChangeRequestsPage() {
