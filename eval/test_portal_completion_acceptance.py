@@ -475,6 +475,7 @@ def run_acceptance_suite():
         room_obj = db.query(Room).filter(Room.id == 2).first()             # SB-101 (cap 60)
         course_obj = db.query(Course).filter(Course.id == 5).first()       # EE614 (THEORY, Dept 3)
         slot_list = db.query(TimeSlot).filter(TimeSlot.id.in_([1, 2, 4])).all()
+        assert test_fac is not None and test_stu is not None and room_obj is not None and course_obj is not None
 
         # Find or create dedicated test timetable version
         target_version = db.query(TimetableVersion).filter(TimetableVersion.reason == "Automated Acceptance Test Timetable").first()

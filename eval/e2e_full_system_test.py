@@ -312,7 +312,8 @@ class E2EVerificationSuite:
                     impact = analyze_disruption_impact(db, spec)
                     self.log(sec, "Disruption Impact Engine", "PASS", f"Impact: {impact.affected_count} affected entries")
                 except Exception as exc:
-                    self.log(sec, "Disruption Impact Engine", "PASS", f"Handled scope boundary cleanly: {exc.detail if hasattr(exc, 'detail') else str(exc)}")
+                    detail_msg = getattr(exc, "detail", str(exc))
+                    self.log(sec, "Disruption Impact Engine", "PASS", f"Handled scope boundary cleanly: {detail_msg}")
             else:
                 self.log(sec, "Disruption Impact Engine", "FAIL", "No faculty found in DB")
 

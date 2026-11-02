@@ -1,8 +1,8 @@
 # RIO-MJP Campus Multi-Agent System: Comprehensive Evaluation & Benchmarking Report
 
-> **Report Timestamp**: `2026-11-02 07:22:13Z`  
-> **Git Target**: Commit `7d97eccc1b6ef01b21b0251079a9fcf1f62d59c3` (Branch: `main`)  
-> **Execution Mode**: `UNIT` | **Total Evaluation Runtime**: `20.56s`  
+> **Report Timestamp**: `2026-11-02 11:21:43Z`  
+> **Git Target**: Commit `123f92c9cfe3712f0c0a06dd29c26c147b9e0376` (Branch: `feature/portal-role-completion`)  
+> **Execution Mode**: `UNIT` | **Total Evaluation Runtime**: `18.67s`  
 > **Environment**: Python 3.13.1, Windows OS, CP-SAT Solver (OR-Tools), PostgreSQL Seeded Schema  
 
 ---
@@ -17,7 +17,7 @@ This document constitutes the authoritative, fully reproducible evaluation repor
 | **Query Intent Classification** | $\ge 90.0\%$ | **100.0%** (55/55 queries) | **PASSED (OPTIMAL)** |
 | **Supervisor Agent Routing** | $\ge 90.0\%$ | **100.0%** (55/55 routed) | **PASSED (OPTIMAL)** |
 | **Resource Agent Lifecycle & Rules** | $100.0\%$ | **100.0%** (7/7 tests) | **PASSED** |
-| **API Safeguards & Conflict Guards** | $100.0\%$ | **FAILED** | **PASSED** |
+| **API Safeguards & Conflict Guards** | $100.0\%$ | **PASSED (15/15)** | **PASSED** |
 
 ## 2. Evaluation Methodology & Metric Formulas
 
@@ -51,22 +51,22 @@ The scheduling evaluation exercises 16 deterministic scenarios spanning basic fe
 ### Detailed Scenario Results
 | Scenario ID | Expected Status | Actual Status | Timetable Gen | Hard Violations | Soft Score | Solve Time | Result |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `SCENARIO_01_FEASIBLE_BASIC` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 100.00 | 0.092s | **PASS (Zero Violations)** |
-| `SCENARIO_02_MULTI_COURSE` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 95.67 | 0.064s | **PASS (Zero Violations)** |
+| `SCENARIO_01_FEASIBLE_BASIC` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 100.00 | 0.020s | **PASS (Zero Violations)** |
+| `SCENARIO_02_MULTI_COURSE` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 95.67 | 0.074s | **PASS (Zero Violations)** |
 | `SCENARIO_03_FACULTY_CONFLICT` | `INFEASIBLE` | `INFEASIBLE` | No | 0 | 0.00 | 0.003s | **PASS (Expected INFEASIBLE)** |
 | `SCENARIO_04_ROOM_COLLISION` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 100.00 | 0.009s | **PASS (Zero Violations)** |
-| `SCENARIO_05_SECTION_CONFLICT` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 100.00 | 0.018s | **PASS (Zero Violations)** |
-| `SCENARIO_06_CAPACITY` | `INFEASIBLE_AT_BUILD` | `INFEASIBLE_AT_BUILD` | No | 0 | 0.00 | 0.000s | **PASS (Expected INFEASIBLE_AT_BUILD)** |
+| `SCENARIO_05_SECTION_CONFLICT` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 100.00 | 0.015s | **PASS (Zero Violations)** |
+| `SCENARIO_06_CAPACITY` | `INFEASIBLE_AT_BUILD` | `INFEASIBLE_AT_BUILD` | No | 0 | 0.00 | 0.001s | **PASS (Expected INFEASIBLE_AT_BUILD)** |
 | `SCENARIO_07_FACULTY_AVAILABILITY` | `INFEASIBLE_AT_BUILD` | `INFEASIBLE_AT_BUILD` | No | 0 | 0.00 | 0.000s | **PASS (Expected INFEASIBLE_AT_BUILD)** |
 | `SCENARIO_08_LAB_SUITABILITY` | `INFEASIBLE_AT_BUILD` | `INFEASIBLE_AT_BUILD` | No | 0 | 0.00 | 0.000s | **PASS (Expected INFEASIBLE_AT_BUILD)** |
-| `SCENARIO_09_BREAK_EXCLUSION` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 79.49 | 0.011s | **PASS (Zero Violations)** |
+| `SCENARIO_09_BREAK_EXCLUSION` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 79.49 | 0.014s | **PASS (Zero Violations)** |
 | `SCENARIO_10_OVERLAPPING_INTERVALS` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 100.00 | 0.016s | **PASS (Zero Violations)** |
 | `SCENARIO_11_TIGHT_CAPACITY` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 100.00 | 0.015s | **PASS (Zero Violations)** |
-| `SCENARIO_12_INFEASIBLE` | `INFEASIBLE` | `INFEASIBLE` | No | 0 | 0.00 | 0.007s | **PASS (Expected INFEASIBLE)** |
-| `SCENARIO_13_TIMEOUT` | `UNKNOWN` | `UNKNOWN` | No | 0 | 0.00 | 1.853s | **PASS (Expected UNKNOWN)** |
-| `SCENARIO_14_SOFT_PREFERENCES` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 100.00 | 0.014s | **PASS (Zero Violations)** |
-| `SCENARIO_15_FAILED_THEN_REGENERATE` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 100.00 | 0.015s | **PASS (Zero Violations)** |
-| `SCENARIO_16_PUBLICATION_SAFEGUARD` | `OPTIMAL` | `OPTIMAL` | Yes | 4 | 0.00 | 0.015s | **PASS (Safeguard Blocked)** |
+| `SCENARIO_12_INFEASIBLE` | `INFEASIBLE` | `INFEASIBLE` | No | 0 | 0.00 | 0.003s | **PASS (Expected INFEASIBLE)** |
+| `SCENARIO_13_TIMEOUT` | `UNKNOWN` | `UNKNOWN` | No | 0 | 0.00 | 1.622s | **PASS (Expected UNKNOWN)** |
+| `SCENARIO_14_SOFT_PREFERENCES` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 100.00 | 0.007s | **PASS (Zero Violations)** |
+| `SCENARIO_15_FAILED_THEN_REGENERATE` | `OPTIMAL` | `OPTIMAL` | Yes | 0 | 100.00 | 0.019s | **PASS (Zero Violations)** |
+| `SCENARIO_16_PUBLICATION_SAFEGUARD` | `OPTIMAL` | `OPTIMAL` | Yes | 4 | 0.00 | 0.018s | **PASS (Safeguard Blocked)** |
 
 ## 4. Benchmark 2: Natural Language Query & Supervisor Routing (55 Queries)
 
@@ -98,13 +98,13 @@ Evaluates the strict state machine invariants and security boundaries of the Res
 
 | Test Name | Category | Status | Latency | Invariant Verified |
 | :--- | :--- | :--- | :--- | :--- |
-| `test_proposal_lifecycle_and_single_use_idempotency` | `proposal_lifecycle` | **PASS** | 0.26002s | First consume: ok=True; Second consume: ok=False, msg='Proposal has already been confirmed and processed (duplicate submission blocked).' |
-| `test_proposal_user_session_isolation` | `proposal_lifecycle` | **PASS** | 0.00717s | Attempt by wrong user: ok=False, error='Access denied: Proposal belongs to another user session.' |
-| `test_proposal_ttl_expiry_enforcement` | `proposal_lifecycle` | **PASS** | 0.00641s | Attempt to consume expired proposal: ok=False, error='Proposal has expired. Please check current availability and request again.' |
-| `test_superseded_proposal_invalidation` | `proposal_lifecycle` | **PASS** | 0.01417s | p4a superseded: ok=False, err='Confirmation Blocked: Proposal has been discarded or superseded. Please create a new booking request.'; p4b active: ok=True |
-| `test_natural_language_parameter_extraction` | `nlp_parsing` | **PASS** | 0.00216s | Parsed: date=2026-11-15, start=14:00:00, end=16:00:00, details={'resource_name': 'Seminar Hall A', 'resource_type': 'SEMINAR_HALL', 'resource_id': None, 'min_capacity': 60, 'purpose': None} |
-| `test_temporal_interval_overlap_logic` | `conflict_detection` | **PASS** | 0.00001s | c1_overlap=True, c2_disjoint=False, c3_touching=False, c4_enclosed=True |
-| `test_non_admin_approval_rejection_blocked` | `authorization_guards` | **PASS** | 0.00131s | Student approve: error='Access denied: Only university Administrators possess the authority to approve resource bookings.'; Faculty reject: error='Access denied: Only university Administrators possess the authority to reject resource bookings.' |
+| `test_proposal_lifecycle_and_single_use_idempotency` | `proposal_lifecycle` | **PASS** | 0.13430s | First consume: ok=True; Second consume: ok=False, msg='Proposal has already been confirmed and processed (duplicate submission blocked).' |
+| `test_proposal_user_session_isolation` | `proposal_lifecycle` | **PASS** | 0.00401s | Attempt by wrong user: ok=False, error='Access denied: Proposal belongs to another user session.' |
+| `test_proposal_ttl_expiry_enforcement` | `proposal_lifecycle` | **PASS** | 0.00490s | Attempt to consume expired proposal: ok=False, error='Proposal has expired. Please check current availability and request again.' |
+| `test_superseded_proposal_invalidation` | `proposal_lifecycle` | **PASS** | 0.00754s | p4a superseded: ok=False, err='Confirmation Blocked: Proposal has been discarded or superseded. Please create a new booking request.'; p4b active: ok=True |
+| `test_natural_language_parameter_extraction` | `nlp_parsing` | **PASS** | 0.00101s | Parsed: date=2026-11-15, start=14:00:00, end=16:00:00, details={'resource_name': 'Seminar Hall A', 'resource_type': 'SEMINAR_HALL', 'resource_id': None, 'min_capacity': 60, 'purpose': None} |
+| `test_temporal_interval_overlap_logic` | `conflict_detection` | **PASS** | 0.00000s | c1_overlap=True, c2_disjoint=False, c3_touching=False, c4_enclosed=True |
+| `test_non_admin_approval_rejection_blocked` | `authorization_guards` | **PASS** | 0.00077s | Student approve: error='Access denied: Only university Administrators possess the authority to approve resource bookings.'; Faculty reject: error='Access denied: Only university Administrators possess the authority to reject resource bookings.' |
 
 ## 6. Regression & API Safeguard Verification
 
@@ -112,13 +112,13 @@ Pytest test suites executed against the live application codebase:
 
 | Test Suite | Scope | Status | Execution Duration |
 | :--- | :--- | :--- | :--- |
-| `tests/eval/test_scheduling_benchmark_unit.py` | `eval_unit_suite` | **FAILED** | 7.12s |
-| `tests/api/test_timetable_validation_safeguards.py` | `api_safeguards_suite` | **FAILED** | 10.91s |
+| `tests/eval/test_scheduling_benchmark_unit.py` | `eval_unit_suite` | **PASSED (100%)** | 7.96s |
+| `tests/api/test_timetable_validation_safeguards.py` | `api_safeguards_suite` | **PASSED (100%)** | 8.63s |
 
 ## 7. Latency & Computational Overhead
 
-- **Timetable Solver Latency**: Min: `0.000s` | Mean: `0.133s` | Max (Stress Scenario): `1.853s`
-- **Natural Language Query Classification Latency**: Mean `0.00036s`
+- **Timetable Solver Latency**: Min: `0.000s` | Mean: `0.115s` | Max (Stress Scenario): `1.622s`
+- **Natural Language Query Classification Latency**: Mean `0.00018s`
 - **Resource Invalidation & Proposal Consumption**: Mean `< 0.010s`
 
 ## 8. Observed Failure Modes & Handled Edge Cases

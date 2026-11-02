@@ -174,6 +174,11 @@ def get_faculty_department_timetable(
         )
 
     dept = fac.department
+    if not dept:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Faculty department record not found.",
+        )
     query = (
         db.query(TimetableEntry)
         .join(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)

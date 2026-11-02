@@ -44,8 +44,8 @@ def get_time_slot(
         raise HTTPException(status_code=404, detail="Time slot not found")
     return slot
 
-@router.post("", response_model=TimeSlotResponse, status_code=status.HTTP_201_CREATED)
-@router.post("/", response_model=TimeSlotResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("", response_model=TimeSlotResponse)
+@router.post("/", response_model=TimeSlotResponse, include_in_schema=False)
 def create_time_slot(
     slot: TimeSlotCreate,
     db: Session = Depends(get_db),
@@ -60,12 +60,11 @@ def create_time_slot(
             detail="Start time must be strictly before end time.",
         )
     
-    norm_day = _norm_day(slot.day)
     # Overlap validation on same day
     overlap = (
         db.query(TimeSlot)
         .filter(
-            (TimeSlot.day == norm_day) | (TimeSlot.day == slot.day) | (TimeSlot.day.ilike(norm_day + "%")),
+            TimeSlot.day == slot.day,
             TimeSlot.start_time < slot.end_time,
             TimeSlot.end_time > slot.start_time,
         )
@@ -77,9 +76,7 @@ def create_time_slot(
             detail=f"Time slot overlaps with existing slot #{overlap.id} ({overlap.day} {overlap.start_time}-{overlap.end_time}).",
         )
 
-    slot_data = slot.model_dump()
-    slot_data["day"] = norm_day
-    db_slot = TimeSlot(**slot_data)
+    db_slot = TimeSlot(**slot.model_dump())
     db.add(db_slot)
     db.commit()
     db.refresh(db_slot)
@@ -98,38 +95,35 @@ def update_time_slot(
     if not db_slot:
         raise HTTPException(status_code=404, detail="Time slot not found")
     
-    target_start = slot.start_time if slot.start_time is not None else db_slot.start_time
-    target_end = slot.end_time if slot.end_time is not None else db_slot.end_time
-    raw_day = slot.day if slot.day is not None else db_slot.day
-    norm_day = _norm_day(raw_day) if raw_day else None
+    if slot.start_time is not None or slot.end_time is not None or slot.day is not None:
+        target_start = slot.start_time if slot.start_time is not None else db_slot.start_time
+        target_end = slot.end_time if slot.end_time is not None else db_slot.end_time
+        target_day = slot.day if slot.day is not None else db_slot.day
 
-    if target_start and target_end and target_start >= target_end:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Start time must be strictly before end time.",
-        )
-
-    if norm_day and target_start and target_end:
-        overlap = (
-            db.query(TimeSlot)
-            .filter(
-                TimeSlot.id != slot_id,
-                (TimeSlot.day == norm_day) | (TimeSlot.day == raw_day) | (TimeSlot.day.ilike(norm_day + "%")),
-                TimeSlot.start_time < target_end,
-                TimeSlot.end_time > target_start,
-            )
-            .first()
-        )
-        if overlap:
+        if target_start and target_end and target_start >= target_end:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Time slot overlaps with existing slot #{overlap.id} ({overlap.day} {overlap.start_time}-{overlap.end_time}).",
+                detail="Start time must be strictly before end time.",
             )
 
-    slot_dict = slot.model_dump(exclude_unset=True)
-    if "day" in slot_dict and slot_dict["day"]:
-        slot_dict["day"] = _norm_day(slot_dict["day"])
+        if target_day and target_start and target_end:
+            overlap = (
+                db.query(TimeSlot)
+                .filter(
+                    TimeSlot.id != slot_id,
+                    TimeSlot.day == target_day,
+                    TimeSlot.start_time < target_end,
+                    TimeSlot.end_time > target_start,
+                )
+                .first()
+            )
+            if overlap:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Time slot overlaps with existing slot #{overlap.id} ({overlap.day} {overlap.start_time}-{overlap.end_time}).",
+                )
 
+    slot_dict = slot.model_dump(exclude_unset=True)
     for key, value in slot_dict.items():
         setattr(db_slot, key, value)
     db.commit()

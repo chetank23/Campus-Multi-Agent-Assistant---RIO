@@ -29,8 +29,8 @@ def get_academic_calendar(
         raise HTTPException(status_code=404, detail="Academic calendar event not found")
     return ac
 
-@router.post("", response_model=AcademicCalendarResponse, status_code=status.HTTP_201_CREATED)
-@router.post("/", response_model=AcademicCalendarResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("", response_model=AcademicCalendarResponse)
+@router.post("/", response_model=AcademicCalendarResponse, include_in_schema=False)
 def create_academic_calendar(
     ac: AcademicCalendarCreate,
     db: Session = Depends(get_db),

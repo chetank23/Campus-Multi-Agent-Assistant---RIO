@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Download, Printer } from 'lucide-react';
 import type { TimetableEntryResult, TimetableEntryResponse, TimetableVersionDetailResponse } from '@/api/timetable';
 import type { TimeSlotResponse } from '@/api/timeSlots';
@@ -85,7 +85,7 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
     return mat;
   }, [entries, timeSlots, sortedSlots]);
 
-  const getCellData = (entry: AnyTimetableEntry) => {
+  const getCellData = useCallback((entry: AnyTimetableEntry) => {
     let courseId: number | undefined;
     let facultyId: number | undefined;
     let hourType: string;
@@ -115,7 +115,7 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
       roomName: room?.room_number || (entry.room_id ? `Room ${entry.room_id}` : ''),
       hourType,
     };
-  };
+  }, [assignments, courses, facultyList, rooms]);
 
   // Derive unique course-faculty mapping for reference table below grid
   const courseReferenceList = useMemo(() => {
@@ -138,7 +138,7 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
     });
 
     return Array.from(map.values());
-  }, [entries, assignments, courses, facultyList, rooms]);
+  }, [entries, getCellData]);
 
   const handleExportPDF = () => {
     if (versionDetail) {

@@ -102,18 +102,22 @@ def _validate_import_rows(
                     row_has_error = True
                 seen_identifiers.add(room_num)
 
+            bld_id_int: Optional[int] = None
             try:
-                bld_id_int = int(bld_id)
-                if bld_id_int not in buildings_cache:
-                    errors.append(RowError(row_index=idx, field="building_id", message=f"Building ID #{bld_id_int} does not exist."))
+                if bld_id is not None:
+                    bld_id_int = int(str(bld_id).strip())
+                if bld_id_int is None or bld_id_int not in buildings_cache:
+                    errors.append(RowError(row_index=idx, field="building_id", message=f"Building ID #{bld_id} does not exist."))
                     row_has_error = True
             except (ValueError, TypeError):
                 errors.append(RowError(row_index=idx, field="building_id", message="Valid integer building_id is required."))
                 row_has_error = True
 
+            cap_int: Optional[int] = None
             try:
-                cap_int = int(cap)
-                if cap_int <= 0:
+                if cap is not None:
+                    cap_int = int(str(cap).strip())
+                if cap_int is None or cap_int <= 0:
                     errors.append(RowError(row_index=idx, field="capacity", message="Capacity must be greater than zero."))
                     row_has_error = True
             except (ValueError, TypeError):
@@ -124,11 +128,11 @@ def _validate_import_rows(
                 errors.append(RowError(row_index=idx, field="room_type", message="room_type must be CLASSROOM, LAB, SEMINAR_HALL, or AUDITORIUM."))
                 row_has_error = True
 
-            if not row_has_error:
+            if not row_has_error and bld_id_int is not None and cap_int is not None:
                 valid_rows.append({
                     "room_number": room_num,
-                    "building_id": int(bld_id),
-                    "capacity": int(cap),
+                    "building_id": bld_id_int,
+                    "capacity": cap_int,
                     "room_type": rtype,
                 })
 
@@ -156,10 +160,12 @@ def _validate_import_rows(
                 errors.append(RowError(row_index=idx, field="course_name", message="Course name is required."))
                 row_has_error = True
 
+            dept_id_int: Optional[int] = None
             try:
-                dept_id_int = int(dept_id)
-                if dept_id_int not in departments_cache:
-                    errors.append(RowError(row_index=idx, field="department_id", message=f"Department ID #{dept_id_int} does not exist."))
+                if dept_id is not None:
+                    dept_id_int = int(str(dept_id).strip())
+                if dept_id_int is None or dept_id_int not in departments_cache:
+                    errors.append(RowError(row_index=idx, field="department_id", message=f"Department ID #{dept_id} does not exist."))
                     row_has_error = True
             except (ValueError, TypeError):
                 errors.append(RowError(row_index=idx, field="department_id", message="Valid integer department_id is required."))
@@ -169,11 +175,11 @@ def _validate_import_rows(
                 errors.append(RowError(row_index=idx, field="course_type", message="course_type must be THEORY, LAB, INTEGRATED, or ELECTIVE."))
                 row_has_error = True
 
-            if not row_has_error:
+            if not row_has_error and dept_id_int is not None:
                 valid_rows.append({
                     "course_code": code,
                     "course_name": name,
-                    "department_id": int(dept_id),
+                    "department_id": dept_id_int,
                     "course_type": ctype,
                     "credits": int(credits_val) if str(credits_val).isdigit() else 3,
                 })
@@ -211,21 +217,23 @@ def _validate_import_rows(
                     errors.append(RowError(row_index=idx, field="email", message=f"Email '{email}' is already registered."))
                     row_has_error = True
 
+            dept_id_int: Optional[int] = None
             try:
-                dept_id_int = int(dept_id)
-                if dept_id_int not in departments_cache:
-                    errors.append(RowError(row_index=idx, field="department_id", message=f"Department #{dept_id_int} does not exist."))
+                if dept_id is not None:
+                    dept_id_int = int(str(dept_id).strip())
+                if dept_id_int is None or dept_id_int not in departments_cache:
+                    errors.append(RowError(row_index=idx, field="department_id", message=f"Department #{dept_id} does not exist."))
                     row_has_error = True
             except (ValueError, TypeError):
                 errors.append(RowError(row_index=idx, field="department_id", message="Valid integer department_id is required."))
                 row_has_error = True
 
-            if not row_has_error:
+            if not row_has_error and dept_id_int is not None:
                 valid_rows.append({
                     "faculty_id": fid,
                     "name": name,
                     "email": email,
-                    "department_id": int(dept_id),
+                    "department_id": dept_id_int,
                     "designation": desig,
                 })
 
@@ -262,31 +270,35 @@ def _validate_import_rows(
                     errors.append(RowError(row_index=idx, field="email", message=f"Email '{email}' is already registered."))
                     row_has_error = True
 
+            dept_id_int: Optional[int] = None
             try:
-                dept_id_int = int(dept_id)
-                if dept_id_int not in departments_cache:
-                    errors.append(RowError(row_index=idx, field="department_id", message=f"Department #{dept_id_int} does not exist."))
+                if dept_id is not None:
+                    dept_id_int = int(str(dept_id).strip())
+                if dept_id_int is None or dept_id_int not in departments_cache:
+                    errors.append(RowError(row_index=idx, field="department_id", message=f"Department #{dept_id} does not exist."))
                     row_has_error = True
             except (ValueError, TypeError):
                 errors.append(RowError(row_index=idx, field="department_id", message="Valid integer department_id is required."))
                 row_has_error = True
 
+            sec_id_int: Optional[int] = None
             try:
-                sec_id_int = int(sec_id)
-                if sec_id_int not in sections_cache:
-                    errors.append(RowError(row_index=idx, field="section_id", message=f"Section #{sec_id_int} does not exist."))
+                if sec_id is not None:
+                    sec_id_int = int(str(sec_id).strip())
+                if sec_id_int is None or sec_id_int not in sections_cache:
+                    errors.append(RowError(row_index=idx, field="section_id", message=f"Section #{sec_id} does not exist."))
                     row_has_error = True
             except (ValueError, TypeError):
                 errors.append(RowError(row_index=idx, field="section_id", message="Valid integer section_id is required."))
                 row_has_error = True
 
-            if not row_has_error:
+            if not row_has_error and dept_id_int is not None and sec_id_int is not None:
                 valid_rows.append({
                     "student_id": sid,
                     "name": name,
                     "email": email,
-                    "department_id": int(dept_id),
-                    "section_id": int(sec_id),
+                    "department_id": dept_id_int,
+                    "section_id": sec_id_int,
                 })
 
     return valid_rows, errors

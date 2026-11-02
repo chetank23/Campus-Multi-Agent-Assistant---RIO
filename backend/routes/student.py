@@ -205,9 +205,9 @@ def _get_student_courses_handler(db: Session, current_user: User) -> List[Studen
         results.append(
             StudentCourseResponse(
                 id=ca.course.id,
-                course_code=ca.course.course_code,
-                course_name=ca.course.course_name,
-                course_type=ca.course.course_type,
+                course_code=ca.course.course_code or "",
+                course_name=ca.course.course_name or "",
+                course_type=ca.course.course_type or "THEORY",
                 credits=ca.course.credits or 3,
                 faculty_name=fac_name,
                 faculty_designation=fac_desig,

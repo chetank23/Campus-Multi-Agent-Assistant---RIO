@@ -46,6 +46,8 @@ if not custom_url:
 from sqlalchemy.engine import make_url  # noqa: E402
 
 migration_url = config.get_main_option("sqlalchemy.url")
+if not migration_url:
+    raise RuntimeError("Alembic configuration is missing sqlalchemy.url.")
 try:
     parsed_migration_url = make_url(migration_url)
 except Exception as exc:

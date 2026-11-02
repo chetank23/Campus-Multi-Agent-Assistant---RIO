@@ -69,6 +69,7 @@ def test_refresh_token_success(get_seeded_users):
     assert "refresh_token" in login_resp.cookies
 
     original_refresh_token = fresh_client.cookies.get("refresh_token")
+    assert original_refresh_token is not None
     refresh_resp = fresh_client.post("/auth/refresh")
     assert refresh_resp.status_code == 200
     data = refresh_resp.json()

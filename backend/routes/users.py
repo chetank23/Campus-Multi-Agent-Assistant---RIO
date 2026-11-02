@@ -8,7 +8,7 @@ All mutations are recorded in AuditLog.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional, cast
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 
@@ -31,11 +31,12 @@ router = APIRouter(prefix="/users", tags=["Users & Roles"])
 
 def _to_user_admin_response(u: User) -> UserAdminResponse:
     dept_name = u.department.name if u.department else None
+    role_lit = cast(Literal["ADMIN", "FACULTY", "STUDENT"], u.role if u.role in ("ADMIN", "FACULTY", "STUDENT") else "STUDENT")
     return UserAdminResponse(
         id=u.id,
         name=u.name,
         email=u.email,
-        role=u.role,
+        role=role_lit,
         department_id=u.department_id,
         department_name=dept_name,
         is_active=u.is_active,
