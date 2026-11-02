@@ -49,7 +49,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/campus_ai_test
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/campus_ai_app
       DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/campus_ai_test
       SECRET_KEY: rio-ci-only-signing-key-not-used-outside-ephemeral-tests-2026
       PYTHONPATH: .
