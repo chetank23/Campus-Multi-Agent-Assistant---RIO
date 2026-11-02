@@ -1,7 +1,7 @@
 {
   "benchmark_name": "RIO-MJP Resource Agent Logic & Boundary Benchmark",
   "mode": "unit",
-  "timestamp": "2026-11-02 11:21:45Z",
+  "timestamp": "2026-11-02 15:29:57Z",
   "total_tests": 7,
   "passed_tests": 7,
   "failed_tests": 0,
@@ -11,49 +11,49 @@
       "test_name": "test_proposal_lifecycle_and_single_use_idempotency",
       "category": "proposal_lifecycle",
       "passed": true,
-      "latency_seconds": 0.1343,
+      "latency_seconds": 0.16176,
       "details": "First consume: ok=True; Second consume: ok=False, msg='Proposal has already been confirmed and processed (duplicate submission blocked).'"
     },
     {
       "test_name": "test_proposal_user_session_isolation",
       "category": "proposal_lifecycle",
       "passed": true,
-      "latency_seconds": 0.00401,
+      "latency_seconds": 0.00593,
       "details": "Attempt by wrong user: ok=False, error='Access denied: Proposal belongs to another user session.'"
     },
     {
       "test_name": "test_proposal_ttl_expiry_enforcement",
       "category": "proposal_lifecycle",
       "passed": true,
-      "latency_seconds": 0.0049,
+      "latency_seconds": 0.00564,
       "details": "Attempt to consume expired proposal: ok=False, error='Proposal has expired. Please check current availability and request again.'"
     },
     {
       "test_name": "test_superseded_proposal_invalidation",
       "category": "proposal_lifecycle",
       "passed": true,
-      "latency_seconds": 0.00754,
+      "latency_seconds": 0.01574,
       "details": "p4a superseded: ok=False, err='Confirmation Blocked: Proposal has been discarded or superseded. Please create a new booking request.'; p4b active: ok=True"
     },
     {
       "test_name": "test_natural_language_parameter_extraction",
       "category": "nlp_parsing",
       "passed": true,
-      "latency_seconds": 0.00101,
+      "latency_seconds": 0.00202,
       "details": "Parsed: date=2026-11-15, start=14:00:00, end=16:00:00, details={'resource_name': 'Seminar Hall A', 'resource_type': 'SEMINAR_HALL', 'resource_id': None, 'min_capacity': 60, 'purpose': None}"
     },
     {
       "test_name": "test_temporal_interval_overlap_logic",
       "category": "conflict_detection",
       "passed": true,
-      "latency_seconds": 0.0,
+      "latency_seconds": 1e-05,
       "details": "c1_overlap=True, c2_disjoint=False, c3_touching=False, c4_enclosed=True"
     },
     {
       "test_name": "test_non_admin_approval_rejection_blocked",
       "category": "authorization_guards",
       "passed": true,
-      "latency_seconds": 0.00077,
+      "latency_seconds": 0.00136,
       "details": "Student approve: error='Access denied: Only university Administrators possess the authority to approve resource bookings.'; Faculty reject: error='Access denied: Only university Administrators possess the authority to reject resource bookings.'"
     }
   ]

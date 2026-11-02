@@ -55,6 +55,9 @@ from .auth_security import LoginRateLimit, RefreshSession  # noqa: F401
 # Workflow
 from .workflow import AgentProposal, AuditLog, ChangeRequest, Notification, NotificationOutbox  # noqa: F401
 
+# AI Assistant Chat Persistence
+from .chat import ChatConversation, ChatMessage  # noqa: F401
+
 # Expose the metadata object Alembic needs
 metadata = Base.metadata
 
@@ -91,4 +94,6 @@ __all__ = [
     "RefreshSession",
     "LoginRateLimit",
     "NotificationOutbox",
+    "ChatConversation",
+    "ChatMessage",
 ]

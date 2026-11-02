@@ -1,10 +1,10 @@
 {
   "title": "RIO-MJP Master Benchmark & Evaluation Report",
-  "git_commit": "123f92c9cfe3712f0c0a06dd29c26c147b9e0376",
-  "git_branch": "feature/portal-role-completion",
+  "git_commit": "64261c95126979590ccd1b19fda2021a1d5f5582",
+  "git_branch": "feature/role-aware-ai-campus-assistant",
   "mode": "unit",
-  "timestamp": "2026-11-02 11:21:43Z",
-  "elapsed_seconds": 18.67,
+  "timestamp": "2026-11-02 15:29:55Z",
+  "elapsed_seconds": 18.5,
   "benchmarks": {
     "scheduling": {
       "total_scenarios": 16,
@@ -33,15 +33,15 @@
         "suite": "tests/eval/test_scheduling_benchmark_unit.py",
         "passed": true,
         "return_code": 0,
-        "duration_seconds": 7.96,
-        "output_tail": ".........                                                                [100%]\n9 passed in 5.48s"
+        "duration_seconds": 7.62,
+        "output_tail": ".........                                                                [100%]\n9 passed in 5.23s"
       },
       "api_safeguards_suite": {
         "suite": "tests/api/test_timetable_validation_safeguards.py",
         "passed": true,
         "return_code": 0,
-        "duration_seconds": 8.63,
-        "output_tail": "...............                                                          [100%]\n15 passed in 5.90s"
+        "duration_seconds": 8.67,
+        "output_tail": "...............                                                          [100%]\n15 passed in 5.82s"
       }
     }
   }

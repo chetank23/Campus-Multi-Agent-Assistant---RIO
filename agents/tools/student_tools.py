@@ -12,10 +12,31 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from backend.models.academic import Batch, Section, Student
-from backend.models.courses import Course
 from backend.models.identity import User
-from backend.models.space_time import Room, TimeSlot
+from backend.models.space_time import TimeSlot
 from backend.models.timetable import TimetableEntry, TimetableVersion
+
+
+def _normalize_day_input(day_input: Optional[str]) -> Optional[str]:
+    """Helper to convert 'today', 'tomorrow', or day abbreviations to full uppercase day."""
+    if not day_input:
+        return None
+    d = day_input.strip().upper()
+    if d == "TODAY":
+        return datetime.date.today().strftime("%A").upper()
+    if d == "TOMORROW":
+        return (datetime.date.today() + datetime.timedelta(days=1)).strftime("%A").upper()
+
+    day_map = {
+        "MON": "MONDAY", "MONDAY": "MONDAY",
+        "TUE": "TUESDAY", "TUESDAY": "TUESDAY",
+        "WED": "WEDNESDAY", "WEDNESDAY": "WEDNESDAY",
+        "THU": "THURSDAY", "THURSDAY": "THURSDAY",
+        "FRI": "FRIDAY", "FRIDAY": "FRIDAY",
+        "SAT": "SATURDAY", "SATURDAY": "SATURDAY",
+        "SUN": "SUNDAY", "SUNDAY": "SUNDAY",
+    }
+    return day_map.get(d, d)
 
 
 def get_student_timetable_data(
@@ -27,19 +48,31 @@ def get_student_timetable_data(
     """
     Retrieves the published timetable for the authenticated student.
     - If user is STUDENT, uses the student's actual section and batch.
-    - If user is ADMIN, can optionally query target_student_id.
+      If student attempts to query another student ID, access is strictly denied.
+    - If user is ADMIN, can query target_student_id.
     - If user is FACULTY, denied.
     """
     if user.role == "STUDENT":
         student = db.query(Student).filter(Student.user_id == user.id).first()
+        if not student:
+            return {
+                "error": "Student academic profile not found. Please contact administration.",
+                "entries": [],
+            }
+        # Cross-student privacy guard: cannot query another student's timetable
+        if target_student_id is not None and target_student_id != student.id:
+            return {
+                "error": "Access denied: Students are not authorized to view other students' private timetables.",
+                "entries": [],
+            }
     elif user.role == "ADMIN" and target_student_id:
         student = db.query(Student).filter(Student.id == target_student_id).first()
     elif user.role == "ADMIN":
-        # Admin querying general student timetable must specify or get first active student
+        # Admin querying general student timetable
         student = db.query(Student).first()
     else:
         return {
-            "error": "Only students or administrators can query student timetables.",
+            "error": "Access denied: Faculty cannot inspect individual student personal timetables directly.",
             "entries": [],
         }
 
@@ -79,17 +112,19 @@ def get_student_timetable_data(
     else:
         query = query.filter(TimetableEntry.batch_id.is_(None))
 
-    if day:
-        normalized_day = day.strip().upper()
+    normalized_day = _normalize_day_input(day)
+    if normalized_day:
         query = query.join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id).filter(
             TimeSlot.day == normalized_day
         )
 
     entries = query.all()
 
-    # Sort entries by day and start_time
-    day_order = {"MONDAY": 1, "TUESDAY": 2, "WEDNESDAY": 3, "THURSDAY": 4, "FRIDAY": 5, "SATURDAY": 6, "SUNDAY": 7}
-    
+    day_order = {
+        "MONDAY": 1, "TUESDAY": 2, "WEDNESDAY": 3,
+        "THURSDAY": 4, "FRIDAY": 5, "SATURDAY": 6, "SUNDAY": 7,
+    }
+
     formatted_entries: List[Dict[str, Any]] = []
     for e in entries:
         slot = e.slot
@@ -124,9 +159,36 @@ def get_student_timetable_data(
         "student_id": student.student_id if student else "N/A",
         "section": section.section_name if section else "N/A",
         "batch": batch.batch_name if batch else "All",
+        "day": normalized_day or "ALL",
         "total_classes": len(formatted_entries),
         "entries": formatted_entries,
     }
+
+
+def get_my_timetable_data(
+    db: Session,
+    user: User,
+    day: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Role-aware tool for retrieving the authenticated user's timetable:
+    - If user is STUDENT: retrieves student's section/batch timetable.
+    - If user is FACULTY: retrieves faculty's teaching schedule.
+    - If user is ADMIN: informs admin that they can query department or faculty schedules.
+    """
+    if user.role == "STUDENT":
+        return get_student_timetable_data(db=db, user=user, day=day)
+    elif user.role == "FACULTY":
+        from agents.tools.faculty_tools import get_faculty_schedule_data
+        return get_faculty_schedule_data(db=db, user=user, day=day)
+    else:  # ADMIN
+        return {
+            "message": (
+                "As an Administrator, you do not have personal class enrollments or teaching assignments. "
+                "You can query timetables by department ('get_department_timetable') or by faculty member ('get_faculty_timetable')."
+            ),
+            "entries": [],
+        }
 
 
 def get_class_status_data(
@@ -229,7 +291,6 @@ def get_class_status_data(
         if not slot or not slot.start_time or not slot.end_time:
             continue
 
-        # Deterministic status derivation (§8.4a)
         if e.status == "CANCELLED":
             calculated_status = "CANCELLED"
         elif e.status == "RESCHEDULED":
@@ -258,7 +319,6 @@ def get_class_status_data(
 
     results.sort(key=lambda x: x["start_time"])
 
-    # Highlight current and next classes
     ongoing = next((c for c in results if c["class_status"] == "ONGOING"), None)
     next_up = next((c for c in results if c["class_status"] == "UPCOMING"), None)
 

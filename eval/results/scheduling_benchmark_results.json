@@ -1,7 +1,7 @@
 {
   "benchmark_name": "RIO-MJP Timetable Solver 16-Scenario Benchmark",
   "seed": 42,
-  "timestamp": "2026-11-02 11:21:45Z",
+  "timestamp": "2026-11-02 15:29:57Z",
   "total_scenarios": 16,
   "total_generated": 10,
   "zero_violation_timetables": 10,
@@ -18,7 +18,7 @@
       "validation_valid": true,
       "hard_violation_count": 0,
       "soft_score": 100.0,
-      "runtime_seconds": 0.0199,
+      "runtime_seconds": 0.0316,
       "diagnostic_outcome": [],
       "entries_count": 3,
       "score_details": {
@@ -51,7 +51,7 @@
       "validation_valid": true,
       "hard_violation_count": 0,
       "soft_score": 95.67,
-      "runtime_seconds": 0.0742,
+      "runtime_seconds": 0.079,
       "diagnostic_outcome": [],
       "entries_count": 9,
       "score_details": {
@@ -84,7 +84,7 @@
       "validation_valid": false,
       "hard_violation_count": 0,
       "soft_score": 0.0,
-      "runtime_seconds": 0.0032,
+      "runtime_seconds": 0.0045,
       "diagnostic_outcome": [
         "No feasible timetable exists with the current constraints.",
         "Faculty availability shortage: Faculty ID 1 needs 6 teaching hours but only provided 0 available slots. Suggest adding 6 more available slots for this faculty."
@@ -107,7 +107,7 @@
       "validation_valid": true,
       "hard_violation_count": 0,
       "soft_score": 100.0,
-      "runtime_seconds": 0.0085,
+      "runtime_seconds": 0.0261,
       "diagnostic_outcome": [],
       "entries_count": 6,
       "score_details": {
@@ -140,7 +140,7 @@
       "validation_valid": true,
       "hard_violation_count": 0,
       "soft_score": 100.0,
-      "runtime_seconds": 0.0155,
+      "runtime_seconds": 0.0267,
       "diagnostic_outcome": [],
       "entries_count": 4,
       "score_details": {
@@ -173,7 +173,7 @@
       "validation_valid": false,
       "hard_violation_count": 0,
       "soft_score": 0.0,
-      "runtime_seconds": 0.0005,
+      "runtime_seconds": 0.0003,
       "diagnostic_outcome": [
         "No eligible rooms for THEORY of course 1",
         "Faculty availability shortage: Faculty ID 1 needs 3 teaching hours but only provided 0 available slots. Suggest adding 3 more available slots for this faculty."
@@ -196,7 +196,7 @@
       "validation_valid": false,
       "hard_violation_count": 0,
       "soft_score": 0.0,
-      "runtime_seconds": 0.0002,
+      "runtime_seconds": 0.0003,
       "diagnostic_outcome": [
         "Not enough available slots for faculty 1 teaching 1",
         "Faculty availability shortage: Faculty ID 1 needs 3 teaching hours but only provided 2 available slots. Suggest adding 1 more available slots for this faculty."
@@ -243,7 +243,7 @@
       "validation_valid": true,
       "hard_violation_count": 0,
       "soft_score": 79.49,
-      "runtime_seconds": 0.014,
+      "runtime_seconds": 0.0121,
       "diagnostic_outcome": [],
       "entries_count": 3,
       "score_details": {
@@ -276,7 +276,7 @@
       "validation_valid": true,
       "hard_violation_count": 0,
       "soft_score": 100.0,
-      "runtime_seconds": 0.0159,
+      "runtime_seconds": 0.0151,
       "diagnostic_outcome": [],
       "entries_count": 2,
       "score_details": {
@@ -342,7 +342,7 @@
       "validation_valid": false,
       "hard_violation_count": 0,
       "soft_score": 0.0,
-      "runtime_seconds": 0.003,
+      "runtime_seconds": 0.0031,
       "diagnostic_outcome": [
         "No feasible timetable exists with the current constraints.",
         "Room capacity shortage: Need 6 room-slots but only 4 are available. Suggest adding 2 more slots or rooms.",
@@ -367,7 +367,7 @@
       "validation_valid": false,
       "hard_violation_count": 0,
       "soft_score": 0.0,
-      "runtime_seconds": 1.6218,
+      "runtime_seconds": 1.6358,
       "diagnostic_outcome": [
         "Solver reached time limit without finding a solution."
       ],
@@ -389,7 +389,7 @@
       "validation_valid": true,
       "hard_violation_count": 0,
       "soft_score": 100.0,
-      "runtime_seconds": 0.0073,
+      "runtime_seconds": 0.0068,
       "diagnostic_outcome": [],
       "entries_count": 2,
       "score_details": {
@@ -422,7 +422,7 @@
       "validation_valid": true,
       "hard_violation_count": 0,
       "soft_score": 100.0,
-      "runtime_seconds": 0.0188,
+      "runtime_seconds": 0.007,
       "diagnostic_outcome": [
         "Attempt 1 Result: status=INFEASIBLE_AT_BUILD, message=Not enough available slots for faculty 1 teaching 1",
         "Attempt 2 Recovery: status=OPTIMAL, entries=5"
@@ -460,7 +460,7 @@
           "run": 2,
           "status": "OPTIMAL",
           "feasible": true,
-          "time_seconds": 0.0186
+          "time_seconds": 0.0068
         }
       ]
     },
@@ -473,7 +473,7 @@
       "hard_violation_count": 4,
       "publication_safeguard_verified": true,
       "soft_score": 0.0,
-      "runtime_seconds": 0.018,
+      "runtime_seconds": 0.0156,
       "diagnostic_outcome": [
         "Deliberate injection: Duplicate entry at slot #6",
         "Validation result: is_valid=False, blocker_count=4",

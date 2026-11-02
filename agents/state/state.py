@@ -47,6 +47,10 @@ class ChatMessageRequest(BaseModel):
         max_length=1500,
         description="The natural language query or instruction submitted by the user.",
     )
+    conversation_id: Optional[int] = Field(
+        None,
+        description="Optional persistent conversation ID to append message to.",
+    )
 
 
 class ChatToolCallRecord(BaseModel):
@@ -64,3 +68,37 @@ class ChatMessageResponse(BaseModel):
     action_type: Optional[str] = None
     success: bool = True
     error: Optional[str] = None
+    conversation_id: Optional[int] = None
+
+
+class ConversationCreateRequest(BaseModel):
+    title: Optional[str] = Field(None, max_length=200, description="Optional title for the conversation.")
+
+
+class ConversationItemResponse(BaseModel):
+    id: int
+    title: str
+    role: str
+    created_at: str
+    updated_at: str
+    message_count: int
+
+
+class ChatMessageDetail(BaseModel):
+    id: int
+    conversation_id: int
+    sender: str
+    content: str
+    intent: Optional[str] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    sources: Optional[List[str]] = None
+    created_at: str
+
+
+class ConversationDetailResponse(BaseModel):
+    id: int
+    title: str
+    role: str
+    created_at: str
+    updated_at: str
+    messages: List[ChatMessageDetail]

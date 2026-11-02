@@ -218,6 +218,23 @@ def get_user_bookings_data(
     }
 
 
+def get_resource_booking_status_data(
+    db: Session,
+    user: User,
+    booking_id: Optional[int] = None,
+    status_filter: Optional[str] = None,
+    limit: int = 15,
+) -> Dict[str, Any]:
+    """
+    Retrieves status of resource bookings.
+    - If booking_id is provided, checks specific booking details (with privacy check).
+    - Otherwise lists user's bookings (or all for admin).
+    """
+    if booking_id:
+        return get_booking_details_data(db=db, booking_id=booking_id, user=user)
+    return get_user_bookings_data(db=db, user=user, status_filter=status_filter, limit=limit)
+
+
 def get_booking_details_data(
     db: Session,
     booking_id: int,

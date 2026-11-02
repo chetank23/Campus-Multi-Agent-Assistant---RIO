@@ -192,7 +192,7 @@ def classify_intent(message: str) -> str:
         "teach", "teaching", "who is", "who teaches", "dr.", "dr ", "prof",
         "course", "courses", "subject", "subjects", "credits", "syllabus", "room", "rooms", "classroom", "classrooms", "lab", "labs",
         "auditorium", "seminar", "capacity", "where is", "holiday", "exam", "vacation",
-        "academic calendar", "events", "department schedule", "calendar"
+        "academic calendar", "events", "department schedule", "calendar", "announcement", "announcements", "notice", "notices", "broadcast"
     ]
     for q in query_patterns:
         if " " in q or "." in q:
