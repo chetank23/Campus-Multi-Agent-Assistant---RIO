@@ -18,6 +18,7 @@ import {
   Boxes,
   Bell,
   BookOpen,
+  Briefcase,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -145,6 +146,12 @@ function getNavGroups(role: UserRole): NavGroup[] {
               implemented: true,
             },
             {
+              label: 'CDC Placements',
+              icon: <Briefcase size={18} />,
+              to: '/admin/placements',
+              implemented: true,
+            },
+            {
               label: 'Time Slots & Calendar',
               icon: <Clock size={18} />,
               to: '/admin/campus/calendar-slots',
@@ -239,6 +246,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
             { label: 'My Timetable', icon: <CalendarDays size={18} />, to: '/student/timetable', implemented: true },
             { label: 'My Courses', icon: <BookOpen size={18} />, to: '/student/courses', implemented: true },
             { label: 'Campus Events', icon: <Sparkles size={18} />, to: '/student/events', implemented: true },
+            { label: 'CDC Placements', icon: <Briefcase size={18} />, to: '/student/placements', implemented: true },
           ],
         },
         {

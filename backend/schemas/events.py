@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field, model_validator
 
 class CapabilityAssignRequest(BaseModel):
     user_id: int
-    capability: Literal["EVENT_COORDINATOR", "CLUB_COORDINATOR", "EVENT_DIRECT_PUBLISH"]
+    capability: Literal["EVENT_COORDINATOR", "CLUB_COORDINATOR", "EVENT_DIRECT_PUBLISH", "CDC_COORDINATOR"]
     scope_type: Literal["GLOBAL", "CLUB", "DEPARTMENT", "EVENT"] = "GLOBAL"
     scope_id: Optional[int] = None
     starts_at: Optional[datetime.datetime] = None

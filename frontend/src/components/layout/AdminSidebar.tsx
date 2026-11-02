@@ -25,6 +25,7 @@ import {
   Users,
   CalendarDays,
   Sparkles,
+  Briefcase,
   History,
   Building2,
   Box,
@@ -155,6 +156,12 @@ const adminSections: NavSection[] = [
         label: 'Events & Clubs',
         icon: <Sparkles size={17} className="shrink-0" />,
         to: '/admin/events',
+      },
+      {
+        id: 'cdc-placements',
+        label: 'CDC Placements',
+        icon: <Briefcase size={17} className="shrink-0" />,
+        to: '/admin/placements',
       },
       {
         id: 'calendar-slots',

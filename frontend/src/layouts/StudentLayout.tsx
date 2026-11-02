@@ -18,6 +18,7 @@ import {
   CalendarDays,
   BookOpen,
   Sparkles,
+  Briefcase,
   Megaphone,
   Bell,
   Search,
@@ -109,6 +110,12 @@ export const StudentLayout: React.FC = () => {
       to: '/student/events',
       label: 'Campus Events',
       icon: <Sparkles size={18} />,
+      end: false,
+    },
+    {
+      to: '/student/placements',
+      label: 'CDC Placements',
+      icon: <Briefcase size={18} />,
       end: false,
     },
     {

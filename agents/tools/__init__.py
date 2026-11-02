@@ -61,6 +61,18 @@ from agents.tools.event_tools import (
     create_club_activity_data,
     update_club_activity_data,
 )
+from agents.tools.placement_tools import (
+    create_placement_drive_draft_data,
+    validate_placement_drive_data,
+    publish_placement_drive_data,
+    update_placement_drive_data,
+    cancel_placement_drive_data,
+    list_published_placement_drives_data,
+    get_placement_drive_details_data,
+    get_drive_deadlines_and_schedule_data,
+    get_student_drive_eligibility_data,
+    list_my_eligible_drives_data,
+)
 
 # Tool registry with documentation for LLM tool binding
 QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
@@ -627,6 +639,139 @@ QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         },
         "allowed_roles": ["FACULTY", "ADMIN"],
     },
+    # -----------------------------------------------------------------------
+    # CDC Placement Management Tools
+    # -----------------------------------------------------------------------
+    {
+        "name": "list_published_placement_drives",
+        "description": "Lists active, published campus placement drives with compensation and role details.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "job_type": {"type": "string", "description": "FULL_TIME, INTERNSHIP, INTERN_PLUS_FULL_TIME"},
+                "tier": {"type": "string", "description": "TIER_1, DREAM, SUPER_DREAM, CORE"},
+                "search": {"type": "string", "description": "Search keyword for company or job role"},
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "list_my_eligible_drives",
+        "description": "Lists placement drives where authenticated student meets all deterministic criteria (branch, CGPA, backlogs, graduation year).",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["STUDENT"],
+    },
+    {
+        "name": "get_placement_drive_details",
+        "description": "Retrieves comprehensive details of a placement drive including company, role, packages, criteria, and selection rounds.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "drive_id": {"type": "integer"},
+                "company_name": {"type": "string"},
+                "title": {"type": "string"},
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_drive_deadlines_and_schedule",
+        "description": "Retrieves registration deadlines, assessment dates, and interview schedules for placement drives.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "company_name": {"type": "string"},
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_student_drive_eligibility",
+        "description": "Performs deterministic eligibility evaluation for student against a company placement drive.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "drive_id": {"type": "integer"},
+                "company_name": {"type": "string"},
+            },
+        },
+        "allowed_roles": ["STUDENT"],
+    },
+    {
+        "name": "create_placement_drive_draft",
+        "description": "Creates a placement drive draft (CDC Coordinator / Admin only).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "company_name": {"type": "string"},
+                "title": {"type": "string"},
+                "job_role": {"type": "string"},
+                "application_deadline": {"type": "string"},
+                "job_type": {"type": "string", "default": "FULL_TIME"},
+                "work_location": {"type": "string"},
+                "compensation_details": {"type": "string"},
+                "min_cgpa": {"type": "number"},
+                "graduation_year": {"type": "integer"},
+                "max_active_backlogs": {"type": "integer"},
+            },
+            "required": ["company_name", "title", "job_role", "application_deadline"],
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "validate_placement_drive",
+        "description": "Performs pre-flight validation on drive dates, criteria, and duplicate detection.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "drive_id": {"type": "integer"},
+            },
+            "required": ["drive_id"],
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "publish_placement_drive",
+        "description": "Publishes a validated placement drive to the student portal and dispatches notifications.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "drive_id": {"type": "integer"},
+            },
+            "required": ["drive_id"],
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "update_placement_drive",
+        "description": "Updates placement drive fields with optimistic version control.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "drive_id": {"type": "integer"},
+                "compensation_details": {"type": "string"},
+                "application_deadline": {"type": "string"},
+                "work_location": {"type": "string"},
+                "additional_criteria": {"type": "string"},
+                "version": {"type": "integer"},
+            },
+            "required": ["drive_id"],
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "cancel_placement_drive",
+        "description": "Cancels a placement drive with reason and notifies eligible candidates.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "drive_id": {"type": "integer"},
+                "reason": {"type": "string"},
+            },
+            "required": ["drive_id", "reason"],
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
 ]
 
 
@@ -986,6 +1131,97 @@ def execute_tool(
                 end_time=tool_args.get("end_time"),
                 room_id=tool_args.get("room_id"),
                 venue_name=tool_args.get("venue_name"),
+            )
+
+        # -------------------------------------------------------------------
+        # CDC Placement Tools Dispatch
+        # -------------------------------------------------------------------
+        elif tool_name == "list_published_placement_drives":
+            return list_published_placement_drives_data(
+                db=db,
+                user=user,
+                job_type=tool_args.get("job_type"),
+                tier=tool_args.get("tier"),
+                search=tool_args.get("search"),
+            )
+
+        elif tool_name == "list_my_eligible_drives":
+            return list_my_eligible_drives_data(db=db, user=user)
+
+        elif tool_name == "get_placement_drive_details":
+            return get_placement_drive_details_data(
+                db=db,
+                user=user,
+                drive_id=tool_args.get("drive_id"),
+                company_name=tool_args.get("company_name"),
+                title=tool_args.get("title"),
+            )
+
+        elif tool_name == "get_drive_deadlines_and_schedule":
+            return get_drive_deadlines_and_schedule_data(
+                db=db,
+                user=user,
+                company_name=tool_args.get("company_name"),
+            )
+
+        elif tool_name == "get_student_drive_eligibility":
+            return get_student_drive_eligibility_data(
+                db=db,
+                user=user,
+                drive_id=tool_args.get("drive_id"),
+                company_name=tool_args.get("company_name"),
+            )
+
+        elif tool_name == "create_placement_drive_draft":
+            return create_placement_drive_draft_data(
+                db=db,
+                user=user,
+                company_name=tool_args["company_name"],
+                title=tool_args["title"],
+                job_role=tool_args["job_role"],
+                application_deadline=tool_args["application_deadline"],
+                job_type=tool_args.get("job_type", "FULL_TIME"),
+                work_location=tool_args.get("work_location"),
+                compensation_details=tool_args.get("compensation_details"),
+                min_cgpa=tool_args.get("min_cgpa"),
+                graduation_year=tool_args.get("graduation_year"),
+                max_active_backlogs=tool_args.get("max_active_backlogs"),
+                eligible_department_ids=tool_args.get("eligible_department_ids"),
+                additional_criteria=tool_args.get("additional_criteria"),
+            )
+
+        elif tool_name == "validate_placement_drive":
+            return validate_placement_drive_data(
+                db=db,
+                user=user,
+                drive_id=tool_args["drive_id"],
+            )
+
+        elif tool_name == "publish_placement_drive":
+            return publish_placement_drive_data(
+                db=db,
+                user=user,
+                drive_id=tool_args["drive_id"],
+            )
+
+        elif tool_name == "update_placement_drive":
+            return update_placement_drive_data(
+                db=db,
+                user=user,
+                drive_id=tool_args["drive_id"],
+                compensation_details=tool_args.get("compensation_details"),
+                application_deadline=tool_args.get("application_deadline"),
+                work_location=tool_args.get("work_location"),
+                additional_criteria=tool_args.get("additional_criteria"),
+                version=tool_args.get("version"),
+            )
+
+        elif tool_name == "cancel_placement_drive":
+            return cancel_placement_drive_data(
+                db=db,
+                user=user,
+                drive_id=tool_args["drive_id"],
+                reason=tool_args["reason"],
             )
 
         else:

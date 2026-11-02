@@ -194,6 +194,8 @@ def classify_intent(message: str) -> str:
         "auditorium", "seminar", "capacity", "where is", "holiday", "exam", "vacation",
         "academic calendar", "event", "events", "campus events", "club", "clubs", "activity", "activities",
         "workshop", "workshops", "webinar", "webinars", "hackathon", "hackathons", "cultural", "fest",
+        "placement", "placements", "placement drive", "placement drives", "cdc", "recruitment", "eligible drives",
+        "am i eligible", "eligibility", "job role", "package", "ctc", "internship", "hiring",
         "department schedule", "calendar", "announcement", "announcements", "notice", "notices", "broadcast"
     ]
     for q in query_patterns:

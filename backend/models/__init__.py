@@ -61,6 +61,9 @@ from .chat import ChatConversation, ChatMessage  # noqa: F401
 # Campus Events, Club & Activity Coordination
 from .events import CoordinatorCapability, Club, CampusEvent  # noqa: F401
 
+# CDC Placement Management
+from .placements import PlacementDrive, PlacementSchedule, StudentAcademicRecord  # noqa: F401
+
 # Expose the metadata object Alembic needs
 metadata = Base.metadata
 
@@ -102,4 +105,7 @@ __all__ = [
     "CoordinatorCapability",
     "Club",
     "CampusEvent",
+    "PlacementDrive",
+    "PlacementSchedule",
+    "StudentAcademicRecord",
 ]

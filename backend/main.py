@@ -27,6 +27,7 @@ from backend.routes import (
     faculty_availability,
     labs,
     notifications,
+    placements,
     program,
     resources,
     rooms,
@@ -93,6 +94,7 @@ app.include_router(student.router)
 app.include_router(student.student_router)
 app.include_router(clubs.router)
 app.include_router(events.router)
+app.include_router(placements.router)
 app.include_router(faculty.router)
 app.include_router(course.router)
 app.include_router(course_assignment.router)

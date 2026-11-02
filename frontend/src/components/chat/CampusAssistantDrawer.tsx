@@ -38,6 +38,7 @@ import {
   RefreshCw,
   Bell,
   BookOpen,
+  Briefcase,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthProvider';
 import {
@@ -260,6 +261,7 @@ export const CampusAssistantDrawer: React.FC = () => {
     if (user.role === 'STUDENT') {
       return [
         { label: 'What is my timetable today?', prompt: 'What is my timetable today?', icon: <Calendar size={13} /> },
+        { label: 'Campus placement drives', prompt: 'Show active placement drives and check my eligibility', icon: <Briefcase size={13} /> },
         { label: 'Ongoing campus events', prompt: 'What events are currently ongoing?', icon: <Sparkles size={13} /> },
         { label: 'Upcoming workshops & fests', prompt: 'Show upcoming campus events and workshops', icon: <Sparkles size={13} /> },
         { label: 'Where is my next class?', prompt: 'Where is my next class?', icon: <HelpCircle size={13} /> },
@@ -280,6 +282,7 @@ export const CampusAssistantDrawer: React.FC = () => {
     } else if (user.role === 'ADMIN') {
       return [
         { label: 'Department timetable', prompt: 'Show today timetable for department', icon: <Calendar size={13} /> },
+        { label: 'CDC placement drives', prompt: 'List all placement drives and statistics', icon: <Briefcase size={13} /> },
         { label: 'Active campus events', prompt: 'List all visible campus events', icon: <Sparkles size={13} /> },
         { label: 'Find available rooms', prompt: 'Find available rooms for a time slot', icon: <Building2 size={13} /> },
         { label: 'Timetable publication status', prompt: 'Check timetable publication status', icon: <CheckCircle2 size={13} /> },
@@ -299,6 +302,9 @@ export const CampusAssistantDrawer: React.FC = () => {
     const s = src.toLowerCase();
     if (s.includes('facilities') || s.includes('register') || s.includes('room')) {
       return <Building2 size={11} className="text-emerald-700 shrink-0" />;
+    }
+    if (s.includes('placement') || s.includes('cdc')) {
+      return <Briefcase size={11} className="text-emerald-700 shrink-0" />;
     }
     return <Database size={11} className="text-emerald-700 shrink-0" />;
   };
@@ -337,6 +343,14 @@ export const CampusAssistantDrawer: React.FC = () => {
         links.push({ label: 'Clubs & Events Management', to: '/faculty/events', icon: <Sparkles size={12} /> });
       } else if (user.role === 'ADMIN') {
         links.push({ label: 'Events & Club Coordination', to: '/admin/events', icon: <Sparkles size={12} /> });
+      }
+    }
+
+    if (t.includes('placement') || t.includes('job') || t.includes('internship') || t.includes('drive') || t.includes('cdc') || t.includes('hiring')) {
+      if (user.role === 'STUDENT') {
+        links.push({ label: 'Campus Placements Portal', to: '/student/placements', icon: <Briefcase size={12} /> });
+      } else if (user.role === 'ADMIN') {
+        links.push({ label: 'CDC Placements Workspace', to: '/admin/placements', icon: <Briefcase size={12} /> });
       }
     }
 

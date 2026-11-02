@@ -53,6 +53,7 @@ import { AdminTimetableVersionsPage } from '@/pages/admin/timetable/AdminTimetab
 import { AdminTimetableReviewPage } from '@/pages/admin/timetable/AdminTimetableReviewPage';
 import { ResourcesPage } from '@/pages/admin/resources/ResourcesPage';
 import { AdminEventsPage } from '@/pages/admin/AdminEventsPage';
+import { AdminPlacementsPage } from '@/pages/admin/AdminPlacementsPage';
 import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage';
 import { AdminChangeRequestsPage } from '@/pages/admin/AdminChangeRequestsPage';
 import { AdminAuditLogsPage } from '@/pages/admin/AdminAuditLogsPage';
@@ -68,6 +69,7 @@ import { FacultyNotificationsPage } from '@/pages/faculty/FacultyNotificationsPa
 import { StudentTimetablePage } from '@/pages/student/StudentTimetablePage';
 import { StudentCoursesPage } from '@/pages/student/StudentCoursesPage';
 import { StudentEventsPage } from '@/pages/student/StudentEventsPage';
+import { StudentPlacementsPage } from '@/pages/student/StudentPlacementsPage';
 import { StudentAnnouncementsPage } from '@/pages/student/StudentAnnouncementsPage';
 import { StudentNotificationsPage } from '@/pages/student/StudentNotificationsPage';
 
@@ -145,6 +147,7 @@ export function AppRoutes() {
           {/* Resource & Operational Administration */}
           <Route path="/admin/resources" element={<ResourcesPage />} />
           <Route path="/admin/events" element={<AdminEventsPage />} />
+          <Route path="/admin/placements" element={<AdminPlacementsPage />} />
           <Route path="/admin/requests" element={<AdminChangeRequestsPage />} />
           <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
           <Route path="/admin/audit" element={<AdminAuditLogsPage />} />
@@ -189,6 +192,7 @@ export function AppRoutes() {
           <Route path="/student/timetable" element={<StudentTimetablePage />} />
           <Route path="/student/courses" element={<StudentCoursesPage />} />
           <Route path="/student/events" element={<StudentEventsPage />} />
+          <Route path="/student/placements" element={<StudentPlacementsPage />} />
           <Route path="/student/announcements" element={<StudentAnnouncementsPage />} />
           <Route path="/student/notifications" element={<StudentNotificationsPage />} />
         </Route>

@@ -176,7 +176,40 @@ def _extract_intent_and_tool_call(message: str, user: User) -> Tuple[str, Dict[s
         tf = "TODAY" if "today" in msg else None
         return "list_visible_events", {"time_filter": tf}
 
-    # 13. Academic Calendar / Holidays / Exams
+    # 13. CDC Placement Management
+    if any(k in msg for k in [
+        "eligible for me", "eligible drives", "my eligible drives", "drives i am eligible for",
+        "which drives am i eligible", "what placements can i apply", "my placements",
+    ]):
+        return "list_my_eligible_drives", {}
+
+    if any(k in msg for k in [
+        "am i eligible", "check my eligibility", "eligibility for", "criteria for", "can i apply for",
+    ]) and any(k in msg for k in ["drive", "company", "placement", "internship", "job", "at", "for"]):
+        match = re.search(r"(?:for|at|to)\s+([a-zA-Z0-9\s]+?)(?:\?|$)", message, re.IGNORECASE)
+        comp = match.group(1).strip() if match else None
+        return "get_student_drive_eligibility", {"company_name": comp}
+
+    if any(k in msg for k in [
+        "placement deadline", "placement deadlines", "interview date", "interview schedule",
+        "assessment date", "when is the assessment", "test date", "drive schedule",
+    ]):
+        match = re.search(r"(?:for|at|of)\s+([a-zA-Z0-9\s]+?)(?:\?|$)", message, re.IGNORECASE)
+        comp = match.group(1).strip() if match else None
+        return "get_drive_deadlines_and_schedule", {"company_name": comp}
+
+    if any(k in msg for k in ["placement details", "drive details", "about drive", "about company drive"]):
+        match = re.search(r"(?:for|about|of)\s+([a-zA-Z0-9\s]+?)(?:\?|$)", message, re.IGNORECASE)
+        comp = match.group(1).strip() if match else None
+        return "get_placement_drive_details", {"company_name": comp}
+
+    if any(k in msg for k in [
+        "placement", "placements", "placement drive", "placement drives", "cdc", "recruitment drives",
+        "companies visiting", "hiring drives", "open placements", "what companies are hiring",
+    ]):
+        return "list_published_placement_drives", {}
+
+    # 14. Academic Calendar / Holidays / Exams
     if any(k in msg for k in ["holiday", "calendar", "exam", "vacation", "when is the"]):
         ev_type = None
         if "holiday" in msg:
@@ -668,6 +701,117 @@ def format_grounded_response(
         for c in conflicts:
             lines.append(f"- [{c.get('type')}] {c.get('reason')} ({c.get('time_window')})")
         return sanitize_plain_english("\n".join(lines)), sources
+
+    # -----------------------------------------------------------------------
+    # CDC Placement Grounded Response Formatters
+    # -----------------------------------------------------------------------
+    elif tool_name == "list_published_placement_drives":
+        sources.append("CDC Placement Cell Registry")
+        drives = tool_result.get("drives", [])
+        if not drives:
+            return sanitize_plain_english("No published placement drives found matching your criteria."), sources
+
+        lines = [f"Campus Placement Drives ({len(drives)} drive(s)):\n"]
+        for d in drives[:10]:
+            comp = d.get("compensation_details") or "Not disclosed"
+            deadline = d.get("application_deadline", "").replace("T", " ")[:16]
+            lines.append(f"- **{d['company_name']}** — *{d['title']}*")
+            lines.append(f"  Role: {d['job_role']} | Package: {comp} | Type: {d.get('job_type', 'FULL_TIME')}")
+            lines.append(f"  Deadline: {deadline} | Status: {d.get('status', 'PUBLISHED')}")
+            if d.get("eligibility"):
+                el = d["eligibility"]
+                lines.append(f"  Eligibility: {'ELIGIBLE' if el.get('is_eligible') else el.get('status', 'NOT_ELIGIBLE')}")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    elif tool_name == "list_my_eligible_drives":
+        sources.append("CDC Placement Eligibility Engine")
+        drives = tool_result.get("eligible_drives", [])
+        if not drives:
+            return sanitize_plain_english("You currently do not have any open placement drives matching your academic eligibility criteria."), sources
+
+        lines = [f"Your Eligible Placement Drives ({len(drives)} drive(s)):\n"]
+        for d in drives:
+            comp = d.get("compensation_details") or "Not disclosed"
+            deadline = d.get("application_deadline", "").replace("T", " ")[:16]
+            lines.append(f"- **{d['company_name']}** — *{d['job_role']}* (Package: {comp})")
+            lines.append(f"  Deadline: {deadline}")
+            if d.get("eligibility", {}).get("reasons"):
+                top_reasons = d["eligibility"]["reasons"][:2]
+                lines.append(f"  Criteria matched: {'; '.join(top_reasons)}")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    elif tool_name == "get_student_drive_eligibility":
+        sources.append("CDC Deterministic Eligibility Engine")
+        if tool_result.get("error"):
+            return sanitize_plain_english(f"Eligibility check unavailable: {tool_result['error']}"), sources
+
+        company = tool_result.get("company_name", "Target Company")
+        role = tool_result.get("job_role", "Position")
+        status_val = tool_result.get("status", "CANNOT_DETERMINE")
+        reasons = tool_result.get("reasons", [])
+
+        if status_val == "ELIGIBLE":
+            header = f"You are **ELIGIBLE** for the {company} drive ({role})!"
+        elif status_val == "NOT_ELIGIBLE":
+            header = f"You are **NOT ELIGIBLE** for the {company} drive ({role})."
+        else:
+            header = f"Eligibility status for {company}: **CANNOT DETERMINE** (records missing or incomplete)."
+
+        lines = [header, "\nAuthoritative Criteria Breakdown:"]
+        for r in reasons:
+            lines.append(f"- {r}")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    elif tool_name == "get_drive_deadlines_and_schedule":
+        sources.append("CDC Placement Scheduling Desk")
+        items = tool_result.get("deadlines_and_schedules", [])
+        if not items:
+            return sanitize_plain_english("No placement schedules or deadlines found."), sources
+
+        lines = [f"Placement Deadlines & Selection Rounds ({len(items)} drive(s)):\n"]
+        for item in items[:5]:
+            dl = item.get("application_deadline", "").replace("T", " ")[:16]
+            lines.append(f"- **{item['company_name']}** ({item['job_role']})")
+            lines.append(f"  Registration Deadline: {dl} {'[CLOSED]' if item.get('is_deadline_passed') else '[OPEN]'}")
+            if item.get("schedules"):
+                lines.append("  Selection Rounds:")
+                for s in item["schedules"]:
+                    st = s.get("start_time", "").replace("T", " ")[:16]
+                    venue = s.get("room_number") or s.get("venue_name") or ("Online" if s.get("is_online") else "TBA")
+                    lines.append(f"    * {s['title']} ({s['round_type']}) on {st} at {venue}")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    elif tool_name == "get_placement_drive_details":
+        sources.append("CDC Placement Cell Registry")
+        if tool_result.get("error"):
+            return sanitize_plain_english(f"Drive not found: {tool_result['error']}"), sources
+
+        d = tool_result
+        comp = d.get("compensation_details") or "Not disclosed"
+        dl = d.get("application_deadline", "").replace("T", " ")[:16]
+        lines = [
+            f"**{d.get('company_name')}** — {d.get('title')}",
+            f"Job Role: {d.get('job_role')} | Job Type: {d.get('job_type')}",
+            f"Package / Stipend: {comp} | Location: {d.get('work_location') or 'Campus/Remote'}",
+            f"Registration Deadline: {dl}",
+        ]
+        if d.get("min_cgpa"):
+            lines.append(f"Minimum CGPA: {d['min_cgpa']:.2f}/{d.get('grading_scale', 10.0):.1f}")
+        if d.get("graduation_year"):
+            lines.append(f"Graduation Batch: {d['graduation_year']}")
+        if d.get("required_documents"):
+            lines.append(f"Required Documents: {d['required_documents']}")
+        if d.get("eligibility"):
+            el = d["eligibility"]
+            lines.append(f"\nYour Eligibility: **{el.get('status')}**")
+            for r in el.get("reasons", [])[:3]:
+                lines.append(f"- {r}")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    elif tool_name in ("create_placement_drive_draft", "publish_placement_drive", "cancel_placement_drive", "validate_placement_drive"):
+        sources.append("CDC Administrative Desk")
+        msg = tool_result.get("message") or tool_result.get("error") or str(tool_result)
+        return sanitize_plain_english(msg), sources
 
     return "No information could be generated for this query.", sources
 
