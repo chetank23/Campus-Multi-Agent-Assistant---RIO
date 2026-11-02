@@ -8,9 +8,12 @@ and dispatch to the Query Agent or controlled polite termination for out-of-scop
 
 from __future__ import annotations
 
+import datetime
 import os
 import re
 from typing import Any, Dict, List, Literal, Optional, Tuple, cast
+from backend.config import SessionLocal
+from backend.models.workflow import AgentProposal
 from langgraph.graph import StateGraph, END
 from sqlalchemy.orm import Session
 
@@ -251,6 +254,54 @@ def supervisor_node(state: AgentState) -> AgentState:
     # Handle follow-up confirmation: "yes", "confirm", "proceed", "confirm it"
     if intent == "FOLLOW_UP_CONFIRM":
         if user_id:
+            try:
+                with SessionLocal() as db_session:
+                    now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+                    latest_ap = (
+                        db_session.query(AgentProposal)
+                        .filter(AgentProposal.user_id == user_id)
+                        .order_by(AgentProposal.created_at.desc(), AgentProposal.id.desc())
+                        .first()
+                    )
+                    if latest_ap:
+                        if latest_ap.consumed or latest_ap.superseded or (latest_ap.expires_at and latest_ap.expires_at < now_utc):
+                            return {
+                                "intent": "CLARIFICATION_REQUIRED",
+                                "selected_agent": None,
+                                "final_response": "There is no pending proposal awaiting your confirmation. Please state the action or schedule you wish to request.",
+                            }
+
+                        state["message"] = f"confirm {latest_ap.proposal_id}"
+                        if latest_ap.proposal_type == "OPERATION":
+                            payload = latest_ap.payload or {}
+                            action_name = payload.get("action_name", "")
+                            if "TIMETABLE" in action_name:
+                                return {
+                                    "intent": "TIMETABLE_GENERATION",
+                                    "selected_agent": "scheduling_agent",
+                                    "message": f"confirm {latest_ap.proposal_id}",
+                                }
+                            else:
+                                return {
+                                    "intent": "RESOURCE_BOOKING",
+                                    "selected_agent": "resource_agent",
+                                    "message": f"confirm {latest_ap.proposal_id}",
+                                }
+                        elif latest_ap.proposal_type == "RESOURCE_BOOKING":
+                            return {
+                                "intent": "RESOURCE_BOOKING",
+                                "selected_agent": "resource_agent",
+                                "message": f"confirm {latest_ap.proposal_id}",
+                            }
+                        elif latest_ap.proposal_type == "SCHEDULING":
+                            return {
+                                "intent": "TIMETABLE_GENERATION",
+                                "selected_agent": "scheduling_agent",
+                                "message": f"confirm {latest_ap.proposal_id}",
+                            }
+            except Exception:
+                pass
+
             op_prop = operation_proposal_store.get_latest_pending_proposal(user_id)
             if op_prop:
                 state["message"] = f"confirm {op_prop.proposal_id}"

@@ -79,6 +79,7 @@ def test_invalid_capacity(test_building):
 def test_invalid_room_type_db_error(test_building):
     response = client.post(
         "/rooms/",
+        headers=admin_headers(),
         json={"building_id": test_building.id, "room_number": "103", "capacity": 30, "room_type": "INVALID_TYPE"}
     )
     # Now rejected by Pydantic before reaching DB
@@ -88,6 +89,7 @@ def test_invalid_building_fk_error():
     # Provide a non-existent building_id to trigger SQLAlchemy IntegrityError (Foreign Key violation)
     response = client.post(
         "/rooms/",
+        headers=admin_headers(),
         json={"building_id": 999999, "room_number": "104", "capacity": 30, "room_type": "CLASSROOM"}
     )
     # The global exception handler should catch this and return a 422 instead of 500
