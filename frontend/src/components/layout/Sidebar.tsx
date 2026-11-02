@@ -174,7 +174,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
               label: 'Audit Logs',
               icon: <ClipboardList size={18} />,
               to: '/admin/audit',
-              implemented: false,
+              implemented: true,
             },
             {
               label: 'Settings',
