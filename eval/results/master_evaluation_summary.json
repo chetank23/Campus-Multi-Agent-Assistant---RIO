@@ -1,10 +1,10 @@
 {
   "title": "RIO-MJP Master Benchmark & Evaluation Report",
-  "git_commit": "cd35a34bc0cd7cd761e84c35092ca11821e9a4db",
+  "git_commit": "7d97eccc1b6ef01b21b0251079a9fcf1f62d59c3",
   "git_branch": "main",
   "mode": "unit",
-  "timestamp": "2026-10-28 15:52:47Z",
-  "elapsed_seconds": 16.15,
+  "timestamp": "2026-11-02 07:22:13Z",
+  "elapsed_seconds": 20.56,
   "benchmarks": {
     "scheduling": {
       "total_scenarios": 16,
@@ -31,17 +31,17 @@
     "pytest_safeguards": {
       "eval_unit_suite": {
         "suite": "tests/eval/test_scheduling_benchmark_unit.py",
-        "passed": true,
-        "return_code": 0,
-        "duration_seconds": 6.7,
-        "output_tail": ".........                                                                [100%]\n9 passed in 4.54s"
+        "passed": false,
+        "return_code": 1,
+        "duration_seconds": 7.12,
+        "output_tail": "ERROR tests/eval/test_scheduling_benchmark_unit.py::test_compute_score_bounds_and_penalties\nERROR tests/eval/test_scheduling_benchmark_unit.py::test_scheduling_benchmark_deterministic_execution\n9 errors in 4.57s"
       },
       "api_safeguards_suite": {
         "suite": "tests/api/test_timetable_validation_safeguards.py",
-        "passed": true,
-        "return_code": 0,
-        "duration_seconds": 7.14,
-        "output_tail": "...............                                                          [100%]\n15 passed in 4.74s"
+        "passed": false,
+        "return_code": 1,
+        "duration_seconds": 10.91,
+        "output_tail": "ERROR tests/api/test_timetable_validation_safeguards.py::test_scenario_14_repeated_generation_and_publication_requests_idempotency\nERROR tests/api/test_timetable_validation_safeguards.py::test_scenario_15_regression_for_previously_working_functionality\n15 errors in 8.28s"
       }
     }
   }
