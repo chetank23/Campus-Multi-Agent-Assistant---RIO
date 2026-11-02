@@ -139,6 +139,12 @@ function getNavGroups(role: UserRole): NavGroup[] {
               implemented: true,
             },
             {
+              label: 'Events & Clubs',
+              icon: <Sparkles size={18} />,
+              to: '/admin/events',
+              implemented: true,
+            },
+            {
               label: 'Time Slots & Calendar',
               icon: <Clock size={18} />,
               to: '/admin/campus/calendar-slots',
@@ -213,6 +219,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
           groupTitle: 'REQUESTS & OPERATIONS',
           items: [
             { label: 'Campus Resources', icon: <Boxes size={18} />, to: '/faculty/resources', implemented: true },
+            { label: 'Clubs & Events', icon: <Sparkles size={18} />, to: '/faculty/events', implemented: true },
             { label: 'Change Requests', icon: <ClipboardList size={18} />, to: '/faculty/requests', implemented: true },
             { label: 'Notifications', icon: <Bell size={18} />, to: '/faculty/notifications', implemented: true },
           ],
@@ -231,6 +238,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
           items: [
             { label: 'My Timetable', icon: <CalendarDays size={18} />, to: '/student/timetable', implemented: true },
             { label: 'My Courses', icon: <BookOpen size={18} />, to: '/student/courses', implemented: true },
+            { label: 'Campus Events', icon: <Sparkles size={18} />, to: '/student/events', implemented: true },
           ],
         },
         {

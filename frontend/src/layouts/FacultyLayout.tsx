@@ -23,6 +23,7 @@ import {
   Boxes,
   ClipboardList,
   Bell,
+  Sparkles,
   Search,
   Menu,
   X,
@@ -122,6 +123,12 @@ export const FacultyLayout: React.FC = () => {
       to: '/faculty/resources',
       label: 'Campus Resources',
       icon: <Boxes size={18} />,
+      end: false,
+    },
+    {
+      to: '/faculty/events',
+      label: 'Clubs & Events',
+      icon: <Sparkles size={18} />,
       end: false,
     },
     {

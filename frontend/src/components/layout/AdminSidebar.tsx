@@ -151,6 +151,12 @@ const adminSections: NavSection[] = [
         to: '/admin/resources',
       },
       {
+        id: 'events-clubs',
+        label: 'Events & Clubs',
+        icon: <Sparkles size={17} className="shrink-0" />,
+        to: '/admin/events',
+      },
+      {
         id: 'calendar-slots',
         label: 'Time Slots & Calendar',
         icon: <CalendarClock size={17} className="shrink-0" />,

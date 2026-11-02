@@ -203,6 +203,40 @@ def test_chat_cross_conversation_security(student_auth, student2_auth):
     client.delete(f"/agents/conversations/{conv_id}", headers=s1_headers)
 
 
+def test_admin_cannot_access_or_delete_user_conversations(student_auth, admin_auth):
+    """Admin has no blanket access to other users' private chat conversations."""
+    s_headers = {"Authorization": f"Bearer {student_auth['token']}"}
+    a_headers = {"Authorization": f"Bearer {admin_auth['token']}"}
+
+    create_resp = client.post(
+        "/agents/conversations",
+        headers=s_headers,
+        json={"title": "Confidential Student Chat"},
+    )
+    assert create_resp.status_code == 201
+    conv_id = create_resp.json()["id"]
+
+    # Admin attempts to read Student's conversation -> 403 Forbidden
+    admin_get = client.get(f"/agents/conversations/{conv_id}", headers=a_headers)
+    assert admin_get.status_code == 403
+
+    # Admin attempts to post into Student's conversation -> 403 Forbidden
+    admin_post = client.post(
+        "/agents/chat",
+        headers=a_headers,
+        json={"message": "Admin probe", "conversation_id": conv_id},
+    )
+    assert admin_post.status_code == 403
+
+    # Admin attempts to delete Student's conversation -> 403 Forbidden
+    admin_del = client.delete(f"/agents/conversations/{conv_id}", headers=a_headers)
+    assert admin_del.status_code == 403
+
+    # Student can delete their own conversation
+    student_del = client.delete(f"/agents/conversations/{conv_id}", headers=s_headers)
+    assert student_del.status_code == 200
+
+
 # ---------------------------------------------------------------------------
 # 3. Grounded Tools Verification (All 12 Tools)
 # ---------------------------------------------------------------------------

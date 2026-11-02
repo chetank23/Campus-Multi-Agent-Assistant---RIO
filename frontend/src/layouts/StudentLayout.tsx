@@ -17,6 +17,7 @@ import {
   LayoutGrid,
   CalendarDays,
   BookOpen,
+  Sparkles,
   Megaphone,
   Bell,
   Search,
@@ -102,6 +103,12 @@ export const StudentLayout: React.FC = () => {
       to: '/student/courses',
       label: 'My Courses',
       icon: <BookOpen size={18} />,
+      end: false,
+    },
+    {
+      to: '/student/events',
+      label: 'Campus Events',
+      icon: <Sparkles size={18} />,
       end: false,
     },
     {

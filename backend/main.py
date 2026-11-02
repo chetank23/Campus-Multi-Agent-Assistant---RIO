@@ -14,6 +14,7 @@ from backend.routes import (
     buildings,
     chat,
     change_requests,
+    clubs,
     course,
     course_assignment,
     data_import,
@@ -21,6 +22,7 @@ from backend.routes import (
     disruptions,
     elective_group,
     elective_group_course,
+    events,
     faculty,
     faculty_availability,
     labs,
@@ -89,6 +91,8 @@ app.include_router(section.router)
 app.include_router(batch.router)
 app.include_router(student.router)
 app.include_router(student.student_router)
+app.include_router(clubs.router)
+app.include_router(events.router)
 app.include_router(faculty.router)
 app.include_router(course.router)
 app.include_router(course_assignment.router)

@@ -126,8 +126,8 @@ def get_conversation_detail(
             detail="Conversation not found.",
         )
 
-    # Conversation ownership check
-    if current_user.role != "ADMIN" and conv.user_id != current_user.id:
+    # Strict owner-only conversation privacy: even administrators cannot read other users' private conversations
+    if conv.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: You do not have permission to view this conversation.",
@@ -185,7 +185,8 @@ def delete_conversation(
             detail="Conversation not found.",
         )
 
-    if current_user.role != "ADMIN" and conv.user_id != current_user.id:
+    # Strict owner-only conversation privacy
+    if conv.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: You do not have permission to delete this conversation.",
@@ -238,7 +239,8 @@ def chat_with_campus_assistant(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Conversation #{payload.conversation_id} was not found.",
             )
-        if current_user.role != "ADMIN" and conv.user_id != current_user.id:
+        # Strict owner-only conversation privacy
+        if conv.user_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied: You do not have permission to post to this conversation.",

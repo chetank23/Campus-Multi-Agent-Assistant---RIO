@@ -137,20 +137,52 @@ def _extract_intent_and_tool_call(message: str, user: User) -> Tuple[str, Dict[s
                 return "get_campus_room_inventory", {}
 
     # 11b. Room or Lab details (specific room lookup)
-    if any(k in msg for k in ["room", "lab", "classroom", "hall", "where is", "capacity"]):
+    if any(k in msg for k in ["room", "lab", "classroom", "hall", "where is", "capacity"]) and not any(k in msg for k in ["event", "events", "club", "workshop"]):
         match = re.search(r"(?:room|lab|hall|where is)\s+([a-zA-Z0-9\-\s]+)", message, re.IGNORECASE)
         query = match.group(1).strip() if match else message
         return "get_room_or_lab_details", {"room_query": query}
 
-    # 12. Academic Calendar / Holidays / Exams
-    if any(k in msg for k in ["holiday", "calendar", "exam", "vacation", "events", "when is the"]):
+    # 12. Campus Events & Club Activities
+    if any(k in msg for k in [
+        "ongoing event", "ongoing events", "ongoing", "live events", "live event",
+        "happening now", "currently happening", "what events are happening", "what event is happening",
+    ]):
+        return "get_ongoing_events", {}
+
+    if any(k in msg for k in ["upcoming event", "upcoming events", "upcoming workshop", "upcoming workshops", "upcoming activities"]):
+        return "get_upcoming_events", {}
+
+    if any(k in msg for k in ["my clubs", "my club", "show my clubs", "what clubs do i coordinate", "which clubs do i manage"]):
+        return "list_my_clubs", {}
+
+    if any(k in msg for k in ["list clubs", "all clubs", "campus clubs", "what clubs are there", "clubs in campus"]):
+        return "list_my_clubs" if user.role in ("ADMIN", "FACULTY") else "list_visible_events", {}
+
+    if "club" in msg and any(k in msg for k in ["activit", "events", "workshop"]):
+        match = re.search(r"(?:club|in)\s+([a-zA-Z0-9\s]+?)(?:'s|\s+activities|\s+events|\s*$)", message, re.IGNORECASE)
+        club_name = match.group(1).strip() if match else None
+        return "list_club_activities", {"club_name": club_name}
+
+    if any(k in msg for k in ["event details", "about event", "tell me about event", "details for event"]):
+        match = re.search(r"(?:event|about)\s+([a-zA-Z0-9\s]+)", message, re.IGNORECASE)
+        title = match.group(1).strip() if match else message
+        return "get_published_event_details", {"title": title}
+
+    if any(k in msg for k in [
+        "campus event", "campus events", "college event", "college events", "events today",
+        "today events", "what events", "list events", "show events", "what is happening on campus",
+        "workshops", "workshop", "hackathon", "cultural fest", "fest",
+    ]):
+        tf = "TODAY" if "today" in msg else None
+        return "list_visible_events", {"time_filter": tf}
+
+    # 13. Academic Calendar / Holidays / Exams
+    if any(k in msg for k in ["holiday", "calendar", "exam", "vacation", "when is the"]):
         ev_type = None
         if "holiday" in msg:
             ev_type = "HOLIDAY"
         elif "exam" in msg:
             ev_type = "EXAM"
-        elif "event" in msg:
-            ev_type = "EVENT"
         return "get_academic_calendar", {"event_type": ev_type}
 
     # 13. My Timetable / Schedule (Default for students and faculty)
@@ -516,6 +548,125 @@ def format_grounded_response(
                 lines.append(f"- {b['room_type'].replace('_', ' ').title()}: {b['count']}")
         lines.append("")
         lines.append(f"Note: {note}")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # Campus Events: Visible events list
+    elif tool_name in ("list_visible_events", "list_events"):
+        sources.append("Campus Events Registry")
+        events = tool_result.get("events", [])
+        if not events:
+            return sanitize_plain_english("No campus events found matching your criteria."), sources
+
+        lines = [f"Campus Events ({len(events)} event(s)):\n"]
+        for ev in events[:10]:
+            venue = ev.get("room_number") or ev.get("venue_name") or "TBA"
+            lines.append(f"- **{ev['title']}** ({ev.get('category', 'EVENT')})")
+            lines.append(f"  Status: {ev['status']} | Venue: {venue}")
+            lines.append(f"  Time: {ev.get('start_time', '')} to {ev.get('end_time', '')}")
+            if ev.get("club_name"):
+                lines.append(f"  Organized by: {ev['club_name']}")
+            if ev.get("description"):
+                lines.append(f"  Note: {ev['description']}")
+            lines.append("")
+        if len(events) > 10:
+            lines.append(f"... and {len(events) - 10} more events.")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # Live & Ongoing Campus Events
+    elif tool_name == "get_ongoing_events":
+        sources.append("Campus Events Registry")
+        events = tool_result.get("ongoing_events", [])
+        if not events:
+            return sanitize_plain_english("There are no campus events currently ongoing right now."), sources
+
+        lines = [f"Live & Ongoing Campus Events ({len(events)} active now):\n"]
+        for ev in events:
+            venue = ev.get("room_number") or ev.get("venue_name") or "TBA"
+            lines.append(f"- **{ev['title']}** ({ev.get('category', 'EVENT')})")
+            lines.append(f"  Location: {venue} | Time: {ev.get('start_time', '')} - {ev.get('end_time', '')}")
+            if ev.get("club_name"):
+                lines.append(f"  Club: {ev['club_name']}")
+            lines.append("")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # Upcoming Campus Events
+    elif tool_name == "get_upcoming_events":
+        sources.append("Campus Events Registry")
+        events = tool_result.get("upcoming_events", [])
+        if not events:
+            return sanitize_plain_english("No upcoming campus events scheduled at this time."), sources
+
+        lines = [f"Upcoming Campus Events & Activities ({len(events)} upcoming):\n"]
+        for ev in events:
+            venue = ev.get("room_number") or ev.get("venue_name") or "TBA"
+            lines.append(f"- **{ev['title']}** ({ev.get('category', 'EVENT')})")
+            lines.append(f"  Date & Time: {ev.get('start_time', '')} to {ev.get('end_time', '')}")
+            lines.append(f"  Venue: {venue}")
+            if ev.get("club_name"):
+                lines.append(f"  Organizing Club: {ev['club_name']}")
+            lines.append("")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # Published Event Details
+    elif tool_name == "get_published_event_details":
+        sources.append("Campus Events Registry")
+        if not tool_result.get("found"):
+            return sanitize_plain_english(tool_result.get("message", "Event not found or not published.")), sources
+        ev = tool_result["event"]
+        venue = ev.get("room_number") or ev.get("venue_name") or "TBA"
+        lines = [
+            f"Event Details: {ev['title']}",
+            f"- Category: {ev.get('category', 'EVENT')}",
+            f"- Status: {ev.get('status', 'PUBLISHED')}",
+            f"- Time: {ev.get('start_time', '')} to {ev.get('end_time', '')}",
+            f"- Venue: {venue}",
+            f"- Target Audience: {ev.get('target_audience', 'ALL')}",
+        ]
+        if ev.get("club_name"):
+            lines.append(f"- Organizing Club: {ev['club_name']}")
+        if ev.get("description"):
+            lines.append(f"- Description: {ev['description']}")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # Faculty / Admin Clubs List
+    elif tool_name in ("list_my_clubs", "list_all_clubs"):
+        sources.append("Club & Activity Registry")
+        clubs = tool_result.get("clubs", [])
+        if not clubs:
+            return sanitize_plain_english("You do not currently have any active club coordinator assignments."), sources
+
+        lines = [f"Clubs ({len(clubs)}):\n"]
+        for c in clubs:
+            lines.append(f"- **{c['name']}** ({c['code']}) [{c['category']}] - Status: {c['status']}")
+            if c.get("description"):
+                lines.append(f"  {c['description']}")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # Club Activities
+    elif tool_name == "list_club_activities":
+        sources.append("Club & Activity Registry")
+        activities = tool_result.get("activities", [])
+        if not activities:
+            return sanitize_plain_english("No activities or events found for this club."), sources
+
+        lines = [f"Club Activities ({len(activities)}):\n"]
+        for a in activities:
+            venue = a.get("room_number") or a.get("venue_name") or "TBA"
+            lines.append(f"- **{a['title']}** [{a['status']}]")
+            lines.append(f"  Date & Time: {a.get('start_time', '')} to {a.get('end_time', '')} | Venue: {venue}")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # Venue Conflict Check
+    elif tool_name == "validate_event":
+        sources.append("Venue & Facilities Conflict Engine")
+        is_avail = tool_result.get("is_available", False)
+        room_id = tool_result.get("room_id")
+        conflicts = tool_result.get("conflicts", [])
+        if is_avail:
+            return sanitize_plain_english(f"The requested venue (Room ID: {room_id}) is available with zero conflicts!"), sources
+        lines = [f"The venue has {len(conflicts)} scheduling conflict(s):"]
+        for c in conflicts:
+            lines.append(f"- [{c.get('type')}] {c.get('reason')} ({c.get('time_window')})")
         return sanitize_plain_english("\n".join(lines)), sources
 
     return "No information could be generated for this query.", sources

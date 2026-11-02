@@ -43,6 +43,24 @@ from agents.tools.resource_tools import (
     execute_create_booking_data,
     execute_cancel_booking_data,
 )
+from agents.tools.event_tools import (
+    list_visible_events_data,
+    get_published_event_details_data,
+    get_ongoing_events_data,
+    get_upcoming_events_data,
+    validate_event_data,
+    create_event_draft_data,
+    update_event_draft_data,
+    submit_event_for_approval_data,
+    approve_event_data,
+    reject_event_data,
+    publish_event_data,
+    cancel_event_data,
+    list_my_clubs_data,
+    list_club_activities_data,
+    create_club_activity_data,
+    update_club_activity_data,
+)
 
 # Tool registry with documentation for LLM tool binding
 QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
@@ -394,6 +412,221 @@ QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         },
         "allowed_roles": ["ADMIN"],
     },
+    # Campus Events & Club Coordination Tools
+    {
+        "name": "list_visible_events",
+        "description": "Lists published campus events and activities visible to the current user with optional category or time filters.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "category": {"type": "string", "description": "Optional category filter: SEMINAR, WORKSHOP, GUEST_LECTURE, COMPETITION, HACKATHON, CULTURAL, SPORTS, etc."},
+                "time_filter": {"type": "string", "description": "TODAY, ONGOING, THIS_WEEK, UPCOMING, COMPLETED"},
+                "search": {"type": "string", "description": "Optional search term for event title/description"},
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_published_event_details",
+        "description": "Retrieves comprehensive information about a specific published event.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "integer", "description": "ID of the event"},
+                "title": {"type": "string", "description": "Title of the event"},
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_ongoing_events",
+        "description": "Lists all events that are currently active and happening right now.",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_upcoming_events",
+        "description": "Lists upcoming scheduled campus events and workshops.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "category": {"type": "string", "description": "Optional category filter"},
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "create_event_draft",
+        "description": "Creates a draft for a new campus event. Requires EVENT_COORDINATOR or ADMIN role.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "category": {"type": "string"},
+                "start_time": {"type": "string", "description": "ISO datetime or 'YYYY-MM-DD HH:MM'"},
+                "end_time": {"type": "string", "description": "ISO datetime or 'YYYY-MM-DD HH:MM'"},
+                "room_id": {"type": "integer"},
+                "venue_name": {"type": "string"},
+                "description": {"type": "string"},
+                "target_audience": {"type": "string", "description": "ALL, STUDENT, FACULTY, DEPARTMENT_ONLY"},
+                "requires_approval": {"type": "boolean", "default": True},
+            },
+            "required": ["title", "category", "start_time", "end_time"],
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "update_event_draft",
+        "description": "Updates details of an event draft or permits updating event timings/venue.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "integer"},
+                "title": {"type": "string"},
+                "description": {"type": "string"},
+                "start_time": {"type": "string"},
+                "end_time": {"type": "string"},
+                "room_id": {"type": "integer"},
+                "venue_name": {"type": "string"},
+            },
+            "required": ["event_id"],
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "validate_event",
+        "description": "Verifies whether a proposed venue and time window is conflict-free across timetable classes, resource bookings, and other events.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "room_id": {"type": "integer"},
+                "start_time": {"type": "string"},
+                "end_time": {"type": "string"},
+                "exclude_event_id": {"type": "integer"},
+            },
+            "required": ["room_id", "start_time", "end_time"],
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "submit_event_for_approval",
+        "description": "Submits a draft event for administrator review.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "integer"},
+            },
+            "required": ["event_id"],
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "approve_event",
+        "description": "Approves and publishes a pending event. Administrator only.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "integer"},
+                "notes": {"type": "string"},
+            },
+            "required": ["event_id"],
+        },
+        "allowed_roles": ["ADMIN"],
+    },
+    {
+        "name": "reject_event",
+        "description": "Rejects a pending event submission with a reason. Administrator only.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "integer"},
+                "reason": {"type": "string"},
+            },
+            "required": ["event_id", "reason"],
+        },
+        "allowed_roles": ["ADMIN"],
+    },
+    {
+        "name": "publish_event",
+        "description": "Directly publishes an event (permitted for Admin or coordinators with EVENT_DIRECT_PUBLISH).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "integer"},
+            },
+            "required": ["event_id"],
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "cancel_event",
+        "description": "Cancels a scheduled or published event with cancellation notification.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "integer"},
+                "reason": {"type": "string"},
+            },
+            "required": ["event_id"],
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "list_my_clubs",
+        "description": "Lists the clubs assigned to the current faculty member via CLUB_COORDINATOR capability (or all clubs for Admin).",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "list_club_activities",
+        "description": "Lists published or permitted activities and workshops organized by a campus club.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "club_id": {"type": "integer"},
+                "club_name": {"type": "string"},
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "create_club_activity",
+        "description": "Creates an activity draft under an assigned club. Requires CLUB_COORDINATOR capability for that club.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "club_id": {"type": "integer"},
+                "title": {"type": "string"},
+                "category": {"type": "string", "default": "CLUB_ACTIVITY"},
+                "start_time": {"type": "string"},
+                "end_time": {"type": "string"},
+                "room_id": {"type": "integer"},
+                "venue_name": {"type": "string"},
+                "description": {"type": "string"},
+                "requires_approval": {"type": "boolean", "default": True},
+            },
+            "required": ["club_id", "title", "start_time", "end_time"],
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "update_club_activity",
+        "description": "Updates a club activity draft.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "integer"},
+                "title": {"type": "string"},
+                "description": {"type": "string"},
+                "start_time": {"type": "string"},
+                "end_time": {"type": "string"},
+                "room_id": {"type": "integer"},
+                "venue_name": {"type": "string"},
+            },
+            "required": ["event_id"],
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
 ]
 
 
@@ -608,6 +841,151 @@ def execute_tool(
             return analyze_scheduling_readiness_data(
                 db=db,
                 scope_dict=tool_args.get("scope", {}),
+            )
+
+        # Campus Events & Club Activity Tools
+        elif tool_name == "list_visible_events":
+            return list_visible_events_data(
+                db=db,
+                user=user,
+                category=tool_args.get("category"),
+                time_filter=tool_args.get("time_filter"),
+                search=tool_args.get("search"),
+            )
+
+        elif tool_name == "get_published_event_details":
+            return get_published_event_details_data(
+                db=db,
+                user=user,
+                event_id=tool_args.get("event_id"),
+                title=tool_args.get("title"),
+            )
+
+        elif tool_name == "get_ongoing_events":
+            return get_ongoing_events_data(db=db, user=user)
+
+        elif tool_name == "get_upcoming_events":
+            return get_upcoming_events_data(
+                db=db,
+                user=user,
+                category=tool_args.get("category"),
+            )
+
+        elif tool_name == "create_event_draft":
+            return create_event_draft_data(
+                db=db,
+                user=user,
+                title=tool_args["title"],
+                category=tool_args["category"],
+                start_time=tool_args["start_time"],
+                end_time=tool_args["end_time"],
+                room_id=tool_args.get("room_id"),
+                building_id=tool_args.get("building_id"),
+                venue_name=tool_args.get("venue_name"),
+                description=tool_args.get("description"),
+                target_audience=tool_args.get("target_audience", "ALL"),
+                requires_approval=tool_args.get("requires_approval", True),
+                club_id=tool_args.get("club_id"),
+            )
+
+        elif tool_name == "update_event_draft":
+            return update_event_draft_data(
+                db=db,
+                user=user,
+                event_id=tool_args["event_id"],
+                title=tool_args.get("title"),
+                description=tool_args.get("description"),
+                start_time=tool_args.get("start_time"),
+                end_time=tool_args.get("end_time"),
+                room_id=tool_args.get("room_id"),
+                venue_name=tool_args.get("venue_name"),
+            )
+
+        elif tool_name == "validate_event":
+            return validate_event_data(
+                db=db,
+                user=user,
+                room_id=tool_args["room_id"],
+                start_time=tool_args["start_time"],
+                end_time=tool_args["end_time"],
+                exclude_event_id=tool_args.get("exclude_event_id"),
+            )
+
+        elif tool_name == "submit_event_for_approval":
+            return submit_event_for_approval_data(
+                db=db,
+                user=user,
+                event_id=tool_args["event_id"],
+            )
+
+        elif tool_name == "approve_event":
+            return approve_event_data(
+                db=db,
+                user=user,
+                event_id=tool_args["event_id"],
+                notes=tool_args.get("notes"),
+            )
+
+        elif tool_name == "reject_event":
+            return reject_event_data(
+                db=db,
+                user=user,
+                event_id=tool_args["event_id"],
+                reason=tool_args.get("reason"),
+            )
+
+        elif tool_name == "publish_event":
+            return publish_event_data(
+                db=db,
+                user=user,
+                event_id=tool_args["event_id"],
+            )
+
+        elif tool_name == "cancel_event":
+            return cancel_event_data(
+                db=db,
+                user=user,
+                event_id=tool_args["event_id"],
+                reason=tool_args.get("reason"),
+            )
+
+        elif tool_name == "list_my_clubs":
+            return list_my_clubs_data(db=db, user=user)
+
+        elif tool_name == "list_club_activities":
+            return list_club_activities_data(
+                db=db,
+                user=user,
+                club_id=tool_args.get("club_id"),
+                club_name=tool_args.get("club_name"),
+            )
+
+        elif tool_name == "create_club_activity":
+            return create_club_activity_data(
+                db=db,
+                user=user,
+                club_id=tool_args["club_id"],
+                title=tool_args["title"],
+                category=tool_args.get("category", "CLUB_ACTIVITY"),
+                start_time=tool_args["start_time"],
+                end_time=tool_args["end_time"],
+                room_id=tool_args.get("room_id"),
+                venue_name=tool_args.get("venue_name"),
+                description=tool_args.get("description"),
+                requires_approval=tool_args.get("requires_approval", True),
+            )
+
+        elif tool_name == "update_club_activity":
+            return update_club_activity_data(
+                db=db,
+                user=user,
+                event_id=tool_args["event_id"],
+                title=tool_args.get("title"),
+                description=tool_args.get("description"),
+                start_time=tool_args.get("start_time"),
+                end_time=tool_args.get("end_time"),
+                room_id=tool_args.get("room_id"),
+                venue_name=tool_args.get("venue_name"),
             )
 
         else:

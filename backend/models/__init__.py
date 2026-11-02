@@ -58,6 +58,9 @@ from .workflow import AgentProposal, AuditLog, ChangeRequest, Notification, Noti
 # AI Assistant Chat Persistence
 from .chat import ChatConversation, ChatMessage  # noqa: F401
 
+# Campus Events, Club & Activity Coordination
+from .events import CoordinatorCapability, Club, CampusEvent  # noqa: F401
+
 # Expose the metadata object Alembic needs
 metadata = Base.metadata
 
@@ -96,4 +99,7 @@ __all__ = [
     "NotificationOutbox",
     "ChatConversation",
     "ChatMessage",
+    "CoordinatorCapability",
+    "Club",
+    "CampusEvent",
 ]

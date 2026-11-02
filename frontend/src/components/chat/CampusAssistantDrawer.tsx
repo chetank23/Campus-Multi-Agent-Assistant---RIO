@@ -260,7 +260,8 @@ export const CampusAssistantDrawer: React.FC = () => {
     if (user.role === 'STUDENT') {
       return [
         { label: 'What is my timetable today?', prompt: 'What is my timetable today?', icon: <Calendar size={13} /> },
-        { label: 'What classes do I have tomorrow?', prompt: 'What classes do I have tomorrow?', icon: <Clock size={13} /> },
+        { label: 'Ongoing campus events', prompt: 'What events are currently ongoing?', icon: <Sparkles size={13} /> },
+        { label: 'Upcoming workshops & fests', prompt: 'Show upcoming campus events and workshops', icon: <Sparkles size={13} /> },
         { label: 'Where is my next class?', prompt: 'Where is my next class?', icon: <HelpCircle size={13} /> },
         { label: 'Has my timetable changed?', prompt: 'Has my timetable changed?', icon: <AlertCircle size={13} /> },
         { label: 'Campus announcements', prompt: 'Are there any relevant campus announcements?', icon: <Bell size={13} /> },
@@ -269,6 +270,8 @@ export const CampusAssistantDrawer: React.FC = () => {
     } else if (user.role === 'FACULTY') {
       return [
         { label: 'My teaching schedule today', prompt: 'What is my teaching schedule today?', icon: <Calendar size={13} /> },
+        { label: 'My assigned clubs', prompt: 'Show my clubs', icon: <Sparkles size={13} /> },
+        { label: 'Ongoing campus events', prompt: 'What events are happening now?', icon: <Sparkles size={13} /> },
         { label: 'Classes tomorrow', prompt: 'Which classes do I have tomorrow?', icon: <Clock size={13} /> },
         { label: 'Which rooms are assigned to me?', prompt: 'Which rooms are assigned to me?', icon: <Building2 size={13} /> },
         { label: 'Find free labs', prompt: 'Which available labs match a requested time slot?', icon: <Building2 size={13} /> },
@@ -277,6 +280,7 @@ export const CampusAssistantDrawer: React.FC = () => {
     } else if (user.role === 'ADMIN') {
       return [
         { label: 'Department timetable', prompt: 'Show today timetable for department', icon: <Calendar size={13} /> },
+        { label: 'Active campus events', prompt: 'List all visible campus events', icon: <Sparkles size={13} /> },
         { label: 'Find available rooms', prompt: 'Find available rooms for a time slot', icon: <Building2 size={13} /> },
         { label: 'Timetable publication status', prompt: 'Check timetable publication status', icon: <CheckCircle2 size={13} /> },
         { label: 'Review pending bookings', prompt: 'Review pending resource bookings', icon: <Clock size={13} /> },
@@ -324,6 +328,16 @@ export const CampusAssistantDrawer: React.FC = () => {
 
     if (t.includes('course') && user.role === 'STUDENT') {
       links.push({ label: 'My Enrolled Courses', to: '/student/courses', icon: <BookOpen size={12} /> });
+    }
+
+    if (t.includes('event') || t.includes('club') || t.includes('activity') || t.includes('workshop')) {
+      if (user.role === 'STUDENT') {
+        links.push({ label: 'Campus Events Dashboard', to: '/student/events', icon: <Sparkles size={12} /> });
+      } else if (user.role === 'FACULTY') {
+        links.push({ label: 'Clubs & Events Management', to: '/faculty/events', icon: <Sparkles size={12} /> });
+      } else if (user.role === 'ADMIN') {
+        links.push({ label: 'Events & Club Coordination', to: '/admin/events', icon: <Sparkles size={12} /> });
+      }
     }
 
     return links;

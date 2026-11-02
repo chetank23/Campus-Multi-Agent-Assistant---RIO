@@ -52,6 +52,7 @@ import { TimetableGenerationPage } from '@/pages/admin/timetable/TimetableGenera
 import { AdminTimetableVersionsPage } from '@/pages/admin/timetable/AdminTimetableVersionsPage';
 import { AdminTimetableReviewPage } from '@/pages/admin/timetable/AdminTimetableReviewPage';
 import { ResourcesPage } from '@/pages/admin/resources/ResourcesPage';
+import { AdminEventsPage } from '@/pages/admin/AdminEventsPage';
 import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage';
 import { AdminChangeRequestsPage } from '@/pages/admin/AdminChangeRequestsPage';
 import { AdminAuditLogsPage } from '@/pages/admin/AdminAuditLogsPage';
@@ -60,11 +61,13 @@ import { FacultyTimetablePage } from '@/pages/faculty/FacultyTimetablePage';
 import { FacultyDeptTimetablePage } from '@/pages/faculty/FacultyDeptTimetablePage';
 import { FacultyAvailabilityPage } from '@/pages/faculty/FacultyAvailabilityPage';
 import { FacultyResourcesPage } from '@/pages/faculty/FacultyResourcesPage';
+import { FacultyEventsPage } from '@/pages/faculty/FacultyEventsPage';
 import { FacultyChangeRequestsPage } from '@/pages/faculty/FacultyChangeRequestsPage';
 import { FacultyNotificationsPage } from '@/pages/faculty/FacultyNotificationsPage';
 
 import { StudentTimetablePage } from '@/pages/student/StudentTimetablePage';
 import { StudentCoursesPage } from '@/pages/student/StudentCoursesPage';
+import { StudentEventsPage } from '@/pages/student/StudentEventsPage';
 import { StudentAnnouncementsPage } from '@/pages/student/StudentAnnouncementsPage';
 import { StudentNotificationsPage } from '@/pages/student/StudentNotificationsPage';
 
@@ -141,6 +144,7 @@ export function AppRoutes() {
           <Route path="/admin/timetable/generate" element={<TimetableGenerationPage />} />
           {/* Resource & Operational Administration */}
           <Route path="/admin/resources" element={<ResourcesPage />} />
+          <Route path="/admin/events" element={<AdminEventsPage />} />
           <Route path="/admin/requests" element={<AdminChangeRequestsPage />} />
           <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
           <Route path="/admin/audit" element={<AdminAuditLogsPage />} />
@@ -166,6 +170,7 @@ export function AppRoutes() {
           <Route path="/faculty/dept-timetable" element={<FacultyDeptTimetablePage />} />
           <Route path="/faculty/availability" element={<FacultyAvailabilityPage />} />
           <Route path="/faculty/resources" element={<FacultyResourcesPage />} />
+          <Route path="/faculty/events" element={<FacultyEventsPage />} />
           <Route path="/faculty/requests" element={<FacultyChangeRequestsPage />} />
           <Route path="/faculty/notifications" element={<FacultyNotificationsPage />} />
         </Route>
@@ -183,6 +188,7 @@ export function AppRoutes() {
           <Route path="/student" element={<StudentDashboard />} />
           <Route path="/student/timetable" element={<StudentTimetablePage />} />
           <Route path="/student/courses" element={<StudentCoursesPage />} />
+          <Route path="/student/events" element={<StudentEventsPage />} />
           <Route path="/student/announcements" element={<StudentAnnouncementsPage />} />
           <Route path="/student/notifications" element={<StudentNotificationsPage />} />
         </Route>
