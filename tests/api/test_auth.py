@@ -1,4 +1,5 @@
 import pytest
+import uuid
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from backend.main import app
@@ -126,7 +127,7 @@ def test_access_token_cannot_be_used_as_refresh_token(get_seeded_users):
 
 def test_login_rate_limit_blocks_repeated_invalid_attempts():
     fresh_client = TestClient(app)
-    payload = {"email": "rate-limit-check@example.com", "password": "incorrect"}
+    payload = {"email": f"rate-limit-{uuid.uuid4().hex}@example.com", "password": "incorrect"}
     responses = [fresh_client.post("/auth/login", json=payload) for _ in range(9)]
     assert all(response.status_code == 401 for response in responses[:8])
     assert responses[8].status_code == 429
