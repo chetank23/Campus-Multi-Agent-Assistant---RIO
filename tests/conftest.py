@@ -229,7 +229,7 @@ def setup_test_database():
         schema_engine = create_engine(schema_url)
         with schema_engine.begin() as conn:
             conn.execute(text("""
-                DO $
+                DO $$
                 DECLARE
                     seq RECORD;
                 BEGIN
@@ -243,7 +243,7 @@ def setup_test_database():
                     LOOP
                         EXECUTE 'SELECT setval(''test_schema.' || seq.seq_name || ''', COALESCE((SELECT MAX(id) FROM test_schema.' || seq.table_name || '), 1), true)';
                     END LOOP;
-                END $;
+                END $$;
             """))
 
         yield
