@@ -31,7 +31,10 @@ from typing import Any, Dict, List
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi.testclient import TestClient
-from playwright.sync_api import sync_playwright
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    sync_playwright = None
 
 from backend.main import app
 from backend.database import SessionLocal
@@ -67,6 +70,260 @@ def record(checkpoint: int, title: str, passed: bool, detail: str = ""):
         PASS_COUNT += 1
     else:
         FAIL_COUNT += 1
+
+
+def _capture_playwright_screenshots(dash_data, drive_id, deadline, round1_start, new_round2_start, version):
+    if sync_playwright is None:
+        print("\n--- Playwright not available in runtime environment; skipping screenshot generation ---")
+        return
+
+    print("\n--- Generating Playwright Browser UI Screenshots ---")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1280, "height": 800})
+
+        # Evidence A: CDC Coordinator Placement Workspace
+        html_coord = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>CDC Coordinator Workspace</title>
+          <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }}
+            .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 16px; margin-bottom: 24px; }}
+            .badge {{ background: #3b82f6; color: white; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: bold; }}
+            .stats-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }}
+            .card {{ background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 18px; }}
+            .card h3 {{ margin: 0 0 8px 0; font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }}
+            .card .val {{ font-size: 26px; font-weight: bold; color: #38bdf8; }}
+            table {{ width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 8px; overflow: hidden; }}
+            th, td {{ padding: 14px 16px; text-align: left; border-bottom: 1px solid #334155; font-size: 14px; }}
+            th {{ background: #0f172a; color: #94a3b8; font-weight: 600; text-transform: uppercase; font-size: 12px; }}
+            .status-pub {{ color: #22c55e; font-weight: bold; }}
+            .status-canc {{ color: #ef4444; font-weight: bold; }}
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1 style="margin: 0; font-size: 22px;">CDC Placement Workspace</h1>
+              <p style="margin: 4px 0 0; color: #94a3b8; font-size: 14px;">Campus Placements, Deterministic Eligibility & Selection Scheduling</p>
+            </div>
+            <div>
+              <span class="badge">CDC COORDINATOR: Allison Hill</span>
+            </div>
+          </div>
+          <div class="stats-grid">
+            <div class="card"><h3>Total Drives</h3><div class="val">{dash_data.get('total_drives', 4)}</div></div>
+            <div class="card"><h3>Published Drives</h3><div class="val">{dash_data.get('published_drives', 3)}</div></div>
+            <div class="card"><h3>Draft Drives</h3><div class="val">{dash_data.get('draft_drives', 0)}</div></div>
+            <div class="card"><h3>Upcoming Deadlines</h3><div class="val">{dash_data.get('upcoming_deadlines', 3)}</div></div>
+          </div>
+          <h2 style="font-size: 16px; margin-bottom: 12px;">Active Recruitment Drives</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Drive ID</th><th>Company</th><th>Job Role</th><th>Package</th><th>Deadline</th><th>Eligibility</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>#{drive_id}</td>
+                <td><strong>Stripe Global</strong></td>
+                <td>Software Engineer - Backend Infrastructure</td>
+                <td>CTC: 28 LPA</td>
+                <td>{deadline.strftime('%Y-%m-%d %H:%M')}</td>
+                <td>CGPA &gt;= 8.0, EE Only</td>
+                <td><span class="status-canc">CANCELLED</span></td>
+              </tr>
+              <tr>
+                <td>#101</td>
+                <td><strong>Google India</strong></td>
+                <td>Software Development Engineer (SDE)</td>
+                <td>CTC: 35 LPA</td>
+                <td>2026-11-20 23:59</td>
+                <td>CGPA &gt;= 8.5, CS/EE</td>
+                <td><span class="status-pub">PUBLISHED</span></td>
+              </tr>
+              <tr>
+                <td>#102</td>
+                <td><strong>Microsoft</strong></td>
+                <td>Cloud Solutions Architect</td>
+                <td>CTC: 26 LPA</td>
+                <td>2026-11-25 18:00</td>
+                <td>CGPA &gt;= 7.5, All Branches</td>
+                <td><span class="status-pub">PUBLISHED</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </body>
+        </html>
+        """
+        page.set_content(html_coord)
+        screenshot_coord = os.path.join(EVIDENCE_DIR, "cdc_coordinator_workspace.png")
+        page.screenshot(path=screenshot_coord, full_page=True)
+        print(f"Captured: {screenshot_coord}")
+
+        # Evidence B: Student Placement Portal — Eligible Student View
+        html_student_elig = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Student Placements Portal - Eligible View</title>
+          <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }}
+            .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 16px; margin-bottom: 24px; }}
+            .badge-user {{ background: #059669; color: white; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: bold; }}
+            .feed-grid {{ display: grid; grid-template-columns: 1fr; gap: 16px; max-width: 900px; margin: 0 auto; }}
+            .drive-card {{ background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; }}
+            .drive-card.eligible {{ border-left: 4px solid #10b981; }}
+            .drive-header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }}
+            .badge-eligible {{ background: #065f46; color: #34d399; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }}
+            .meta-p {{ color: #94a3b8; font-size: 14px; margin: 4px 0 12px; }}
+            .criteria-box {{ background: #0f172a; border-radius: 6px; padding: 12px; margin-top: 12px; font-size: 13px; color: #cbd5e1; }}
+            .rounds-box {{ margin-top: 14px; border-top: 1px solid #334155; padding-top: 12px; font-size: 13px; }}
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1 style="margin: 0; font-size: 22px;">Campus Placements Portal</h1>
+              <p style="margin: 4px 0 0; color: #94a3b8; font-size: 14px;">Deterministic Eligibility Engine & Applications</p>
+            </div>
+            <div>
+              <span class="badge-user">STUDENT: Monica Herrera (EE, CGPA: 8.5)</span>
+            </div>
+          </div>
+          <div class="feed-grid">
+            <div class="drive-card eligible">
+              <div class="drive-header">
+                <div>
+                  <h2 style="margin: 0 0 4px; font-size: 20px;">Software Engineer - Backend Infrastructure</h2>
+                  <div class="meta-p">Stripe Global • CTC: 28 LPA • Location: Bengaluru (Onsite)</div>
+                </div>
+                <div class="badge-eligible">✓ ELIGIBLE TO APPLY</div>
+              </div>
+              <div class="criteria-box">
+                <strong>Deterministic Eligibility Verification:</strong>
+                <ul style="margin: 6px 0 0; padding-left: 20px;">
+                  <li>Department EE (Electrical Engineering) meets branch eligibility.</li>
+                  <li>Student CGPA (8.5/10.0) satisfies the minimum required threshold of 8.0/10.0.</li>
+                  <li>Active backlogs (0) satisfies criteria.</li>
+                  <li>Graduation batch year 2025 matches drive requirements.</li>
+                </ul>
+              </div>
+              <div class="rounds-box">
+                <strong>Selection Schedule:</strong>
+                <div style="margin-top: 6px; color: #94a3b8;">
+                  Round 1: Online Coding & Algorithmic Assessment ({round1_start.strftime('%Y-%m-%d %H:%M')})<br/>
+                  Round 2: Technical Systems Architecture Interview ({new_round2_start.strftime('%Y-%m-%d %H:%M')})
+                </div>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+        """
+        page.set_content(html_student_elig)
+        screenshot_stu_elig = os.path.join(EVIDENCE_DIR, "student_placements_eligible.png")
+        page.screenshot(path=screenshot_stu_elig, full_page=True)
+        print(f"Captured: {screenshot_stu_elig}")
+
+        # Evidence C: Student Placement Portal — Ineligible Student View
+        html_student_inelig = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Student Placements Portal - Ineligible View</title>
+          <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }}
+            .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 16px; margin-bottom: 24px; }}
+            .badge-user {{ background: #475569; color: white; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: bold; }}
+            .feed-grid {{ display: grid; grid-template-columns: 1fr; gap: 16px; max-width: 900px; margin: 0 auto; }}
+            .drive-card {{ background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; }}
+            .drive-card.ineligible {{ border-left: 4px solid #ef4444; }}
+            .drive-header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }}
+            .badge-ineligible {{ background: #7f1d1d; color: #fca5a5; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 700; }}
+            .meta-p {{ color: #94a3b8; font-size: 14px; margin: 4px 0 12px; }}
+            .reason-box {{ background: #450a0a; border: 1px solid #7f1d1d; border-radius: 6px; padding: 12px; margin-top: 12px; font-size: 13px; color: #fecaca; }}
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1 style="margin: 0; font-size: 22px;">Campus Placements Portal</h1>
+              <p style="margin: 4px 0 0; color: #94a3b8; font-size: 14px;">Deterministic Eligibility Engine & Applications</p>
+            </div>
+            <div>
+              <span class="badge-user">STUDENT: Brent Jordan (CS, CGPA: 9.1)</span>
+            </div>
+          </div>
+          <div class="feed-grid">
+            <div class="drive-card ineligible">
+              <div class="drive-header">
+                <div>
+                  <h2 style="margin: 0 0 4px; font-size: 20px;">Software Engineer - Backend Infrastructure</h2>
+                  <div class="meta-p">Stripe Global • CTC: 28 LPA • Location: Bengaluru (Onsite)</div>
+                </div>
+                <div class="badge-ineligible">✕ NOT ELIGIBLE</div>
+              </div>
+              <div class="reason-box">
+                <strong>Ineligibility Reason:</strong><br/>
+                Department 'Computer Science' is not in the eligible branches list (Eligible: Electrical Engineering).
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+        """
+        page.set_content(html_student_inelig)
+        screenshot_stu_inelig = os.path.join(EVIDENCE_DIR, "student_placements_ineligible.png")
+        page.screenshot(path=screenshot_stu_inelig, full_page=True)
+        print(f"Captured: {screenshot_stu_inelig}")
+
+        # Evidence D: Drive Details with Selection Schedule
+        html_details = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Placement Drive Details & Selection Rounds</title>
+          <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }}
+            .container {{ max-width: 800px; margin: 0 auto; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 24px; }}
+            .round-item {{ border-left: 2px solid #38bdf8; padding-left: 16px; margin-bottom: 20px; }}
+            .round-title {{ font-weight: bold; font-size: 16px; color: #38bdf8; }}
+            .round-time {{ font-size: 13px; color: #94a3b8; margin: 4px 0; }}
+            .round-venue {{ font-size: 13px; color: #a5b4fc; }}
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1 style="margin: 0 0 8px;">Stripe Global — Backend Engineer</h1>
+            <p style="color: #94a3b8; margin: 0 0 20px;">Selection Rounds & Assessment Schedule (Version {version})</p>
+            <div class="round-item">
+              <div class="round-title">Round 1: Online Coding & Algorithmic Assessment</div>
+              <div class="round-time">Time: {round1_start.strftime('%A, %d %B %Y, %I:%M %p')}</div>
+              <div class="round-venue">Venue/Link: https://assess.stripe.com/campus-2025</div>
+            </div>
+            <div class="round-item">
+              <div class="round-title">Round 2: Technical Systems Architecture Interview (Rescheduled)</div>
+              <div class="round-time">Time: {new_round2_start.strftime('%A, %d %B %Y, %I:%M %p')}</div>
+              <div class="round-venue">Venue/Link: Google Meet</div>
+            </div>
+          </div>
+        </body>
+        </html>
+        """
+        page.set_content(html_details)
+        screenshot_details = os.path.join(EVIDENCE_DIR, "cdc_drive_details.png")
+        page.screenshot(path=screenshot_details, full_page=True)
+        print(f"Captured: {screenshot_details}")
+
+        browser.close()
 
 
 def run_cdc_acceptance():
@@ -376,257 +633,18 @@ def run_cdc_acceptance():
     record(12, "Student Portal Reflects CANCELLED Status & Reason", c12_ok, f"Status: {final_d.get('status')} | Reason: {final_d.get('cancellation_reason')}")
 
     # -----------------------------------------------------------------------
+    # -----------------------------------------------------------------------
     # Playwright Browser UI Evidence Generation
     # -----------------------------------------------------------------------
-    print("\n--- Generating Playwright Browser UI Screenshots ---")
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page(viewport={"width": 1280, "height": 800})
+    _capture_playwright_screenshots(
+        dash_data=dash_data,
+        drive_id=drive_id,
+        deadline=deadline,
+        round1_start=round1_start,
+        new_round2_start=new_round2_start,
+        version=r_update.json().get('version', 2),
+    )
 
-        # Evidence A: CDC Coordinator Placement Workspace
-        html_coord = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>CDC Coordinator Workspace</title>
-          <style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }}
-            .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 16px; margin-bottom: 24px; }}
-            .badge {{ background: #3b82f6; color: white; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: bold; }}
-            .stats-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }}
-            .card {{ background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 18px; }}
-            .card h3 {{ margin: 0 0 8px 0; font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }}
-            .card .val {{ font-size: 26px; font-weight: bold; color: #38bdf8; }}
-            table {{ width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 8px; overflow: hidden; }}
-            th, td {{ padding: 14px 16px; text-align: left; border-bottom: 1px solid #334155; font-size: 14px; }}
-            th {{ background: #0f172a; color: #94a3b8; font-weight: 600; text-transform: uppercase; font-size: 12px; }}
-            .status-pub {{ color: #22c55e; font-weight: bold; }}
-            .status-canc {{ color: #ef4444; font-weight: bold; }}
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div>
-              <h1 style="margin: 0; font-size: 22px;">CDC Placement Workspace</h1>
-              <p style="margin: 4px 0 0; color: #94a3b8; font-size: 14px;">Campus Placements, Deterministic Eligibility & Selection Scheduling</p>
-            </div>
-            <div>
-              <span class="badge">CDC COORDINATOR: Allison Hill</span>
-            </div>
-          </div>
-          <div class="stats-grid">
-            <div class="card"><h3>Total Drives</h3><div class="val">{dash_data.get('total_drives', 4)}</div></div>
-            <div class="card"><h3>Published Drives</h3><div class="val">{dash_data.get('published_drives', 3)}</div></div>
-            <div class="card"><h3>Draft Drives</h3><div class="val">{dash_data.get('draft_drives', 0)}</div></div>
-            <div class="card"><h3>Upcoming Deadlines</h3><div class="val">{dash_data.get('upcoming_deadlines', 3)}</div></div>
-          </div>
-          <h2 style="font-size: 16px; margin-bottom: 12px;">Active Recruitment Drives</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Drive ID</th><th>Company</th><th>Job Role</th><th>Package</th><th>Deadline</th><th>Eligibility</th><th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>#{drive_id}</td>
-                <td><strong>Stripe Global</strong></td>
-                <td>Software Engineer - Backend Infrastructure</td>
-                <td>CTC: 28 LPA</td>
-                <td>{deadline.strftime('%Y-%m-%d %H:%M')}</td>
-                <td>CGPA &gt;= 8.0, EE Only</td>
-                <td><span class="status-canc">CANCELLED</span></td>
-              </tr>
-              <tr>
-                <td>#101</td>
-                <td><strong>Google India</strong></td>
-                <td>Software Development Engineer (SDE)</td>
-                <td>CTC: 35 LPA</td>
-                <td>2026-11-20 23:59</td>
-                <td>CGPA &gt;= 8.5, CS/EE</td>
-                <td><span class="status-pub">PUBLISHED</span></td>
-              </tr>
-              <tr>
-                <td>#102</td>
-                <td><strong>Microsoft</strong></td>
-                <td>Cloud Solutions Architect</td>
-                <td>CTC: 26 LPA</td>
-                <td>2026-11-25 18:00</td>
-                <td>CGPA &gt;= 7.5, All Branches</td>
-                <td><span class="status-pub">PUBLISHED</span></td>
-              </tr>
-            </tbody>
-          </table>
-        </body>
-        </html>
-        """
-        page.set_content(html_coord)
-        screenshot_coord = os.path.join(EVIDENCE_DIR, "cdc_coordinator_workspace.png")
-        page.screenshot(path=screenshot_coord, full_page=True)
-        print(f"Captured: {screenshot_coord}")
-
-        # Evidence B: Student Placement Portal — Eligible Student View
-        html_student_elig = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>Student Placements Portal - Eligible View</title>
-          <style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }}
-            .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 16px; margin-bottom: 24px; }}
-            .badge-user {{ background: #059669; color: white; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: bold; }}
-            .feed-grid {{ display: grid; grid-template-columns: 1fr; gap: 16px; max-width: 900px; margin: 0 auto; }}
-            .drive-card {{ background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; }}
-            .drive-card.eligible {{ border-left: 4px solid #10b981; }}
-            .drive-header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }}
-            .badge-eligible {{ background: #065f46; color: #34d399; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }}
-            .meta-p {{ color: #94a3b8; font-size: 14px; margin: 4px 0 12px; }}
-            .criteria-box {{ background: #0f172a; border-radius: 6px; padding: 12px; margin-top: 12px; font-size: 13px; color: #cbd5e1; }}
-            .rounds-box {{ margin-top: 14px; border-top: 1px solid #334155; padding-top: 12px; font-size: 13px; }}
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div>
-              <h1 style="margin: 0; font-size: 22px;">Campus Placements Portal</h1>
-              <p style="margin: 4px 0 0; color: #94a3b8; font-size: 14px;">Deterministic Eligibility Engine & Applications</p>
-            </div>
-            <div>
-              <span class="badge-user">STUDENT: Monica Herrera (EE, CGPA: 8.5)</span>
-            </div>
-          </div>
-          <div class="feed-grid">
-            <div class="drive-card eligible">
-              <div class="drive-header">
-                <div>
-                  <h2 style="margin: 0 0 4px; font-size: 20px;">Software Engineer - Backend Infrastructure</h2>
-                  <div class="meta-p">Stripe Global • CTC: 28 LPA • Location: Bengaluru (Onsite)</div>
-                </div>
-                <div class="badge-eligible">✓ ELIGIBLE TO APPLY</div>
-              </div>
-              <div class="criteria-box">
-                <strong>Deterministic Eligibility Verification:</strong>
-                <ul style="margin: 6px 0 0; padding-left: 20px;">
-                  <li>Department EE (Electrical Engineering) meets branch eligibility.</li>
-                  <li>Student CGPA (8.5/10.0) satisfies the minimum required threshold of 8.0/10.0.</li>
-                  <li>Active backlogs (0) satisfies criteria.</li>
-                  <li>Graduation batch year 2025 matches drive requirements.</li>
-                </ul>
-              </div>
-              <div class="rounds-box">
-                <strong>Selection Schedule:</strong>
-                <div style="margin-top: 6px; color: #94a3b8;">
-                  Round 1: Online Coding & Algorithmic Assessment ({round1_start.strftime('%Y-%m-%d %H:%M')})<br/>
-                  Round 2: Technical Systems Architecture Interview ({new_round2_start.strftime('%Y-%m-%d %H:%M')})
-                </div>
-              </div>
-            </div>
-          </div>
-        </body>
-        </html>
-        """
-        page.set_content(html_student_elig)
-        screenshot_stu_elig = os.path.join(EVIDENCE_DIR, "student_placements_eligible.png")
-        page.screenshot(path=screenshot_stu_elig, full_page=True)
-        print(f"Captured: {screenshot_stu_elig}")
-
-        # Evidence C: Student Placement Portal — Ineligible Student View
-        html_student_inelig = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>Student Placements Portal - Ineligible View</title>
-          <style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }}
-            .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 16px; margin-bottom: 24px; }}
-            .badge-user {{ background: #475569; color: white; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: bold; }}
-            .feed-grid {{ display: grid; grid-template-columns: 1fr; gap: 16px; max-width: 900px; margin: 0 auto; }}
-            .drive-card {{ background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; }}
-            .drive-card.ineligible {{ border-left: 4px solid #ef4444; }}
-            .drive-header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }}
-            .badge-ineligible {{ background: #7f1d1d; color: #fca5a5; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 700; }}
-            .meta-p {{ color: #94a3b8; font-size: 14px; margin: 4px 0 12px; }}
-            .reason-box {{ background: #450a0a; border: 1px solid #7f1d1d; border-radius: 6px; padding: 12px; margin-top: 12px; font-size: 13px; color: #fecaca; }}
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div>
-              <h1 style="margin: 0; font-size: 22px;">Campus Placements Portal</h1>
-              <p style="margin: 4px 0 0; color: #94a3b8; font-size: 14px;">Deterministic Eligibility Engine & Applications</p>
-            </div>
-            <div>
-              <span class="badge-user">STUDENT: Brent Jordan (CS, CGPA: 9.1)</span>
-            </div>
-          </div>
-          <div class="feed-grid">
-            <div class="drive-card ineligible">
-              <div class="drive-header">
-                <div>
-                  <h2 style="margin: 0 0 4px; font-size: 20px;">Software Engineer - Backend Infrastructure</h2>
-                  <div class="meta-p">Stripe Global • CTC: 28 LPA • Location: Bengaluru (Onsite)</div>
-                </div>
-                <div class="badge-ineligible">✕ NOT ELIGIBLE</div>
-              </div>
-              <div class="reason-box">
-                <strong>Ineligibility Reason:</strong><br/>
-                Department 'Computer Science and Engineering' is not in the eligible branches list (Eligible: Electrical Engineering).
-              </div>
-            </div>
-          </div>
-        </body>
-        </html>
-        """
-        page.set_content(html_student_inelig)
-        screenshot_stu_inelig = os.path.join(EVIDENCE_DIR, "student_placements_ineligible.png")
-        page.screenshot(path=screenshot_stu_inelig, full_page=True)
-        print(f"Captured: {screenshot_stu_inelig}")
-
-        # Evidence D: Drive Details with Selection Schedule
-        html_details = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>Placement Drive Details & Selection Rounds</title>
-          <style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }}
-            .container {{ max-width: 800px; margin: 0 auto; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 24px; }}
-            .round-item {{ border-left: 2px solid #38bdf8; padding-left: 16px; margin-bottom: 20px; }}
-            .round-title {{ font-weight: bold; font-size: 16px; color: #38bdf8; }}
-            .round-time {{ font-size: 13px; color: #94a3b8; margin: 4px 0; }}
-            .round-venue {{ font-size: 13px; color: #a5b4fc; }}
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1 style="margin: 0 0 8px;">Stripe Global — Backend Engineer</h1>
-            <p style="color: #94a3b8; margin: 0 0 20px;">Selection Rounds & Assessment Schedule (Version {r_update.json().get('version', 2)})</p>
-            <div class="round-item">
-              <div class="round-title">Round 1: Online Coding & Algorithmic Assessment</div>
-              <div class="round-time">Time: {round1_start.strftime('%A, %d %B %Y, %I:%M %p')} - {round1_end.strftime('%I:%M %p')}</div>
-              <div class="round-venue">Venue/Link: https://assess.stripe.com/campus-2025</div>
-            </div>
-            <div class="round-item">
-              <div class="round-title">Round 2: Technical Systems Architecture Interview (Rescheduled)</div>
-              <div class="round-time">Time: {new_round2_start.strftime('%A, %d %B %Y, %I:%M %p')} - {new_round2_end.strftime('%I:%M %p')}</div>
-              <div class="round-venue">Venue/Link: Google Meet</div>
-            </div>
-          </div>
-        </body>
-        </html>
-        """
-        page.set_content(html_details)
-        screenshot_details = os.path.join(EVIDENCE_DIR, "cdc_drive_details.png")
-        page.screenshot(path=screenshot_details, full_page=True)
-        print(f"Captured: {screenshot_details}")
-
-        browser.close()
-
-    # -----------------------------------------------------------------------
     # Generate CDC Verification Markdown Report
     # -----------------------------------------------------------------------
     report_path = os.path.join(EVIDENCE_DIR, "CDC_VERIFICATION_REPORT.md")
