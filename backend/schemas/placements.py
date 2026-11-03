@@ -217,14 +217,14 @@ class PlacementDriveResponse(BaseModel):
 
 class StudentAcademicRecordUpsert(BaseModel):
     student_id: int
-    cgpa: Optional[float] = Field(None, ge=0.0, le=10.0)
-    grading_scale: float = Field(10.0, ge=4.0, le=10.0)
-    percentage: Optional[float] = Field(None, ge=0.0, le=100.0)
-    active_backlogs: Optional[int] = Field(0, ge=0)
-    total_backlogs: Optional[int] = Field(0, ge=0)
-    graduation_year: Optional[int] = Field(None, ge=2020, le=2035)
-    tenth_percentage: Optional[float] = Field(None, ge=0.0, le=100.0)
-    twelfth_percentage: Optional[float] = Field(None, ge=0.0, le=100.0)
+    cgpa: Optional[float] = Field(default=None, ge=0.0, le=10.0)
+    grading_scale: float = Field(default=10.0, ge=4.0, le=10.0)
+    percentage: Optional[float] = Field(default=None, ge=0.0, le=100.0)
+    active_backlogs: Optional[int] = Field(default=0, ge=0)
+    total_backlogs: Optional[int] = Field(default=0, ge=0)
+    graduation_year: Optional[int] = Field(default=None, ge=2020, le=2035)
+    tenth_percentage: Optional[float] = Field(default=None, ge=0.0, le=100.0)
+    twelfth_percentage: Optional[float] = Field(default=None, ge=0.0, le=100.0)
     is_verified: bool = True
 
 

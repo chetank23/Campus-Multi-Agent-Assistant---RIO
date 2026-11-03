@@ -568,7 +568,7 @@ def test_assistant_placement_grounding(admin_auth, faculty_auth, student_auth, d
     intent = classify_intent("What placement drives are open for me?")
     assert intent == "QUERY_AGENT", f"Placement intent should route to QUERY_AGENT, got {intent}"
 
-    tool_call = _extract_intent_and_tool_call("Show all campus placement drives", "STUDENT")
+    tool_call = _extract_intent_and_tool_call("Show all campus placement drives", student_user)
     assert tool_call is not None
     assert tool_call[0] in ("list_placement_drives", "list_published_placement_drives", "check_student_placement_eligibility")
 

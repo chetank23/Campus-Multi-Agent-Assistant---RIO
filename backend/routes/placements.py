@@ -337,6 +337,13 @@ def get_academic_record(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """Retrieves academic record. Students can only inspect their own record."""
+    target_student = db.query(Student).filter(Student.id == student_id).first()
+    if not target_student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Student #{student_id} not found.",
+        )
+
     if current_user.role == "STUDENT":
         student = db.query(Student).filter(Student.user_id == current_user.id).first()
         if not student or student.id != student_id:
@@ -345,7 +352,7 @@ def get_academic_record(
                 detail="Access denied: You can only view your own academic record.",
             )
     else:
-        require_cdc_coordinator(db, current_user)
+        require_cdc_coordinator(db, current_user, department_id=target_student.department_id)
 
     rec = get_student_academic_record(db=db, student_id=student_id)
     if not rec:

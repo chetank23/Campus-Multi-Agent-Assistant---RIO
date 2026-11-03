@@ -90,7 +90,10 @@ def check_user_is_cdc_coordinator(
         if c.scope_type == "GLOBAL":
             return True
         if c.scope_type == "DEPARTMENT":
-            if department_id is None or c.scope_id is None or c.scope_id == department_id:
+            if department_id is not None:
+                if c.scope_id is not None and c.scope_id == department_id:
+                    return True
+            else:
                 return True
 
     return False
@@ -117,6 +120,7 @@ def evaluate_student_eligibility(
     db: Session,
     drive: PlacementDrive,
     student: Student,
+    acad: Optional[StudentAcademicRecord] = None,
 ) -> StudentEligibilityResult:
     """
     Authoritative deterministic evaluation of student eligibility against drive criteria.
@@ -175,12 +179,13 @@ def evaluate_student_eligibility(
             breakdown["batch"] = {"status": "PASS"}
 
     # 4. Academic Metrics Check (CGPA, Backlogs, Grad Year)
-    # Fetch authoritative student academic record
-    acad = (
-        db.query(StudentAcademicRecord)
-        .filter(StudentAcademicRecord.student_id == student.id)
-        .first()
-    )
+    # Fetch authoritative student academic record if not provided
+    if acad is None:
+        acad = (
+            db.query(StudentAcademicRecord)
+            .filter(StudentAcademicRecord.student_id == student.id)
+            .first()
+        )
 
     needs_acad_record = any([
         drive.graduation_year is not None,
@@ -195,6 +200,11 @@ def evaluate_student_eligibility(
             "Verified student academic record (CGPA, backlogs, graduation year) is not on file in CDC database."
         )
         breakdown["academic_record"] = {"status": "MISSING"}
+    elif acad and not acad.is_verified:
+        cannot_determine_reasons.append(
+            "Student academic record is pending official CDC verification."
+        )
+        breakdown["academic_record"] = {"status": "UNVERIFIED"}
     elif acad:
         # A. Graduation Year
         if drive.graduation_year is not None:
@@ -219,6 +229,9 @@ def evaluate_student_eligibility(
             if acad.cgpa is None:
                 cannot_determine_reasons.append("Authoritative student CGPA record is missing.")
                 breakdown["cgpa"] = {"status": "MISSING", "required": drive.min_cgpa}
+            elif acad.cgpa < 0 or acad.grading_scale <= 0:
+                cannot_determine_reasons.append("Student CGPA or grading scale in record is invalid.")
+                breakdown["cgpa"] = {"status": "INVALID"}
             else:
                 # Scale normalization if necessary
                 if acad.grading_scale != drive.grading_scale and acad.grading_scale > 0:
@@ -266,6 +279,9 @@ def evaluate_student_eligibility(
             if acad.active_backlogs is None:
                 cannot_determine_reasons.append("Active backlogs count is not verified.")
                 breakdown["active_backlogs"] = {"status": "MISSING", "required": drive.max_active_backlogs}
+            elif acad.active_backlogs < 0:
+                cannot_determine_reasons.append("Active backlogs record contains an invalid count (< 0).")
+                breakdown["active_backlogs"] = {"status": "INVALID"}
             elif acad.active_backlogs > drive.max_active_backlogs:
                 not_eligible_reasons.append(
                     f"Active backlogs ({acad.active_backlogs}) exceeds the maximum allowed limit of {drive.max_active_backlogs}."
@@ -286,6 +302,9 @@ def evaluate_student_eligibility(
             if acad.total_backlogs is None:
                 cannot_determine_reasons.append("Total backlog history record is missing.")
                 breakdown["total_backlogs"] = {"status": "MISSING"}
+            elif acad.total_backlogs < 0:
+                cannot_determine_reasons.append("Total backlogs record contains an invalid count (< 0).")
+                breakdown["total_backlogs"] = {"status": "INVALID"}
             elif acad.total_backlogs > drive.max_total_backlogs:
                 not_eligible_reasons.append(
                     f"Total backlog history ({acad.total_backlogs}) exceeds the maximum limit of {drive.max_total_backlogs}."
@@ -294,6 +313,10 @@ def evaluate_student_eligibility(
             else:
                 reasons.append(f"Total backlog history ({acad.total_backlogs}) satisfies criteria.")
                 breakdown["total_backlogs"] = {"status": "PASS", "val": acad.total_backlogs}
+
+    # 5. Policy Check: Gender Neutrality & Merit-Based Access
+    # Per institutional guidelines, placement opportunities are evaluated purely on academic merit.
+    breakdown["gender_policy"] = {"status": "MERIT_BASED_ACCESS", "policy": "NON_DISCRIMINATORY"}
 
     # Synthesize Final Determination
     if not_eligible_reasons:
@@ -351,6 +374,12 @@ def validate_placement_drive(
                 warnings.append(
                     f"Schedule round '{s.title}' starts before the application deadline ({app_dl.strftime('%Y-%m-%d %H:%M')})."
                 )
+
+    # Gender neutrality policy notice
+    if payload.allowed_genders and payload.allowed_genders != "ALL":
+        warnings.append(
+            "Advisory: Institutional policy does not authorize discriminatory eligibility filtering by gender; all students will be evaluated on academic merit."
+        )
 
     # 3. Duplicate Detection
     dup_query = db.query(PlacementDrive).filter(
@@ -1037,14 +1066,13 @@ def upsert_student_academic_record(
     payload: StudentAcademicRecordUpsert,
 ) -> StudentAcademicRecord:
     """Creates or updates authoritative student academic metrics."""
-    require_cdc_coordinator(db, updater)
-
     student = db.query(Student).filter(Student.id == payload.student_id).first()
     if not student:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Student #{payload.student_id} not found.",
         )
+    require_cdc_coordinator(db, updater, department_id=student.department_id)
 
     rec = (
         db.query(StudentAcademicRecord)
