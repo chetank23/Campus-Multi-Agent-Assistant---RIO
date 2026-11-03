@@ -447,6 +447,11 @@ def create_curriculum_version(db: Session, data: CurriculumVersionCreate, user_i
     dept_code = dept.department_code if hasattr(dept, 'code') and dept.department_code else dept.name[:4].upper()
     version_code = data.version_code.strip() if data.version_code else generate_curriculum_version_code(db, dept_code, reg.code)
 
+    # Resolve total_semesters dynamically from input, program duration (e.g. 2 years -> 4 sem, 5 years -> 10 sem), or default
+    resolved_total_semesters = data.total_semesters
+    if resolved_total_semesters is None or resolved_total_semesters <= 0:
+        resolved_total_semesters = (prog.duration * 2) if (prog.duration and prog.duration > 0) else 8
+
     version = CurriculumVersion(
         version_code=version_code,
         department_id=data.department_id,
@@ -456,7 +461,7 @@ def create_curriculum_version(db: Session, data: CurriculumVersionCreate, user_i
         version_number=1,
         status="DRAFT",
         description=data.description,
-        total_semesters=data.total_semesters,
+        total_semesters=resolved_total_semesters,
         total_credits=0.0,
         created_by_id=user_id,
     )
@@ -464,7 +469,7 @@ def create_curriculum_version(db: Session, data: CurriculumVersionCreate, user_i
     db.flush()
 
     # Automatically create semester rows 1..total_semesters
-    for sem_num in range(1, data.total_semesters + 1):
+    for sem_num in range(1, resolved_total_semesters + 1):
         sem_row = CurriculumSemester(
             curriculum_version_id=version.id,
             semester_number=sem_num,
@@ -476,7 +481,7 @@ def create_curriculum_version(db: Session, data: CurriculumVersionCreate, user_i
 
     _log_curriculum_audit(
         db, user_id, "CREATE_CURRICULUM_VERSION", "CurriculumVersion", version.id,
-        new_value={"version_code": version.version_code, "status": "DRAFT", "semesters": data.total_semesters}
+        new_value={"version_code": version.version_code, "status": "DRAFT", "semesters": resolved_total_semesters}
     )
     db.commit()
     db.refresh(version)
@@ -719,13 +724,12 @@ def create_new_revision(db: Session, version_id: int, user_id: int) -> Curriculu
 
     new_version_number = parent.version_number + 1
     code_base = parent.version_code.rsplit("-V", 1)[0]
-    base_candidate = f"{code_base}-V{new_version_number}"
-    candidate = base_candidate
-    counter = 1
-    while db.query(CurriculumVersion).filter(CurriculumVersion.version_code == candidate).first():
-        candidate = f"{base_candidate}-REV{counter}"
-        counter += 1
-    new_version_code = candidate
+    new_version_code = f"{code_base}-V{new_version_number}"
+
+    # Check uniqueness
+    existing = db.query(CurriculumVersion).filter(CurriculumVersion.version_code == new_version_code).first()
+    if existing:
+        new_version_code = f"{code_base}-V{new_version_number}-REV"
 
     new_version = CurriculumVersion(
         version_code=new_version_code,
@@ -1219,7 +1223,8 @@ def extract_curriculum_from_pdf(
                             elective_group="Elective Group" if sub_type == "PROFESSIONAL_ELECTIVE" else None,
                             source_page=page_idx,
                             source_text=line[:300],
-                            confidence_score=0.95 if ltpc_match else 0.80,
+                            confidence_score=None,
+                            extraction_method="DETERMINISTIC_PARSER",
                         )
                     )
 
@@ -1231,15 +1236,20 @@ def extract_curriculum_from_pdf(
                 seen_codes.add(it.code)
                 deduped_items.append(it)
 
+        has_llm = bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY"))
+        mode = "LLM_STRUCTURED_EXTRACTION" if has_llm else "DETERMINISTIC_PARSER_FALLBACK"
+        ai_status = "ACTIVE" if has_llm else "UNAVAILABLE (Local heuristic parser active)"
+
         job.status = "AWAITING_REVIEW"
         job.extracted_semesters_count = len(semesters_found) or 1
         job.extracted_subjects_count = len(deduped_items)
         job.extracted_data_json = json.dumps([item.model_dump() for item in deduped_items])
         doc.status = "EXTRACTED"
 
+        audit_action = "AI_EXTRACTION_COMPLETED" if has_llm else "DETERMINISTIC_EXTRACTION_COMPLETED"
         _log_curriculum_audit(
-            db, user_id, "AI_EXTRACTION_COMPLETED", "CurriculumExtractionJob", job.id,
-            new_value={"subjects_extracted": len(deduped_items), "pages": total_pages}
+            db, user_id, audit_action, "CurriculumExtractionJob", job.id,
+            new_value={"subjects_extracted": len(deduped_items), "pages": total_pages, "mode": mode}
         )
         db.commit()
         db.refresh(job)
@@ -1255,6 +1265,8 @@ def extract_curriculum_from_pdf(
             extracted_subjects_count=job.extracted_subjects_count,
             extracted_data=deduped_items,
             error_message=job.error_message,
+            extraction_mode=mode,
+            ai_provider_status=ai_status,
             created_by_id=job.created_by_id,
             creator_name=job.creator.name if job.creator else None,
             reviewed_by_id=job.reviewed_by_id,
@@ -1401,6 +1413,10 @@ def get_extraction_job(db: Session, job_id: int) -> CurriculumExtractionJobRespo
         except Exception:
             pass
 
+    has_llm = bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY"))
+    mode = "LLM_STRUCTURED_EXTRACTION" if has_llm else "DETERMINISTIC_PARSER_FALLBACK"
+    ai_status = "ACTIVE" if has_llm else "UNAVAILABLE (Local heuristic parser active)"
+
     return CurriculumExtractionJobResponse(
         id=job.id,
         document_id=job.document_id,
@@ -1412,6 +1428,8 @@ def get_extraction_job(db: Session, job_id: int) -> CurriculumExtractionJobRespo
         extracted_subjects_count=job.extracted_subjects_count,
         extracted_data=extracted_items,
         error_message=job.error_message,
+        extraction_mode=mode,
+        ai_provider_status=ai_status,
         created_by_id=job.created_by_id,
         creator_name=job.creator.name if job.creator else None,
         reviewed_by_id=job.reviewed_by_id,

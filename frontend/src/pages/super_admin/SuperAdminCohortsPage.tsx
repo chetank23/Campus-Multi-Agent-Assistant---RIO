@@ -37,7 +37,7 @@ export const SuperAdminCohortsPage: React.FC = () => {
   const { data: programs } = useQuery({
     queryKey: ['programs'],
     queryFn: async () => {
-      const { data } = await apiClient.get<any[]>('/programs');
+      const { data } = await apiClient.get<any[]>('/programs/');
       return data;
     },
   });

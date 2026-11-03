@@ -34,6 +34,7 @@ def provision_super_admin(email: str, name: str, password: str) -> None:
         user = db.query(User).filter(User.email == email_clean).first()
         hashed = get_password_hash(password)
 
+        old_role: str | None = None
         if user:
             old_role = user.role
             user.role = "SUPER_ADMIN"
@@ -63,7 +64,7 @@ def provision_super_admin(email: str, name: str, password: str) -> None:
             action=action,
             entity_type="users",
             entity_id=user.id,
-            old_value={"role": old_role} if user and 'old_role' in locals() else None,
+            old_value={"role": old_role} if old_role else None,
             new_value={
                 "email": user.email,
                 "role": "SUPER_ADMIN",

@@ -145,8 +145,13 @@ export function AppRoutes() {
           <Route path="/super-admin/regulations" element={<SuperAdminRegulationsPage />} />
           <Route path="/super-admin/cohorts" element={<SuperAdminCohortsPage />} />
           <Route path="/super-admin/curriculum" element={<SuperAdminCurriculumVersionsPage />} />
+          <Route path="/super-admin/curriculum-versions" element={<SuperAdminCurriculumVersionsPage />} />
+          <Route path="/super-admin/curriculum/:versionId" element={<SuperAdminSemesterWorkspacePage />} />
+          <Route path="/super-admin/curriculum-versions/:versionId" element={<SuperAdminSemesterWorkspacePage />} />
           <Route path="/super-admin/curriculum/:versionId/workspace" element={<SuperAdminSemesterWorkspacePage />} />
+          <Route path="/super-admin/curriculum-versions/:versionId/workspace" element={<SuperAdminSemesterWorkspacePage />} />
           <Route path="/super-admin/ai-extraction" element={<SuperAdminPDFExtractionPage />} />
+          <Route path="/super-admin/extraction" element={<SuperAdminPDFExtractionPage />} />
           <Route path="/super-admin/requests" element={<SuperAdminRequestsPage />} />
           <Route path="/super-admin/audit" element={<SuperAdminAuditHistoryPage />} />
         </Route>

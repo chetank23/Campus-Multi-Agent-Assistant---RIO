@@ -21,6 +21,7 @@ def _to_response(sec: Section) -> SectionResponse:
     return resp
 
 
+@router.get("", include_in_schema=False)
 @router.get("/", response_model=List[SectionResponse])
 def get_sections(
     db: Session = Depends(get_db),
@@ -29,7 +30,7 @@ def get_sections(
     query = db.query(Section).options(
         joinedload(Section.class_teacher).joinedload(Faculty.user)
     )
-    if current_user.role == "ADMIN":
+    if current_user.role in ("ADMIN", "SUPER_ADMIN"):
         sections = query.all()
     elif current_user.role == "FACULTY":
         sections = query.filter(Section.department_id == current_user.department_id).all()
@@ -49,7 +50,7 @@ def get_section(
     ).filter(Section.id == section_id).first()
     if not sec:
         raise HTTPException(status_code=404, detail="Section not found")
-    if current_user.role == "ADMIN":
+    if current_user.role in ("ADMIN", "SUPER_ADMIN"):
         return _to_response(sec)
     elif current_user.role == "FACULTY":
         if sec.department_id != current_user.department_id:
@@ -65,7 +66,7 @@ def create_section(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
 
     if section.class_teacher_id is not None:
@@ -93,7 +94,7 @@ def update_section(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     db_sec = db.query(Section).filter(Section.id == section_id).first()
     if not db_sec:
@@ -125,7 +126,7 @@ def delete_section(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     db_sec = db.query(Section).filter(Section.id == section_id).first()
     if not db_sec:

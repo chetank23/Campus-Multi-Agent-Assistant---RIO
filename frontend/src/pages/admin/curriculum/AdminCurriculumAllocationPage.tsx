@@ -40,7 +40,7 @@ export const AdminCurriculumAllocationPage: React.FC = () => {
   const { data: academicYears } = useQuery({
     queryKey: ['academic-years'],
     queryFn: async () => {
-      const { data } = await apiClient.get<any[]>('/academic-years');
+      const { data } = await apiClient.get<any[]>('/academic-years/');
       return data;
     },
   });
@@ -48,7 +48,7 @@ export const AdminCurriculumAllocationPage: React.FC = () => {
   const { data: semesters } = useQuery({
     queryKey: ['semesters', academicYearId],
     queryFn: async () => {
-      const { data } = await apiClient.get<any[]>('/semesters');
+      const { data } = await apiClient.get<any[]>('/semesters/');
       return academicYearId ? data.filter((s) => s.academic_year_id === academicYearId) : data;
     },
   });
@@ -56,7 +56,7 @@ export const AdminCurriculumAllocationPage: React.FC = () => {
   const { data: sections } = useQuery({
     queryKey: ['sections'],
     queryFn: async () => {
-      const { data } = await apiClient.get<any[]>('/sections');
+      const { data } = await apiClient.get<any[]>('/sections/');
       return data;
     },
   });
@@ -64,7 +64,7 @@ export const AdminCurriculumAllocationPage: React.FC = () => {
   const { data: facultyList } = useQuery({
     queryKey: ['faculty'],
     queryFn: async () => {
-      const { data } = await apiClient.get<any[]>('/faculty');
+      const { data } = await apiClient.get<any[]>('/faculty/');
       return data;
     },
   });

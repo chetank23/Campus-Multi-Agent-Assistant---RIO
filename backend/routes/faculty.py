@@ -35,6 +35,7 @@ def _to_response(fac: Faculty) -> FacultyResponse:
     return resp
 
 
+@router.get("", response_model=List[FacultyResponse], include_in_schema=False)
 @router.get("/", response_model=List[FacultyResponse])
 def get_faculty_members(
     db: Session = Depends(get_db),

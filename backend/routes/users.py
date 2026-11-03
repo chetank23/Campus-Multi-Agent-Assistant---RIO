@@ -123,6 +123,13 @@ def create_user(
             detail=f"A user with email '{body.email}' already exists.",
         )
 
+    # RBAC Guard: Ordinary ADMIN cannot create a SUPER_ADMIN account
+    if body.role == "SUPER_ADMIN" and admin_user.role != "SUPER_ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a SUPER_ADMIN can provision new SUPER_ADMIN accounts.",
+        )
+
     # Check department if provided
     if body.department_id:
         dept = db.query(Department).filter(Department.id == body.department_id).first()
@@ -179,6 +186,20 @@ def update_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User #{user_id} not found",
+        )
+
+    # RBAC Guard: Ordinary ADMIN cannot modify a SUPER_ADMIN account
+    if target.role == "SUPER_ADMIN" and admin_user.role != "SUPER_ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a SUPER_ADMIN can modify a SUPER_ADMIN account.",
+        )
+
+    # RBAC Guard: Ordinary ADMIN cannot promote any user to SUPER_ADMIN
+    if body.role == "SUPER_ADMIN" and admin_user.role != "SUPER_ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a SUPER_ADMIN can promote an account to SUPER_ADMIN.",
         )
 
     # Self-protection guard
@@ -273,6 +294,13 @@ def reset_user_password(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User #{user_id} not found",
+        )
+
+    # RBAC Guard: Ordinary ADMIN cannot modify a SUPER_ADMIN account
+    if target.role == "SUPER_ADMIN" and admin_user.role != "SUPER_ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a SUPER_ADMIN can modify a SUPER_ADMIN account.",
         )
 
     target.password_hash = get_password_hash(body.new_password)

@@ -549,3 +549,4 @@ export async function getFacultyAssignedCurriculum(): Promise<{
   const { data } = await apiClient.get('/curriculum/faculty/assigned');
   return data;
 }
+

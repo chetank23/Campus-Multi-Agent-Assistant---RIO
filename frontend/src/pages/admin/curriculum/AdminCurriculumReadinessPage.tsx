@@ -31,13 +31,18 @@ export const AdminCurriculumReadinessPage: React.FC = () => {
 
   const { data: publishedVersions } = useQuery({
     queryKey: ['curriculum-versions', 'published'],
-    queryFn: () => getCurriculumVersions({ status: 'PUBLISHED' }),
+    queryFn: async () => {
+      const { data } = await apiClient.get<any[]>('/admin/curriculum/versions', {
+        params: { status: 'PUBLISHED' },
+      });
+      return data;
+    },
   });
 
   const { data: academicYears } = useQuery({
     queryKey: ['academic-years'],
     queryFn: async () => {
-      const { data } = await apiClient.get<any[]>('/academic-years');
+      const { data } = await apiClient.get<any[]>('/academic-years/');
       return data;
     },
   });
@@ -45,7 +50,7 @@ export const AdminCurriculumReadinessPage: React.FC = () => {
   const { data: semesters } = useQuery({
     queryKey: ['semesters', academicYearId],
     queryFn: async () => {
-      const { data } = await apiClient.get<any[]>('/semesters');
+      const { data } = await apiClient.get<any[]>('/semesters/');
       return academicYearId ? data.filter((s) => s.academic_year_id === academicYearId) : data;
     },
   });

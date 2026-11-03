@@ -11,12 +11,13 @@ from backend.dependencies import get_current_user, require_role, require_departm
 router = APIRouter(prefix="/batches", tags=["Batches"])
 
 
+@router.get("", include_in_schema=False)
 @router.get("/", response_model=List[BatchResponse])
 def get_batches(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role == "ADMIN":
+    if current_user.role in ("ADMIN", "SUPER_ADMIN"):
         return db.query(Batch).all()
     elif current_user.role == "FACULTY":
         # Faculty can see batches of sections in their department via join
@@ -37,7 +38,7 @@ def get_batch(
     batch = db.query(Batch).filter(Batch.id == batch_id).first()
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
-    if current_user.role == "ADMIN":
+    if current_user.role in ("ADMIN", "SUPER_ADMIN"):
         return batch
     elif current_user.role == "FACULTY":
         # check via section department
@@ -54,7 +55,7 @@ def create_batch(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     db_batch = Batch(**batch.model_dump())
     db.add(db_batch)
@@ -70,7 +71,7 @@ def update_batch(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     db_batch = db.query(Batch).filter(Batch.id == batch_id).first()
     if not db_batch:
@@ -88,7 +89,7 @@ def delete_batch(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     db_batch = db.query(Batch).filter(Batch.id == batch_id).first()
     if not db_batch:

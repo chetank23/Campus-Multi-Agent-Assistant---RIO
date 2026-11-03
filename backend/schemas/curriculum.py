@@ -200,7 +200,7 @@ class CurriculumVersionBase(BaseModel):
     regulation_id: int
     cohort_id: Optional[int] = None
     description: Optional[str] = None
-    total_semesters: int = Field(default=8, ge=1, le=12)
+    total_semesters: Optional[int] = Field(default=None, ge=1, le=16)
 
 
 class CurriculumVersionCreate(CurriculumVersionBase):
@@ -210,7 +210,7 @@ class CurriculumVersionCreate(CurriculumVersionBase):
 class CurriculumVersionUpdate(BaseModel):
     cohort_id: Optional[int] = None
     description: Optional[str] = None
-    total_semesters: Optional[int] = Field(None, ge=1, le=12)
+    total_semesters: Optional[int] = Field(None, ge=1, le=16)
 
 
 class CurriculumVersionStatusUpdate(BaseModel):
@@ -311,7 +311,8 @@ class ExtractedSubjectItem(BaseModel):
     elective_group: Optional[str] = None
     source_page: Optional[int] = None
     source_text: Optional[str] = None
-    confidence_score: float = 1.0
+    confidence_score: Optional[float] = None
+    extraction_method: str = "DETERMINISTIC_PARSER"
 
 
 class ExtractionReviewRequest(BaseModel):
@@ -332,6 +333,8 @@ class CurriculumExtractionJobResponse(BaseModel):
     extracted_subjects_count: int
     extracted_data: Optional[List[ExtractedSubjectItem]] = None
     error_message: Optional[str] = None
+    extraction_mode: str = "DETERMINISTIC_PARSER_FALLBACK"
+    ai_provider_status: str = "UNAVAILABLE"
     created_by_id: int
     creator_name: Optional[str] = None
     reviewed_by_id: Optional[int] = None

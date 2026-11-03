@@ -11,6 +11,7 @@ from backend.dependencies import get_current_user
 router = APIRouter(prefix="/academic-years", tags=["Academic Years"])
 
 
+@router.get("", include_in_schema=False)
 @router.get("/", response_model=List[AcademicYearResponse])
 def get_academic_years(
     db: Session = Depends(get_db),
@@ -39,7 +40,7 @@ def create_academic_year(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     db_yr = AcademicYear(**year.model_dump())
     db.add(db_yr)
@@ -55,7 +56,7 @@ def update_academic_year(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     db_yr = db.query(AcademicYear).filter(AcademicYear.id == year_id).first()
     if not db_yr:
@@ -73,7 +74,7 @@ def delete_academic_year(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     db_yr = db.query(AcademicYear).filter(AcademicYear.id == year_id).first()
     if not db_yr:

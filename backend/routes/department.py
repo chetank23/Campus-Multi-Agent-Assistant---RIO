@@ -13,13 +13,14 @@ from backend.dependencies import get_current_user, require_role, require_departm
 router = APIRouter(prefix="/departments", tags=["Departments"])
 
 
+@router.get("", response_model=List[DepartmentResponse], include_in_schema=False)
 @router.get("/", response_model=List[DepartmentResponse])
 def get_departments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     # Only admin can list all departments
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     return db.query(Department).all()
 
@@ -49,7 +50,7 @@ def create_department(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     db_dept = Department(**department.model_dump())
     db.add(db_dept)
@@ -65,7 +66,7 @@ def update_department(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     db_dept = db.query(Department).filter(Department.id == department_id).first()
     if not db_dept:
@@ -83,7 +84,7 @@ def delete_department(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     db_dept = db.query(Department).filter(Department.id == department_id).first()
     if not db_dept:
@@ -99,7 +100,7 @@ def import_departments_preview(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     content = file.file.read().decode("utf-8")
     reader = csv.DictReader(io.StringIO(content))
@@ -134,7 +135,7 @@ def import_departments_preview(
 
 @router.post("/import/confirm")
 def import_departments_confirm(rows: List[DepartmentCreate], db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     inserted = []
     for row in rows:

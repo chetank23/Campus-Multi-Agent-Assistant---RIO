@@ -251,14 +251,37 @@ def test_curriculum_version_full_lifecycle(super_admin_auth):
 
     with Session(engine) as db:
         dept = db.query(Department).first()
-        prog = db.query(Program).filter(Program.department_id == dept.id).first() or db.query(Program).first()
+        if not dept:
+            dept = Department(name="Computer Science and Engineering", code="CSE")
+            db.add(dept)
+            db.commit()
+            db.refresh(dept)
+        assert dept is not None, "Department must exist in database"
+        dept_id = dept.id
+
+        prog = db.query(Program).filter(Program.department_id == dept_id).first() or db.query(Program).first()
+        if not prog:
+            prog = Program(name="B.Tech Computer Science and Engineering", program_name="B.Tech Computer Science and Engineering", department_id=dept_id, duration=4)
+            db.add(prog)
+            db.commit()
+            db.refresh(prog)
+        assert prog is not None, "Program must exist in database"
+        prog_id = prog.id
+
         reg = db.query(Regulation).first()
+        if not reg:
+            reg = Regulation(code="R2026-AUTONOMOUS", name="Autonomous Regulation 2026", effective_year=2026, is_active=True)
+            db.add(reg)
+            db.commit()
+            db.refresh(reg)
+        assert reg is not None, "Regulation must exist in database"
+        reg_id = reg.id
 
     # Step 1: Create Draft Curriculum Version
     ver_payload = {
-        "department_id": dept.id,
-        "program_id": prog.id,
-        "regulation_id": reg.id,
+        "department_id": dept_id,
+        "program_id": prog_id,
+        "regulation_id": reg_id,
         "description": "B.Tech Computer Science 2026 Curriculum",
         "total_semesters": 8,
     }
@@ -374,7 +397,7 @@ def test_pdf_upload_and_extraction_workflow(super_admin_auth):
 
     # Upload document
     files = {"file": ("test_syllabus.pdf", pdf_bytes, "application/pdf")}
-    data = {"title": "Test Syllabus 2026", "department_id": 1}
+    data = {"title": "Test Syllabus 2026", "department_id": "1"}
     upload_resp = client.post("/super-admin/documents/upload", files=files, data=data, headers=headers)
     assert upload_resp.status_code == 200, upload_resp.text
     doc_id = upload_resp.json()["id"]
@@ -428,24 +451,52 @@ def test_admin_curriculum_inbox_and_acknowledgement(super_admin_auth, admin_auth
         v = db.query(CurriculumVersion).filter(CurriculumVersion.status == "PUBLISHED").first()
         if not v:
             dept = db.query(Department).first()
-            prog = db.query(Program).first()
+            if not dept:
+                dept = Department(name="Computer Science and Engineering", code="CSE")
+                db.add(dept)
+                db.commit()
+                db.refresh(dept)
+            assert dept is not None, "Department must exist in database"
+            dept_id = dept.id
+
+            prog = db.query(Program).filter(Program.department_id == dept_id).first() or db.query(Program).first()
+            if not prog:
+                prog = Program(name="B.Tech Computer Science and Engineering", program_name="B.Tech Computer Science and Engineering", department_id=dept_id, duration=4)
+                db.add(prog)
+                db.commit()
+                db.refresh(prog)
+            assert prog is not None, "Program must exist in database"
+            prog_id = prog.id
+
             reg = db.query(Regulation).first()
+            if not reg:
+                reg = Regulation(code="R2026-INBOX", name="Inbox Regulation 2026", effective_year=2026, is_active=True)
+                db.add(reg)
+                db.commit()
+                db.refresh(reg)
+            assert reg is not None, "Regulation must exist in database"
+            reg_id = reg.id
+
             user = db.query(User).first()
+            assert user is not None, "User must exist in database"
+            user_id = user.id
+
             v = CurriculumVersion(
                 version_code="CURR-TEST-INBOX-PUB",
-                department_id=dept.id,
-                program_id=prog.id,
-                regulation_id=reg.id,
+                department_id=dept_id,
+                program_id=prog_id,
+                regulation_id=reg_id,
                 status="PUBLISHED",
-                created_by_id=user.id,
+                created_by_id=user_id,
             )
             db.add(v)
             db.commit()
             db.refresh(v)
-    assert v is not None
+        assert v is not None, "CurriculumVersion must exist in database"
+        v_id = v.id
 
-    release_payload = {"curriculum_version_id": v.id, "department_ids": [admin_dept_id]}
-    client.post(f"/super-admin/curriculum-versions/{v.id}/release", json=release_payload, headers=sa_headers)
+    release_payload = {"curriculum_version_id": v_id, "department_ids": [admin_dept_id]}
+    client.post(f"/super-admin/curriculum-versions/{v_id}/release", json=release_payload, headers=sa_headers)
 
     # Admin checks inbox
     inbox_resp = client.get("/admin/curriculum/inbox", headers=adm_headers)
@@ -523,23 +574,100 @@ def test_operational_allocation_and_readiness_preflight(admin_auth):
 
     with Session(engine) as db:
         ay = db.query(AcademicYear).first()
-        sem = db.query(Semester).first()
-        sec = db.query(Section).first()
-        fac = db.query(Faculty).first()
-        csm = db.query(CurriculumSubjectMapping).first()
+        if not ay:
+            ay = AcademicYear(name="2026-2027", start_year=2026, end_year=2027, is_current=True)
+            db.add(ay)
+            db.commit()
+            db.refresh(ay)
+        assert ay is not None, "AcademicYear must exist in database"
+        ay_id = ay.id
 
+        sem = db.query(Semester).first()
+        if not sem:
+            sem = Semester(name="Fall 2026", semester_number=1, academic_year_id=ay_id)
+            db.add(sem)
+            db.commit()
+            db.refresh(sem)
+        assert sem is not None, "Semester must exist in database"
+        sem_id = sem.id
+
+        sec = db.query(Section).first()
+        if not sec:
+            dept = db.query(Department).first()
+            if not dept:
+                dept = Department(name="Computer Science and Engineering", code="CSE")
+                db.add(dept)
+                db.commit()
+                db.refresh(dept)
+            assert dept is not None, "Department must exist in database"
+
+            prog = db.query(Program).filter(Program.department_id == dept.id).first() or db.query(Program).first()
+            if not prog:
+                prog = Program(name="B.Tech Computer Science and Engineering", program_name="B.Tech Computer Science and Engineering", department_id=dept.id, duration=4)
+                db.add(prog)
+                db.commit()
+                db.refresh(prog)
+            assert prog is not None, "Program must exist in database"
+
+            sec = Section(name="A", section_name="A", department_id=dept.id, program_id=prog.id, semester_id=sem_id)
+            db.add(sec)
+            db.commit()
+            db.refresh(sec)
+        assert sec is not None, "Section must exist in database"
+        sec_id = sec.id
+
+        fac = db.query(Faculty).first()
+        if not fac:
+            user = db.query(User).filter(User.role == "FACULTY").first()
+            if not user:
+                user = User(
+                    name="Prof. Faculty Test",
+                    email="faculty_test_off@campus.edu",
+                    password_hash=get_password_hash("Test@1234"),
+                    role="FACULTY",
+                    is_active=True,
+                )
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+            assert user is not None, "Faculty User must exist in database"
+            fac = Faculty(faculty_id="FAC-TEST-OFF", user_id=user.id, department_id=sec.department_id)
+            db.add(fac)
+            db.commit()
+            db.refresh(fac)
+        assert fac is not None, "Faculty must exist in database"
+        fac_id = fac.id
+
+        csm = db.query(CurriculumSubjectMapping).first()
         if not csm:
             dept = db.query(Department).first()
-            prog = db.query(Program).first()
+            assert dept is not None, "Department must exist"
+            dept_id = dept.id
+
+            prog = db.query(Program).filter(Program.department_id == dept_id).first() or db.query(Program).first()
+            assert prog is not None, "Program must exist"
+            prog_id = prog.id
+
             reg = db.query(Regulation).first()
+            if not reg:
+                reg = Regulation(code="R2026-OFF", name="Off Regulation 2026", effective_year=2026, is_active=True)
+                db.add(reg)
+                db.commit()
+                db.refresh(reg)
+            assert reg is not None, "Regulation must exist"
+            reg_id = reg.id
+
             user = db.query(User).first()
+            assert user is not None, "User must exist"
+            user_id = user.id
+
             v = CurriculumVersion(
                 version_code="CURR-TEST-OFF",
-                department_id=dept.id,
-                program_id=prog.id,
-                regulation_id=reg.id,
+                department_id=dept_id,
+                program_id=prog_id,
+                regulation_id=reg_id,
                 status="PUBLISHED",
-                created_by_id=user.id,
+                created_by_id=user_id,
             )
             db.add(v)
             db.flush()
@@ -558,13 +686,12 @@ def test_operational_allocation_and_readiness_preflight(admin_auth):
             db.commit()
             db.refresh(csm)
 
-        ay_id = ay.id
-        sem_id = sem.id
-        sec_id = sec.id
-        fac_id = fac.id
+        assert csm is not None, "CurriculumSubjectMapping must exist in database"
         csm_id = csm.id
         version_id = csm.curriculum_version_id
-        semester_num = csm.curriculum_semester.semester_number
+        c_semester = csm.curriculum_semester
+        assert c_semester is not None, "CurriculumSemester relationship must be loaded"
+        semester_num = c_semester.semester_number
 
     # Step 1: Create Section Course Offering
     offering_payload = {
@@ -612,34 +739,68 @@ def test_timetable_input_loader_curriculum_snapshot():
     """Verify validate_and_load_input accepts curriculum_version_id and syncs assignments."""
     with Session(engine) as db:
         ay = db.query(AcademicYear).first()
-        sem = db.query(Semester).first()
-        dept = db.query(Department).first()
-        prog = db.query(Program).filter(Program.department_id == dept.id).first() or db.query(Program).first()
-        sec = db.query(Section).filter(Section.department_id == dept.id, Section.program_id == prog.id).first()
-        csm = db.query(CurriculumSubjectMapping).first()
+        if not ay:
+            ay = AcademicYear(name="2026-2027", start_year=2026, end_year=2027, is_current=True)
+            db.add(ay)
+            db.commit()
+            db.refresh(ay)
+        assert ay is not None, "AcademicYear must exist in database"
+        ay_id = ay.id
 
+        sem = db.query(Semester).first()
+        if not sem:
+            sem = Semester(name="Fall 2026", semester_number=1, academic_year_id=ay_id)
+            db.add(sem)
+            db.commit()
+            db.refresh(sem)
+        assert sem is not None, "Semester must exist in database"
+        sem_id = sem.id
+
+        dept = db.query(Department).first()
+        if not dept:
+            dept = Department(name="Computer Science and Engineering", code="CSE")
+            db.add(dept)
+            db.commit()
+            db.refresh(dept)
+        assert dept is not None, "Department must exist in database"
+        dept_id = dept.id
+
+        prog = db.query(Program).filter(Program.department_id == dept_id).first() or db.query(Program).first()
+        if not prog:
+            prog = Program(name="B.Tech Computer Science and Engineering", program_name="B.Tech Computer Science and Engineering", department_id=dept_id, duration=4)
+            db.add(prog)
+            db.commit()
+            db.refresh(prog)
+        assert prog is not None, "Program must exist in database"
+        prog_id = prog.id
+
+        sec = db.query(Section).filter(Section.department_id == dept_id, Section.program_id == prog_id).first()
         if not sec:
-            sec = Section(department_id=dept.id, program_id=prog.id, semester_id=sem.id, section_name="A")
+            sec = Section(name="A", section_name="A", department_id=dept_id, program_id=prog_id, semester_id=sem_id)
             db.add(sec)
             db.commit()
             db.refresh(sec)
+        assert sec is not None, "Section must exist in database"
+        sec_id = sec.id
+
+        csm = db.query(CurriculumSubjectMapping).first()
 
         scope = GenerationScope(
-            academic_year_id=ay.id,
-            semester_id=sem.id,
-            department_id=dept.id,
-            program_id=prog.id,
-            section_ids=[sec.id],
+            academic_year_id=ay_id,
+            semester_id=sem_id,
+            department_id=dept_id,
+            program_id=prog_id,
+            section_ids=[sec_id],
             curriculum_version_id=csm.curriculum_version_id if csm else None,
         )
 
         # Non-existent curriculum version should raise HTTPException 400
         invalid_scope = GenerationScope(
-            academic_year_id=ay.id,
-            semester_id=sem.id,
-            department_id=dept.id,
-            program_id=prog.id,
-            section_ids=[sec.id],
+            academic_year_id=ay_id,
+            semester_id=sem_id,
+            department_id=dept_id,
+            program_id=prog_id,
+            section_ids=[sec_id],
             curriculum_version_id=999999,
         )
         with pytest.raises(Exception):
@@ -666,3 +827,185 @@ def test_student_and_faculty_curriculum_access(student_auth, faculty_auth):
     fac_data = fac_resp.json()
     assert "faculty_name" in fac_data
     assert "assigned_offerings_count" in fac_data
+
+
+# ---------------------------------------------------------------------------
+# 10. Audit Verification Tests: Configurable Duration, Explicit Credits & RBAC
+# ---------------------------------------------------------------------------
+
+def test_configurable_curriculum_duration_beyond_and_below_eight_semesters(super_admin_auth):
+    """Verify that programs with >8 semesters (e.g. 10) and <8 semesters (e.g. 4) are fully supported."""
+    headers = {"Authorization": f"Bearer {super_admin_auth['token']}"}
+
+    with Session(engine) as db:
+        dept = db.query(Department).first()
+        assert dept is not None, "Department must exist"
+        dept_id = dept.id
+
+        prog = db.query(Program).filter(Program.department_id == dept_id).first() or db.query(Program).first()
+        assert prog is not None, "Program must exist"
+        prog_id = prog.id
+
+        reg = db.query(Regulation).first()
+        assert reg is not None, "Regulation must exist"
+        reg_id = reg.id
+
+    # 1. Ten-semester program curriculum (e.g. 5-year integrated / B.Arch)
+    ten_sem_payload = {
+        "department_id": dept_id,
+        "program_id": prog_id,
+        "regulation_id": reg_id,
+        "description": "5-Year Integrated Dual Degree Curriculum",
+        "total_semesters": 10,
+    }
+    resp10 = client.post("/super-admin/curriculum-versions", json=ten_sem_payload, headers=headers)
+    assert resp10.status_code == 201, resp10.text
+    ver10 = resp10.json()
+    assert ver10["total_semesters"] == 10
+    assert len(ver10["semesters"]) == 10
+    assert [s["semester_number"] for s in ver10["semesters"]] == list(range(1, 11))
+
+    # 2. Four-semester program curriculum (e.g. 2-year M.Tech / MBA)
+    four_sem_payload = {
+        "department_id": dept_id,
+        "program_id": prog_id,
+        "regulation_id": reg_id,
+        "description": "2-Year Postgraduate M.Tech Curriculum",
+        "total_semesters": 4,
+    }
+    resp4 = client.post("/super-admin/curriculum-versions", json=four_sem_payload, headers=headers)
+    assert resp4.status_code == 201, resp4.text
+    ver4 = resp4.json()
+    assert ver4["total_semesters"] == 4
+    assert len(ver4["semesters"]) == 4
+    assert [s["semester_number"] for s in ver4["semesters"]] == list(range(1, 5))
+
+
+def test_explicit_credits_preservation_without_formula_overwrite(super_admin_auth):
+    """Verify that explicitly specified credits are preserved even when diverging from L+T+0.5P heuristic."""
+    headers = {"Authorization": f"Bearer {super_admin_auth['token']}"}
+
+    with Session(engine) as db:
+        dept = db.query(Department).first()
+        assert dept is not None
+        dept_id = dept.id
+        prog = db.query(Program).first()
+        assert prog is not None
+        prog_id = prog.id
+        reg = db.query(Regulation).first()
+        assert reg is not None
+        reg_id = reg.id
+
+    # Create a draft version
+    ver_payload = {
+        "department_id": dept_id,
+        "program_id": prog_id,
+        "regulation_id": reg_id,
+        "description": "Credit Formula Preservation Test",
+        "total_semesters": 4,
+    }
+    resp = client.post("/super-admin/curriculum-versions", json=ver_payload, headers=headers)
+    assert resp.status_code == 201
+    ver = resp.json()
+    ver_id = ver["id"]
+    sem1_id = ver["semesters"][0]["id"]
+
+    # Subject A: L=3, T=0, P=0, but official credits = 4.0 (e.g. Honors Course)
+    # Heuristic L+T+0.5P would calculate 3.0, but official credit is 4.0
+    sub_a_payload = {
+        "curriculum_semester_id": sem1_id,
+        "subject_code": "CS-HON-401",
+        "subject_name": "Advanced Algorithmic Honors",
+        "subject_type": "THEORY",
+        "credits": 4.0,
+        "lecture_hours": 3,
+        "tutorial_hours": 0,
+        "practical_hours": 0,
+        "is_mandatory": True,
+    }
+    sub_a_resp = client.post(f"/super-admin/curriculum-versions/{ver_id}/subjects", json=sub_a_payload, headers=headers)
+    assert sub_a_resp.status_code == 201
+    assert sub_a_resp.json()["credits"] == 4.0
+    assert sub_a_resp.json()["contact_hours"] == 3
+
+    # Subject B: L=0, T=0, P=4, but official credits = 1.0 (e.g. Workshop/Fieldwork)
+    # Heuristic L+T+0.5P would calculate 2.0, but official credit is 1.0
+    sub_b_payload = {
+        "curriculum_semester_id": sem1_id,
+        "subject_code": "ME-WS-102",
+        "subject_name": "Mechanical Fabrication Workshop",
+        "subject_type": "PRACTICAL",
+        "credits": 1.0,
+        "lecture_hours": 0,
+        "tutorial_hours": 0,
+        "practical_hours": 4,
+        "practical_consecutive_periods": 3,
+        "requires_lab": True,
+        "is_mandatory": True,
+    }
+    sub_b_resp = client.post(f"/super-admin/curriculum-versions/{ver_id}/subjects", json=sub_b_payload, headers=headers)
+    assert sub_b_resp.status_code == 201
+    assert sub_b_resp.json()["credits"] == 1.0
+    assert sub_b_resp.json()["contact_hours"] == 4
+    assert sub_b_resp.json()["practical_consecutive_periods"] == 3
+
+    # Verify version total credits sums the explicitly provided credits (4.0 + 1.0 = 5.0)
+    ver_detail = client.get(f"/super-admin/curriculum-versions/{ver_id}", headers=headers).json()
+    assert ver_detail["total_credits"] == 5.0
+
+
+def test_ordinary_admin_cannot_promote_or_create_super_admin(admin_auth):
+    """Verify that ordinary ADMIN accounts cannot provision or promote accounts into SUPER_ADMIN."""
+    headers = {"Authorization": f"Bearer {admin_auth['token']}"}
+
+    # Attempt to create a user with role SUPER_ADMIN
+    illegal_create = {
+        "name": "Malicious User",
+        "email": "malicious_sa@campus.edu",
+        "password": "Password@123",
+        "role": "SUPER_ADMIN",
+    }
+    create_resp = client.post("/users", json=illegal_create, headers=headers)
+    assert create_resp.status_code == 403, f"Expected 403 Forbidden, got {create_resp.status_code}"
+
+    # Attempt to promote an existing user to SUPER_ADMIN
+    with Session(engine) as db:
+        user = db.query(User).filter(User.role == "STUDENT").first()
+        assert user is not None
+        user_id = user.id
+
+    patch_resp = client.patch(f"/users/{user_id}", json={"role": "SUPER_ADMIN"}, headers=headers)
+    assert patch_resp.status_code == 403, f"Expected 403 Forbidden, got {patch_resp.status_code}"
+
+
+def test_cohort_and_regulation_curriculum_resolution_integrity():
+    """Verify that student curriculum is resolved strictly by cohort and regulation, never falling back to arbitrary curricula."""
+    with Session(engine) as db:
+        # Create an unassigned student with no program
+        unassigned_user = User(
+            name="Unassigned Student",
+            email="unassigned_stu@campus.edu",
+            password_hash=get_password_hash("Test@1234"),
+            role="STUDENT",
+            is_active=True,
+        )
+        db.add(unassigned_user)
+        db.commit()
+        db.refresh(unassigned_user)
+
+        stu = Student(user_id=unassigned_user.id, student_id="STU-UNASSIGNED")
+        db.add(stu)
+        db.commit()
+
+    login_resp = client.post("/auth/login", json={"email": "unassigned_stu@campus.edu", "password": "Test@1234"})
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Student with no enrolled program must return is_curriculum_resolved = False, NOT an arbitrary version
+    res = client.get("/curriculum/student/current", headers=headers)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["curriculum"] is None
+    assert body["is_curriculum_resolved"] is False
+    assert "not enrolled in an academic program" in body["unresolved_reason"]

@@ -11,6 +11,7 @@ from backend.dependencies import get_current_user
 router = APIRouter(prefix="/semesters", tags=["Semesters"])
 
 
+@router.get("", include_in_schema=False)
 @router.get("/", response_model=List[SemesterResponse])
 def get_semesters(
     db: Session = Depends(get_db),
@@ -39,7 +40,7 @@ def create_semester(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     db_sem = Semester(**semester.model_dump())
     db.add(db_sem)
@@ -55,7 +56,7 @@ def update_semester(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     db_sem = db.query(Semester).filter(Semester.id == semester_id).first()
     if not db_sem:
@@ -73,7 +74,7 @@ def delete_semester(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != "ADMIN":
+    if current_user.role not in ("ADMIN", "SUPER_ADMIN"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     db_sem = db.query(Semester).filter(Semester.id == semester_id).first()
     if not db_sem:

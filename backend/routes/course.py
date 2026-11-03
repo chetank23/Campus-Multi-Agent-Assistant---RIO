@@ -15,7 +15,7 @@ def get_courses(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role == "ADMIN":
+    if current_user.role in ("ADMIN", "SUPER_ADMIN"):
         return db.query(Course).all()
     elif current_user.role in ["FACULTY", "STUDENT"]:
         # Allow faculty and students to see courses within their department
@@ -31,7 +31,7 @@ def get_course(
     c = db.query(Course).filter(Course.id == course_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="Course not found")
-    if current_user.role == "ADMIN":
+    if current_user.role in ("ADMIN", "SUPER_ADMIN"):
         return c
     elif current_user.role in ["FACULTY", "STUDENT"]:
         if c.department_id != current_user.department_id:

@@ -13,12 +13,13 @@ from backend.dependencies import get_current_user
 router = APIRouter(prefix="/programs", tags=["Programs"])
 
 
+@router.get("", response_model=List[ProgramResponse], include_in_schema=False)
 @router.get("/", response_model=List[ProgramResponse])
 def get_programs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role == "ADMIN":
+    if current_user.role in ("ADMIN", "SUPER_ADMIN"):
         return db.query(Program).all()
     elif current_user.role == "FACULTY":
         # Faculty can see programs of their own department

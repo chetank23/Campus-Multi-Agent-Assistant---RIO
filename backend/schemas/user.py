@@ -28,7 +28,7 @@ class UserAdminCreate(BaseModel):
 
 class UserAdminUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=150)
-    role: Optional[Literal["ADMIN", "FACULTY", "STUDENT"]] = None
+    role: Optional[Literal["ADMIN", "FACULTY", "STUDENT", "SUPER_ADMIN"]] = None
     department_id: Optional[int] = None
     is_active: Optional[bool] = None
 

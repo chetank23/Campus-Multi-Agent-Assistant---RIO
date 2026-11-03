@@ -621,12 +621,34 @@ def get_student_curriculum(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student profile not found.")
 
     version_id = student.curriculum_version_id
-    if not version_id:
+    unresolved_reason = None
+
+    if version_id:
         v = db.query(CurriculumVersion).filter(
+            CurriculumVersion.id == version_id,
             CurriculumVersion.status == "PUBLISHED"
-        ).order_by(CurriculumVersion.version_number.desc()).first()
-        if v:
-            version_id = v.id
+        ).first()
+        if not v:
+            version_id = None
+            unresolved_reason = "Assigned curriculum version is not published or no longer available."
+    else:
+        # Resolve strictly from student's enrolled program, cohort, and regulation
+        if student.program_id:
+            query = db.query(CurriculumVersion).filter(
+                CurriculumVersion.program_id == student.program_id,
+                CurriculumVersion.status == "PUBLISHED"
+            )
+            if student.admission_cohort_id:
+                query = query.filter(CurriculumVersion.cohort_id == student.admission_cohort_id)
+            if student.regulation_id:
+                query = query.filter(CurriculumVersion.regulation_id == student.regulation_id)
+            v = query.order_by(CurriculumVersion.version_number.desc()).first()
+            if v:
+                version_id = v.id
+            else:
+                unresolved_reason = "No published curriculum found matching student's enrolled program, cohort, or regulation."
+        else:
+            unresolved_reason = "Student is not enrolled in an academic program."
 
     curr = curriculum_service.get_curriculum_version(db, version_id) if version_id else None
     return {
@@ -634,6 +656,8 @@ def get_student_curriculum(
         "student_id": student.student_id,
         "current_semester": student.current_curriculum_semester or student.semester_id or 1,
         "curriculum": curr,
+        "is_curriculum_resolved": curr is not None,
+        "unresolved_reason": unresolved_reason if curr is None else None,
     }
 
 
