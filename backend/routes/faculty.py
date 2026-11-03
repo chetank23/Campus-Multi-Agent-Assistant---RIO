@@ -1,3 +1,4 @@
+import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
@@ -9,6 +10,8 @@ from backend.models.timetable import TimetableVersion, TimetableEntry
 from backend.models.space_time import Room, TimeSlot
 from backend.schemas.faculty import FacultyCreate, FacultyUpdate, FacultyResponse
 from backend.schemas.timetable import FacultyTimetableResponse, PersonalTimetableEntry, DepartmentTimetableResponse
+from backend.models.substitution import FacultySubstitution
+from backend.services.substitution_service import day_matches_date, get_active_substitutions_for_date
 from backend.dependencies import get_current_user, require_role
 
 router = APIRouter(prefix="/faculty", tags=["Faculty"])
@@ -50,6 +53,7 @@ def get_faculty_members(
 @router.get("/my-timetable", response_model=FacultyTimetableResponse)
 def get_faculty_my_timetable(
     academic_year_id: Optional[int] = None,
+    date: Optional[datetime.date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("FACULTY")),
 ):
@@ -104,12 +108,21 @@ def get_faculty_my_timetable(
 
     sorted_entries = sorted(raw_entries, key=sort_key)
 
+    # If date is specified, filter and overlay date-specific substitutions
+    sub_map = get_active_substitutions_for_date(db, date) if date else {}
+
+    filtered_entries = [e for e in sorted_entries if not date or day_matches_date(e.slot.day if e.slot else None, date)]
+
     result_entries = []
     total_hours = 0
-    for e in sorted_entries:
+    for e in filtered_entries:
         slot_type = e.slot.slot_type if e.slot else None
         if slot_type == "CLASS" or slot_type is None:
             total_hours += 1
+
+        sub = sub_map.get(e.id)
+        is_sub = sub is not None
+        sub_name = sub.substitute_faculty.user.name if (sub and sub.substitute_faculty and sub.substitute_faculty.user) else None
 
         result_entries.append(
             PersonalTimetableEntry(
@@ -134,8 +147,71 @@ def get_faculty_my_timetable(
                 end_time=e.slot.end_time.strftime("%H:%M") if (e.slot and e.slot.end_time) else None,
                 slot_type=slot_type,
                 status=e.status,
+                is_substituted=is_sub,
+                substitute_faculty_id=sub.substitute_faculty_id if sub else None,
+                substitute_faculty_name=sub_name,
+                substitution_id=sub.id if sub else None,
+                substitution_status=sub.status if sub else None,
             )
         )
+
+    # If date is specified, also append classes this faculty is covering as substitute
+    if date:
+        covering_subs = (
+            db.query(FacultySubstitution)
+            .options(
+                joinedload(FacultySubstitution.timetable_entry).joinedload(TimetableEntry.course),
+                joinedload(FacultySubstitution.timetable_entry).joinedload(TimetableEntry.slot),
+                joinedload(FacultySubstitution.timetable_entry).joinedload(TimetableEntry.room).joinedload(Room.building),
+                joinedload(FacultySubstitution.timetable_entry).joinedload(TimetableEntry.section),
+                joinedload(FacultySubstitution.timetable_entry).joinedload(TimetableEntry.batch),
+                joinedload(FacultySubstitution.timetable_entry).joinedload(TimetableEntry.department),
+                joinedload(FacultySubstitution.original_faculty).joinedload(Faculty.user),
+            )
+            .filter(
+                FacultySubstitution.substitution_date == date,
+                FacultySubstitution.substitute_faculty_id == fac.id,
+                FacultySubstitution.status == "APPROVED",
+            )
+            .all()
+        )
+        for cs in covering_subs:
+            ce = cs.timetable_entry
+            if not ce:
+                continue
+            orig_fac_name = cs.original_faculty.user.name if (cs.original_faculty and cs.original_faculty.user) else "Regular Faculty"
+            result_entries.append(
+                PersonalTimetableEntry(
+                    id=ce.id,
+                    version_id=ce.version_id,
+                    version_number=ce.version.version_number if ce.version else None,
+                    academic_year_name=ce.version.academic_year.name if (ce.version and ce.version.academic_year) else None,
+                    semester_number=ce.semester_id,
+                    department_name=ce.department.name if ce.department else None,
+                    program_name=ce.program.program_name if ce.program else None,
+                    section_name=ce.section.section_name if ce.section else None,
+                    batch_name=ce.batch.batch_name if ce.batch else None,
+                    course_code=ce.course.course_code if ce.course else None,
+                    course_name=ce.course.course_name if ce.course else None,
+                    course_type=ce.course.course_type if ce.course else None,
+                    faculty_name=current_user.name,
+                    faculty_designation=fac.designation,
+                    room_number=ce.room.room_number if ce.room else None,
+                    building_name=ce.room.building.name if (ce.room and ce.room.building) else None,
+                    day=ce.slot.day if ce.slot else None,
+                    start_time=ce.slot.start_time.strftime("%H:%M") if (ce.slot and ce.slot.start_time) else None,
+                    end_time=ce.slot.end_time.strftime("%H:%M") if (ce.slot and ce.slot.end_time) else None,
+                    slot_type=ce.slot.slot_type if ce.slot else None,
+                    status=ce.status,
+                    is_substituted=True,
+                    original_faculty_name=orig_fac_name,
+                    substitute_faculty_id=fac.id,
+                    substitute_faculty_name=current_user.name,
+                    substitution_id=cs.id,
+                    substitution_status=cs.status,
+                )
+            )
+        result_entries.sort(key=lambda x: x.start_time or "00:00")
 
     return FacultyTimetableResponse(
         faculty_id=fac.id,

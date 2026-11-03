@@ -26,6 +26,7 @@ import {
   CalendarDays,
   Sparkles,
   Briefcase,
+  UserCheck,
   History,
   Building2,
   Box,
@@ -162,6 +163,12 @@ const adminSections: NavSection[] = [
         label: 'CDC Placements',
         icon: <Briefcase size={17} className="shrink-0" />,
         to: '/admin/placements',
+      },
+      {
+        id: 'faculty-substitutions',
+        label: 'Faculty Substitutions',
+        icon: <UserCheck size={17} className="shrink-0" />,
+        to: '/admin/substitutions',
       },
       {
         id: 'calendar-slots',

@@ -64,6 +64,9 @@ from .events import CoordinatorCapability, Club, CampusEvent  # noqa: F401
 # CDC Placement Management
 from .placements import PlacementDrive, PlacementSchedule, StudentAcademicRecord  # noqa: F401
 
+# Faculty Substitution
+from .substitution import FacultySubstitution  # noqa: F401
+
 # Expose the metadata object Alembic needs
 metadata = Base.metadata
 
@@ -108,4 +111,5 @@ __all__ = [
     "PlacementDrive",
     "PlacementSchedule",
     "StudentAcademicRecord",
+    "FacultySubstitution",
 ]

@@ -34,6 +34,7 @@ from backend.routes import (
     section,
     semester,
     student,
+    substitutions,
     time_slot,
     timetable,
     users,
@@ -95,6 +96,7 @@ app.include_router(student.student_router)
 app.include_router(clubs.router)
 app.include_router(events.router)
 app.include_router(placements.router)
+app.include_router(substitutions.router)
 app.include_router(faculty.router)
 app.include_router(course.router)
 app.include_router(course_assignment.router)

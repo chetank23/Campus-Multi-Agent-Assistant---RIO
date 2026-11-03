@@ -1,3 +1,4 @@
+import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
@@ -10,6 +11,7 @@ from backend.models.timetable import TimetableVersion, TimetableEntry
 from backend.models.space_time import Room, TimeSlot
 from backend.schemas.student import StudentCreate, StudentUpdate, StudentResponse, StudentCourseResponse
 from backend.schemas.timetable import StudentTimetableResponse, PersonalTimetableEntry
+from backend.services.substitution_service import day_matches_date, get_active_substitutions_for_date
 from backend.dependencies import get_current_user, require_role, require_department_scope
 
 router = APIRouter(prefix="/students", tags=["Students"])
@@ -43,6 +45,7 @@ def get_students(
 
 def _get_student_my_timetable_handler(
     academic_year_id: Optional[int] = None,
+    date: Optional[datetime.date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("STUDENT")),
 ) -> StudentTimetableResponse:
@@ -113,12 +116,22 @@ def _get_student_my_timetable_handler(
 
     sorted_entries = sorted(raw_entries, key=sort_key)
 
+    sub_map = get_active_substitutions_for_date(db, date) if date else {}
+
+    filtered_entries = [e for e in sorted_entries if not date or day_matches_date(e.slot.day if e.slot else None, date)]
+
     result_entries = []
     total_hours = 0
-    for e in sorted_entries:
+    for e in filtered_entries:
         slot_type = e.slot.slot_type if e.slot else None
         if slot_type == "CLASS" or slot_type is None:
             total_hours += 1
+
+        sub = sub_map.get(e.id)
+        is_sub = sub is not None
+        orig_fac_name = e.faculty.user.name if (e.faculty and e.faculty.user) else None
+        eff_fac_name = sub.substitute_faculty.user.name if (sub and sub.substitute_faculty and sub.substitute_faculty.user) else orig_fac_name
+        sub_name = sub.substitute_faculty.user.name if (sub and sub.substitute_faculty and sub.substitute_faculty.user) else None
 
         result_entries.append(
             PersonalTimetableEntry(
@@ -134,7 +147,7 @@ def _get_student_my_timetable_handler(
                 course_code=e.course.course_code if e.course else None,
                 course_name=e.course.course_name if e.course else None,
                 course_type=e.course.course_type if e.course else None,
-                faculty_name=e.faculty.user.name if (e.faculty and e.faculty.user) else None,
+                faculty_name=eff_fac_name,
                 faculty_designation=e.faculty.designation if e.faculty else None,
                 room_number=e.room.room_number if e.room else None,
                 building_name=e.room.building.name if (e.room and e.room.building) else None,
@@ -143,6 +156,12 @@ def _get_student_my_timetable_handler(
                 end_time=e.slot.end_time.strftime("%H:%M") if (e.slot and e.slot.end_time) else None,
                 slot_type=slot_type,
                 status=e.status,
+                is_substituted=is_sub,
+                original_faculty_name=orig_fac_name if is_sub else None,
+                substitute_faculty_id=sub.substitute_faculty_id if sub else None,
+                substitute_faculty_name=sub_name,
+                substitution_id=sub.id if sub else None,
+                substitution_status=sub.status if sub else None,
             )
         )
 
@@ -163,19 +182,21 @@ def _get_student_my_timetable_handler(
 @router.get("/my-timetable", response_model=StudentTimetableResponse)
 def get_student_my_timetable_plural(
     academic_year_id: Optional[int] = None,
+    date: Optional[datetime.date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("STUDENT")),
 ):
-    return _get_student_my_timetable_handler(academic_year_id, db, current_user)
+    return _get_student_my_timetable_handler(academic_year_id, date, db, current_user)
 
 
 @student_router.get("/my-timetable", response_model=StudentTimetableResponse)
 def get_student_my_timetable_singular(
     academic_year_id: Optional[int] = None,
+    date: Optional[datetime.date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("STUDENT")),
 ):
-    return _get_student_my_timetable_handler(academic_year_id, db, current_user)
+    return _get_student_my_timetable_handler(academic_year_id, date, db, current_user)
 
 
 def _get_student_courses_handler(db: Session, current_user: User) -> List[StudentCourseResponse]:

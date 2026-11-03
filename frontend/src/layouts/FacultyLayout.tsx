@@ -24,6 +24,7 @@ import {
   ClipboardList,
   Bell,
   Sparkles,
+  UserCheck,
   Search,
   Menu,
   X,
@@ -129,6 +130,12 @@ export const FacultyLayout: React.FC = () => {
       to: '/faculty/events',
       label: 'Clubs & Events',
       icon: <Sparkles size={18} />,
+      end: false,
+    },
+    {
+      to: '/faculty/substitutions',
+      label: 'Substitutions',
+      icon: <UserCheck size={18} />,
       end: false,
     },
     {

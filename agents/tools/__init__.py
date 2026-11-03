@@ -61,6 +61,12 @@ from agents.tools.event_tools import (
     create_club_activity_data,
     update_club_activity_data,
 )
+from agents.tools.substitution_tools import (
+    list_my_substitution_requests_data,
+    list_my_substitution_assignments_data,
+    list_pending_substitutions_data,
+    get_date_substitutions_data,
+)
 from agents.tools.placement_tools import (
     create_placement_drive_draft_data,
     validate_placement_drive_data,
@@ -640,6 +646,38 @@ QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         "allowed_roles": ["FACULTY", "ADMIN"],
     },
     # -----------------------------------------------------------------------
+    # Faculty Substitution Tools
+    # -----------------------------------------------------------------------
+    {
+        "name": "list_my_substitution_requests",
+        "description": "Lists substitution requests submitted by or concerning the authenticated faculty member.",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "list_my_substitution_assignments",
+        "description": "Lists classes where authenticated faculty is covering as substitute teacher.",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["FACULTY"],
+    },
+    {
+        "name": "list_pending_substitutions",
+        "description": "Lists pending substitution requests awaiting approval for Admins and Coordinators.",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_date_substitutions",
+        "description": "Checks active faculty substitutions for a given date (e.g. today or tomorrow).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string", "description": "Date to query (YYYY-MM-DD or today/tomorrow)"},
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    # -----------------------------------------------------------------------
     # CDC Placement Management Tools
     # -----------------------------------------------------------------------
     {
@@ -1131,6 +1169,25 @@ def execute_tool(
                 end_time=tool_args.get("end_time"),
                 room_id=tool_args.get("room_id"),
                 venue_name=tool_args.get("venue_name"),
+            )
+
+        # -------------------------------------------------------------------
+        # Faculty Substitution Tools Dispatch
+        # -------------------------------------------------------------------
+        elif tool_name == "list_my_substitution_requests":
+            return list_my_substitution_requests_data(db=db, user=user)
+
+        elif tool_name == "list_my_substitution_assignments":
+            return list_my_substitution_assignments_data(db=db, user=user)
+
+        elif tool_name == "list_pending_substitutions":
+            return list_pending_substitutions_data(db=db, user=user)
+
+        elif tool_name == "get_date_substitutions":
+            return get_date_substitutions_data(
+                db=db,
+                user=user,
+                date=tool_args.get("date"),
             )
 
         # -------------------------------------------------------------------

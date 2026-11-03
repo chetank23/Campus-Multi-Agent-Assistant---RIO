@@ -286,6 +286,9 @@ def get_class_status_data(
     entries = query.all()
     results: List[Dict[str, Any]] = []
 
+    from backend.services.substitution_service import get_active_substitutions_for_date
+    sub_map = get_active_substitutions_for_date(db, now_date)
+
     for e in entries:
         slot = e.slot
         if not slot or not slot.start_time or not slot.end_time:
@@ -307,15 +310,63 @@ def get_class_status_data(
         fac = e.faculty
         fac_user = fac.user if fac else None
 
+        sub = sub_map.get(e.id)
+        is_sub = sub is not None
+        effective_faculty = (
+            sub.substitute_faculty.user.name
+            if (sub and sub.substitute_faculty and sub.substitute_faculty.user)
+            else (fac_user.name if fac_user else "N/A")
+        )
+
         results.append({
             "course_code": course.course_code if course else "N/A",
             "course_title": course.course_name if course else "N/A",
             "room": room.room_number if room else "N/A",
-            "faculty": fac_user.name if fac_user else "N/A",
+            "faculty": effective_faculty,
             "start_time": slot.start_time.strftime("%H:%M"),
             "end_time": slot.end_time.strftime("%H:%M"),
             "class_status": calculated_status,
+            "is_substituted": is_sub,
         })
+
+    if user.role == "FACULTY":
+        from backend.models.academic import Faculty as AcademicFaculty
+        from backend.models.substitution import FacultySubstitution
+        fac_rec = db.query(AcademicFaculty).filter(AcademicFaculty.user_id == user.id).first()
+        if fac_rec:
+            covering_subs = (
+                db.query(FacultySubstitution)
+                .filter(
+                    FacultySubstitution.substitution_date == now_date,
+                    FacultySubstitution.substitute_faculty_id == fac_rec.id,
+                    FacultySubstitution.status == "APPROVED",
+                )
+                .all()
+            )
+            for cs in covering_subs:
+                ce = cs.timetable_entry
+                if not ce or not ce.slot or ce.slot.start_time is None or ce.slot.end_time is None:
+                    continue
+                cslot = ce.slot
+                c_st = cslot.start_time
+                c_et = cslot.end_time
+                assert c_st is not None and c_et is not None
+                if now_time < c_st:
+                    c_stat = "UPCOMING"
+                elif c_st <= now_time < c_et:
+                    c_stat = "ONGOING"
+                else:
+                    c_stat = "COMPLETED"
+                results.append({
+                    "course_code": ce.course.course_code if ce.course else "N/A",
+                    "course_title": ce.course.course_name if ce.course else "N/A",
+                    "room": ce.room.room_number if ce.room else "N/A",
+                    "faculty": user.name,
+                    "start_time": c_st.strftime("%H:%M"),
+                    "end_time": c_et.strftime("%H:%M"),
+                    "class_status": c_stat,
+                    "is_substituted": True,
+                })
 
     results.sort(key=lambda x: x["start_time"])
 

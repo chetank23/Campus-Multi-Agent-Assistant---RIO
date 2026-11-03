@@ -188,6 +188,12 @@ export interface PersonalTimetableEntry {
   end_time?: string | null;
   slot_type?: string | null;
   status: string;
+  is_substituted?: boolean;
+  substitute_faculty_id?: number | null;
+  substitute_faculty_name?: string | null;
+  original_faculty_name?: string | null;
+  substitution_id?: number | null;
+  substitution_status?: string | null;
 }
 
 export interface FacultyTimetableResponse {

@@ -85,6 +85,12 @@ class PersonalTimetableEntry(BaseModel):
     end_time: Optional[str] = None
     slot_type: Optional[str] = None
     status: str
+    is_substituted: bool = False
+    substitute_faculty_id: Optional[int] = None
+    substitute_faculty_name: Optional[str] = None
+    original_faculty_name: Optional[str] = None
+    substitution_id: Optional[int] = None
+    substitution_status: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

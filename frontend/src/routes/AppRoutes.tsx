@@ -54,6 +54,8 @@ import { AdminTimetableReviewPage } from '@/pages/admin/timetable/AdminTimetable
 import { ResourcesPage } from '@/pages/admin/resources/ResourcesPage';
 import { AdminEventsPage } from '@/pages/admin/AdminEventsPage';
 import { AdminPlacementsPage } from '@/pages/admin/AdminPlacementsPage';
+import { AdminSubstitutionPage } from '@/pages/admin/AdminSubstitutionPage';
+import { FacultySubstitutionPage } from '@/pages/faculty/FacultySubstitutionPage';
 import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage';
 import { AdminChangeRequestsPage } from '@/pages/admin/AdminChangeRequestsPage';
 import { AdminAuditLogsPage } from '@/pages/admin/AdminAuditLogsPage';
@@ -148,6 +150,7 @@ export function AppRoutes() {
           <Route path="/admin/resources" element={<ResourcesPage />} />
           <Route path="/admin/events" element={<AdminEventsPage />} />
           <Route path="/admin/placements" element={<AdminPlacementsPage />} />
+            <Route path="/admin/substitutions" element={<AdminSubstitutionPage />} />
           <Route path="/admin/requests" element={<AdminChangeRequestsPage />} />
           <Route path="/admin/notifications" element={<AdminNotificationsPage />} />
           <Route path="/admin/audit" element={<AdminAuditLogsPage />} />
@@ -174,6 +177,7 @@ export function AppRoutes() {
           <Route path="/faculty/availability" element={<FacultyAvailabilityPage />} />
           <Route path="/faculty/resources" element={<FacultyResourcesPage />} />
           <Route path="/faculty/events" element={<FacultyEventsPage />} />
+            <Route path="/faculty/substitutions" element={<FacultySubstitutionPage />} />
           <Route path="/faculty/requests" element={<FacultyChangeRequestsPage />} />
           <Route path="/faculty/notifications" element={<FacultyNotificationsPage />} />
         </Route>
