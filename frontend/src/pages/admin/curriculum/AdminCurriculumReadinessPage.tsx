@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import {
   getCurriculumReadiness,
-  getCurriculumVersions,
 } from '@/api/curriculum';
 import { apiClient } from '@/api/client';
 import { LoadingState } from '@/components/common';
