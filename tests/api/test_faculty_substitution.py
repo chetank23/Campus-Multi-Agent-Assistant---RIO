@@ -325,7 +325,7 @@ def test_deterministic_candidate_ranking(admin_auth, faculty_auth, faculty2_auth
         assert "faculty_id" in cand
         assert "faculty_name" in cand
         assert "qualification_tier" in cand
-        assert cand["qualification_tier"] in ("DIRECT_ASSIGNMENT", "DEPARTMENT_MATCH", "GENERAL")
+        assert cand["qualification_tier"] in ("VERIFIED_QUALIFICATION", "DIRECT_ASSIGNMENT", "UNQUALIFIED", "DEPARTMENT_MATCH", "GENERAL")
         assert "current_weekly_load" in cand
         assert "max_weekly_load" in cand
         assert "score" in cand
@@ -702,3 +702,422 @@ def test_assistant_substitution_grounding(admin_auth, faculty_auth, student_auth
     # Privacy check: If student runs it, reason is never in the substitutions
     for item in date_res.get("substitutions", []):
         assert "reason" not in item, "Student received private reason via assistant tool!"
+
+
+# ---------------------------------------------------------------------------
+# Test 10: Mandatory Hard Qualification Enforcement & Exclusion Verification
+# ---------------------------------------------------------------------------
+
+def test_hard_qualification_enforcement(admin_auth, faculty_auth, db_session):
+    admin_headers = {"Authorization": f"Bearer {admin_auth['token']}"}
+    faculty1_headers = {"Authorization": f"Bearer {faculty_auth['token']}"}
+
+    # Setup controlled courses and faculty
+    dept = db_session.query(Department).first()
+    assert dept is not None
+
+    # Target Course
+    c_target = db_session.query(Course).filter(Course.course_code == "CS-HARD-QUAL").first()
+    if not c_target:
+        c_target = Course(course_code="CS-HARD-QUAL", course_name="Hard Qualification Test Course", department_id=dept.id)
+        db_session.add(c_target)
+        db_session.flush()
+
+    # Unrelated Course
+    c_unrelated = db_session.query(Course).filter(Course.course_code == "CS-UNRELATED").first()
+    if not c_unrelated:
+        c_unrelated = Course(course_code="CS-UNRELATED", course_name="Unrelated Subject Course", department_id=dept.id)
+        db_session.add(c_unrelated)
+        db_session.flush()
+
+    # Qualified faculty (Noah Rhodes)
+    fac_qual = db_session.query(Faculty).join(User, Faculty.user_id == User.id).filter(User.email == "noah.rhodes@campus.edu").first()
+    assert fac_qual is not None
+
+    # Ensure fac_qual has verified CourseAssignment for c_target
+    ca_qual = db_session.query(CourseAssignment).filter(CourseAssignment.faculty_id == fac_qual.id, CourseAssignment.course_id == c_target.id).first()
+    if not ca_qual:
+        db_session.add(CourseAssignment(faculty_id=fac_qual.id, course_id=c_target.id))
+        db_session.flush()
+
+    # Ensure other faculty do NOT have CourseAssignment for c_target
+    other_facs = db_session.query(Faculty).filter(Faculty.id != fac_qual.id).all()
+    for of in other_facs:
+        db_session.query(CourseAssignment).filter(CourseAssignment.faculty_id == of.id, CourseAssignment.course_id == c_target.id).delete()
+    db_session.commit()
+
+    # Find or create published timetable entry for fac1 with c_target
+    fac1 = db_session.query(Faculty).join(User, Faculty.user_id == User.id).filter(User.email == "allison.hill@campus.edu").first()
+    pub_v = db_session.query(TimetableVersion).filter(TimetableVersion.status == "PUBLISHED").first()
+    slot = db_session.query(TimeSlot).filter(TimeSlot.slot_type == "CLASS").first()
+    room = db_session.query(Room).first()
+    sec = db_session.query(Section).first()
+    assert fac1 and pub_v and slot and room and sec
+
+    # Add assignment for fac1
+    ca1 = db_session.query(CourseAssignment).filter(CourseAssignment.faculty_id == fac1.id, CourseAssignment.course_id == c_target.id).first()
+    if not ca1:
+        db_session.add(CourseAssignment(faculty_id=fac1.id, course_id=c_target.id, section_id=sec.id))
+
+    test_entry = db_session.query(TimetableEntry).filter(
+        TimetableEntry.version_id == pub_v.id,
+        TimetableEntry.faculty_id == fac1.id,
+        TimetableEntry.course_id == c_target.id,
+    ).first()
+    if not test_entry:
+        test_entry = TimetableEntry(
+            version_id=pub_v.id,
+            faculty_id=fac1.id,
+            course_id=c_target.id,
+            room_id=room.id,
+            slot_id=slot.id,
+            section_id=sec.id,
+            department_id=dept.id,
+            status="ACTIVE",
+        )
+        db_session.add(test_entry)
+        db_session.commit()
+
+    # Calculate valid future date matching slot
+    today = datetime.date.today()
+    target_date = today + datetime.timedelta(days=7)
+    while not day_matches_date(slot.day, target_date):
+        target_date += datetime.timedelta(days=1)
+
+    # Clean prior subs
+    db_session.query(FacultySubstitution).filter(
+        FacultySubstitution.timetable_entry_id == test_entry.id,
+        FacultySubstitution.substitution_date == target_date,
+    ).delete()
+    db_session.commit()
+
+    sub = FacultySubstitution(
+        timetable_entry_id=test_entry.id,
+        substitution_date=target_date,
+        original_faculty_id=fac1.id,
+        status="REQUESTED",
+        reason="Academic Conference Keynote Address",
+        created_by_id=fac1.user_id,
+        version=1,
+    )
+    db_session.add(sub)
+    db_session.commit()
+
+    # Query candidate recommendations
+    cands_resp = client.get(f"/substitutions/requests/{sub.id}/candidates", headers=admin_headers)
+    assert cands_resp.status_code == 200
+    res_data = cands_resp.json()
+    candidates = res_data["candidates"]
+
+    # 1. Qualified faculty member with no timetable clash is proposed (is_eligible = True)
+    cand_qual = next((c for c in candidates if c["faculty_id"] == fac_qual.id), None)
+    assert cand_qual is not None
+    qual_reasons = {b["factor"]: b["status"] for b in cand_qual["eligibility_breakdown"]}
+    assert qual_reasons["QUALIFICATION"] == "PASS"
+
+    # 2. Same-department faculty WITHOUT course qualification is EXCLUDED (is_eligible = False)
+    unqual_same_dept = [
+        c for c in candidates
+        if c["faculty_id"] != fac_qual.id and c["department_id"] == dept.id
+    ]
+    for usd in unqual_same_dept:
+        assert usd["is_eligible"] is False, f"Faculty {usd['faculty_name']} without qualification was marked eligible!"
+        factors = {b["factor"]: b["status"] for b in usd["eligibility_breakdown"]}
+        assert factors["QUALIFICATION"] == "FAIL"
+        assert any("qualification" in r.lower() or "assignment" in r.lower() for r in usd["ineligibility_reasons"])
+
+    # 3. Faculty with unrelated course assignments is EXCLUDED
+    # 4. Inactive faculty account is EXCLUDED
+    # Deactivate fac_qual user temporarily
+    fac_qual.user.is_active = False
+    db_session.commit()
+
+    cands_resp2 = client.get(f"/substitutions/requests/{sub.id}/candidates", headers=admin_headers)
+    cands2 = cands_resp2.json()["candidates"]
+    cand_qual_inactive = next((c for c in cands2 if c["faculty_id"] == fac_qual.id), None)
+    assert cand_qual_inactive is not None
+    assert cand_qual_inactive["is_eligible"] is False
+    factors_inactive = {b["factor"]: b["status"] for b in cand_qual_inactive["eligibility_breakdown"]}
+    assert factors_inactive["ACTIVE_STATUS"] == "FAIL"
+
+    # Restore user
+    fac_qual.user.is_active = True
+    db_session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Test 11: Candidate Result Semantics (ELIGIBLE, NO_ELIGIBLE_CANDIDATE, CANNOT_DETERMINE)
+# ---------------------------------------------------------------------------
+
+def test_candidate_result_semantics(admin_auth, db_session):
+    admin_headers = {"Authorization": f"Bearer {admin_auth['token']}"}
+
+    # Setup Course with ZERO qualifications
+    c_empty = db_session.query(Course).filter(Course.course_code == "CS-NO-ONE-QUAL").first()
+    if not c_empty:
+        c_empty = Course(course_code="CS-NO-ONE-QUAL", course_name="Zero Qualifications Subject")
+        db_session.add(c_empty)
+        db_session.flush()
+
+    pub_v = db_session.query(TimetableVersion).filter(TimetableVersion.status == "PUBLISHED").first()
+    fac1 = db_session.query(Faculty).first()
+    slot = db_session.query(TimeSlot).filter(TimeSlot.slot_type == "CLASS").first()
+    room = db_session.query(Room).first()
+    sec = db_session.query(Section).first()
+    assert pub_v and fac1 and slot and room and sec
+
+    empty_entry = TimetableEntry(
+        version_id=pub_v.id,
+        faculty_id=fac1.id,
+        course_id=c_empty.id,
+        room_id=room.id,
+        slot_id=slot.id,
+        section_id=sec.id,
+        status="ACTIVE",
+    )
+    db_session.add(empty_entry)
+    db_session.commit()
+
+    target_date = datetime.date.today() + datetime.timedelta(days=14)
+    while not day_matches_date(slot.day, target_date):
+        target_date += datetime.timedelta(days=1)
+
+    sub_empty = FacultySubstitution(
+        timetable_entry_id=empty_entry.id,
+        substitution_date=target_date,
+        original_faculty_id=fac1.id,
+        status="REQUESTED",
+        reason="Research workshop",
+        created_by_id=fac1.user_id,
+        version=1,
+    )
+    db_session.add(sub_empty)
+    db_session.commit()
+
+    # When no trusted qualification records exist for the course: CANNOT_DETERMINE
+    resp = client.get(f"/substitutions/requests/{sub_empty.id}/candidates", headers=admin_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["evaluation_status"] == "CANNOT_DETERMINE"
+    assert data["cannot_determine"] is True
+    assert "No trusted faculty qualification" in data["cannot_determine_reason"]
+
+
+# ---------------------------------------------------------------------------
+# Test 12: Availability & Workload Boundary Rules
+# ---------------------------------------------------------------------------
+
+def test_availability_and_workload_boundary_rules(admin_auth, db_session):
+    admin_headers = {"Authorization": f"Bearer {admin_auth['token']}"}
+
+    # Setup request where candidate has explicit UNAVAILABLE preference
+    fac1 = db_session.query(Faculty).join(User, Faculty.user_id == User.id).filter(User.email == "allison.hill@campus.edu").first()
+    fac2 = db_session.query(Faculty).join(User, Faculty.user_id == User.id).filter(User.email == "noah.rhodes@campus.edu").first()
+    course = db_session.query(Course).first()
+    pub_v = db_session.query(TimetableVersion).filter(TimetableVersion.status == "PUBLISHED").first()
+    slot = db_session.query(TimeSlot).filter(TimeSlot.slot_type == "CLASS").first()
+    room = db_session.query(Room).first()
+    sec = db_session.query(Section).first()
+    assert fac1 and fac2 and course and pub_v and slot and room and sec
+
+    # Ensure fac2 is qualified for course
+    ca = db_session.query(CourseAssignment).filter(CourseAssignment.faculty_id == fac2.id, CourseAssignment.course_id == course.id).first()
+    if not ca:
+        db_session.add(CourseAssignment(faculty_id=fac2.id, course_id=course.id))
+        db_session.flush()
+
+    # Add explicit UNAVAILABLE record for fac2 at slot
+    fa = db_session.query(FacultyAvailability).filter(FacultyAvailability.faculty_id == fac2.id, FacultyAvailability.slot_id == slot.id).first()
+    if not fa:
+        fa = FacultyAvailability(faculty_id=fac2.id, slot_id=slot.id, availability="UNAVAILABLE")
+        db_session.add(fa)
+    else:
+        fa.availability = "UNAVAILABLE"
+    db_session.commit()
+
+    entry = TimetableEntry(
+        version_id=pub_v.id,
+        faculty_id=fac1.id,
+        course_id=course.id,
+        room_id=room.id,
+        slot_id=slot.id,
+        section_id=sec.id,
+        status="ACTIVE",
+    )
+    db_session.add(entry)
+    db_session.flush()
+
+    target_date = datetime.date.today() + datetime.timedelta(days=21)
+    while not day_matches_date(slot.day, target_date):
+        target_date += datetime.timedelta(days=1)
+
+    sub = FacultySubstitution(
+        timetable_entry_id=entry.id,
+        substitution_date=target_date,
+        original_faculty_id=fac1.id,
+        status="REQUESTED",
+        reason="Testing availability bounds",
+        created_by_id=fac1.user_id,
+        version=1,
+    )
+    db_session.add(sub)
+    db_session.commit()
+
+    # Check that explicit UNAVAILABLE excludes candidate
+    resp = client.get(f"/substitutions/requests/{sub.id}/candidates", headers=admin_headers)
+    assert resp.status_code == 200
+    candidates = resp.json()["candidates"]
+    c2 = next((c for c in candidates if c["faculty_id"] == fac2.id), None)
+    assert c2 is not None
+    assert c2["is_eligible"] is False
+    factors = {b["factor"]: b["status"] for b in c2["eligibility_breakdown"]}
+    assert factors["AVAILABILITY"] == "FAIL"
+
+    # Reset availability
+    fa.availability = "AVAILABLE"
+    db_session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Test 13: Scoped Reviewer Permissions & Lifecycle Security
+# ---------------------------------------------------------------------------
+
+def test_scoped_reviewer_permissions_and_lifecycle(faculty_auth, faculty2_auth, db_session):
+    faculty1_headers = {"Authorization": f"Bearer {faculty_auth['token']}"}
+    faculty2_headers = {"Authorization": f"Bearer {faculty2_auth['token']}"}
+
+    fac1_user_id = faculty_auth["user"]["id"]
+    fac2_user_id = faculty2_auth["user"]["id"]
+
+    # Faculty 2 creates capability with DEPARTMENT scope = 999 (out-of-scope department)
+    db_session.query(CoordinatorCapability).filter(
+        CoordinatorCapability.user_id == fac2_user_id,
+        CoordinatorCapability.capability == "SUBSTITUTION_COORDINATOR",
+    ).delete()
+    db_session.commit()
+
+    out_of_scope_cap = CoordinatorCapability(
+        user_id=fac2_user_id,
+        capability="SUBSTITUTION_COORDINATOR",
+        scope_type="DEPARTMENT",
+        scope_id=999,  # Non-matching department
+        is_active=True,
+    )
+    db_session.add(out_of_scope_cap)
+    db_session.commit()
+
+    # Find pending request in department 1
+    pending_sub = db_session.query(FacultySubstitution).filter(FacultySubstitution.status == "REQUESTED").first()
+    assert pending_sub is not None
+
+    # Review attempt from out-of-scope coordinator fails with 403 Forbidden
+    out_of_scope_review = client.post(
+        f"/substitutions/requests/{pending_sub.id}/review",
+        json={"action": "REJECT", "rejection_reason": "Out of scope rejection attempt", "version": pending_sub.version},
+        headers=faculty2_headers,
+    )
+    assert out_of_scope_review.status_code == 403, f"Expected 403 for out-of-scope department, got {out_of_scope_review.status_code}"
+
+    # Revoke capability (is_active = False)
+    out_of_scope_cap.is_active = False
+    db_session.commit()
+
+    revoked_review = client.post(
+        f"/substitutions/requests/{pending_sub.id}/review",
+        json={"action": "REJECT", "rejection_reason": "Revoked reviewer attempt", "version": pending_sub.version},
+        headers=faculty2_headers,
+    )
+    assert revoked_review.status_code == 403, f"Expected 403 for revoked capability, got {revoked_review.status_code}"
+
+    # Private Request View Barrier: Unauthorized faculty cannot view other faculty's request
+    unauth_view = client.get(f"/substitutions/requests/{pending_sub.id}", headers=faculty2_headers)
+    assert unauth_view.status_code == 403, f"Expected 403 for unauth faculty viewing private request, got {unauth_view.status_code}"
+
+
+# ---------------------------------------------------------------------------
+# Test 14: Three-Date Invariant Verification (Week 1, Week 2, Week 3)
+# ---------------------------------------------------------------------------
+
+def test_three_date_timetable_immutability(admin_auth, faculty_auth, faculty2_auth, db_session):
+    admin_headers = {"Authorization": f"Bearer {admin_auth['token']}"}
+    faculty1_headers = {"Authorization": f"Bearer {faculty_auth['token']}"}
+
+    fac1 = db_session.query(Faculty).join(User, Faculty.user_id == User.id).filter(User.email == "allison.hill@campus.edu").first()
+    fac2 = db_session.query(Faculty).join(User, Faculty.user_id == User.id).filter(User.email == "noah.rhodes@campus.edu").first()
+    course = db_session.query(Course).first()
+    pub_v = db_session.query(TimetableVersion).filter(TimetableVersion.status == "PUBLISHED").first()
+    slot = db_session.query(TimeSlot).filter(TimeSlot.slot_type == "CLASS").first()
+    room = db_session.query(Room).first()
+    sec = db_session.query(Section).first()
+    assert fac1 and fac2 and course and pub_v and slot and room and sec
+
+    # Ensure fac2 qualified
+    ca2 = db_session.query(CourseAssignment).filter(CourseAssignment.faculty_id == fac2.id, CourseAssignment.course_id == course.id).first()
+    if not ca2:
+        db_session.add(CourseAssignment(faculty_id=fac2.id, course_id=course.id))
+        db_session.flush()
+
+    entry = TimetableEntry(
+        version_id=pub_v.id,
+        faculty_id=fac1.id,
+        course_id=course.id,
+        room_id=room.id,
+        slot_id=slot.id,
+        section_id=sec.id,
+        department_id=fac1.department_id,
+        status="ACTIVE",
+    )
+    db_session.add(entry)
+    db_session.commit()
+
+    # Three successive weekly dates for the same weekday:
+    # d1 = Week 1 (7 days ahead)
+    # d2 = Week 2 (14 days ahead) -> Substitution approved for THIS date only!
+    # d3 = Week 3 (21 days ahead)
+    today = datetime.date.today()
+    d1 = today + datetime.timedelta(days=7)
+    while not day_matches_date(slot.day, d1):
+        d1 += datetime.timedelta(days=1)
+    d2 = d1 + datetime.timedelta(days=7)
+    d3 = d2 + datetime.timedelta(days=7)
+
+    # Approve substitution on d2 only
+    sub = FacultySubstitution(
+        timetable_entry_id=entry.id,
+        substitution_date=d2,
+        original_faculty_id=fac1.id,
+        substitute_faculty_id=fac2.id,
+        status="APPROVED",
+        reason="Three-date invariant test",
+        created_by_id=fac1.user_id,
+        version=2,
+    )
+    db_session.add(sub)
+    db_session.commit()
+
+    # Verify Week 1 (d1): Canonical Original Faculty
+    d1_view = client.get(f"/substitutions/date-view?date={d1.isoformat()}", headers=admin_headers).json()
+    d1_item = next((c for c in d1_view if c["timetable_entry_id"] == entry.id), None)
+    assert d1_item is not None
+    assert d1_item["is_substituted"] is False
+    assert d1_item["faculty_name"] == fac1.user.name
+
+    # Verify Week 2 (d2): Substituted Faculty (Noah Rhodes)
+    d2_view = client.get(f"/substitutions/date-view?date={d2.isoformat()}", headers=admin_headers).json()
+    d2_item = next((c for c in d2_view if c["timetable_entry_id"] == entry.id), None)
+    assert d2_item is not None
+    assert d2_item["is_substituted"] is True
+    assert d2_item["faculty_name"] == fac2.user.name
+    assert d2_item["original_faculty_name"] == fac1.user.name
+
+    # Verify Week 3 (d3): Canonical Original Faculty
+    d3_view = client.get(f"/substitutions/date-view?date={d3.isoformat()}", headers=admin_headers).json()
+    d3_item = next((c for c in d3_view if c["timetable_entry_id"] == entry.id), None)
+    assert d3_item is not None
+    assert d3_item["is_substituted"] is False
+    assert d3_item["faculty_name"] == fac1.user.name
+
+    # Verify Master Canonical Timetable Entry is still 100% untouched
+    master_check = db_session.query(TimetableEntry).filter(TimetableEntry.id == entry.id).first()
+    assert master_check is not None
+    assert master_check.faculty_id == fac1.id

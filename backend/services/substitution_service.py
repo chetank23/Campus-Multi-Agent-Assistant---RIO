@@ -5,14 +5,14 @@ Business logic for Faculty Substitution:
 1. Faculty occurrence querying (inspecting upcoming scheduled classes).
 2. Unavailability request lifecycle (creation, duplicate prevention, ownership validation).
 3. Deterministic candidate ranking engine:
-   - Qualification (direct course assignment, department match)
-   - Timetable clash detection at slot
-   - Availability check (FacultyAvailability)
+   - Mandatory Hard Qualification (verified CourseAssignment or active published TimetableEntry)
+   - Timetable clash detection at slot in master timetable
+   - Availability check (FacultyAvailability preferences)
    - Existing approved substitution conflicts
-   - Workload limit bounds (current weekly hours + 1 <= max_weekly_load)
-   - Self-exclusion
-   - Deterministic ranking & CANNOT_DETERMINE fail-closed handling
-4. Reviewer workflow (approve / reject with optimistic locking & candidate validation).
+   - Accurate weekly workload limit bounds (current weekly hours + 1 <= max_weekly_load)
+   - Strict self-exclusion
+   - Deterministic ranking & transparent ELIGIBLE / NO_ELIGIBLE_CANDIDATE / CANNOT_DETERMINE semantics
+4. Reviewer workflow (approve / reject with optimistic locking, scoped capabilities, and candidate validation).
 5. Cancellation workflow.
 6. Multi-party notifications (with strict privacy barriers protecting absence reasons).
 7. Non-destructive date occurrence overlay for student & faculty schedules.
@@ -326,8 +326,55 @@ def create_substitution_request(
 
 
 # ---------------------------------------------------------------------------
-# 3. Deterministic Candidate Ranking Engine
+# 3. Reviewer Scoped Authority & Candidate Recommendation Engine
 # ---------------------------------------------------------------------------
+
+def check_reviewer_authority(
+    db: Session,
+    reviewer_user: User,
+    department_id: Optional[int] = None,
+) -> bool:
+    """
+    Validates whether the reviewer holds active capability to review/approve/reject
+    substitutions, strictly honoring department scoping.
+    - Administrators automatically satisfy administrative capabilities across all departments.
+    - Non-administrators must possess an active, non-expired SUBSTITUTION_COORDINATOR or
+      SUBSTITUTION_REVIEWER capability.
+    - If the capability is DEPARTMENT-scoped, department_id must match scope_id.
+    """
+    if reviewer_user.role == "ADMIN":
+        return True
+
+    now = utc_now()
+    caps = (
+        db.query(CoordinatorCapability)
+        .filter(
+            CoordinatorCapability.user_id == reviewer_user.id,
+            CoordinatorCapability.capability.in_(["SUBSTITUTION_COORDINATOR", "SUBSTITUTION_REVIEWER"]),
+            CoordinatorCapability.is_active == True,  # noqa: E712
+            or_(
+                CoordinatorCapability.starts_at.is_(None),
+                CoordinatorCapability.starts_at <= now,
+            ),
+            or_(
+                CoordinatorCapability.expires_at.is_(None),
+                CoordinatorCapability.expires_at > now,
+            ),
+        )
+        .all()
+    )
+    if not caps:
+        return False
+
+    for c in caps:
+        if c.scope_type == "GLOBAL":
+            return True
+        if c.scope_type == "DEPARTMENT":
+            if department_id is not None and c.scope_id == department_id:
+                return True
+
+    return False
+
 
 def find_and_rank_substitute_candidates(
     db: Session,
@@ -337,13 +384,15 @@ def find_and_rank_substitute_candidates(
     Identifies and deterministically ranks available and qualified substitute faculty
     for a given substitution request.
     Evaluates:
-      1. Qualification / Teaching Assignment (direct course assignment > department match > general)
-      2. Timetable clash at slot on this day
-      3. FacultyAvailability record
-      4. Conflicting approved substitutions on this date
-      5. Workload limit compliance (current weekly load + 1 <= max_weekly_load)
-      6. Strict self-exclusion
-    Fails closed with CANNOT_DETERMINE if essential timetable or curriculum references are missing.
+      1. Mandatory Hard Qualification (verified CourseAssignment or active published TimetableEntry)
+      2. Active User Account (non-revoked, is_active == True)
+      3. Timetable clash at slot on this day in master schedule
+      4. Explicit FacultyAvailability constraints (UNAVAILABLE excludes candidate)
+      5. Conflicting approved substitutions on this date
+      6. Weekly workload limit compliance in the target week (current + 1 <= max_weekly_load)
+      7. Strict self-exclusion
+    Fails closed with CANNOT_DETERMINE if essential timetable, curriculum, or qualification records are missing.
+    Distinguishes ELIGIBLE, NO_ELIGIBLE_CANDIDATE, and CANNOT_DETERMINE semantics.
     """
     sub = (
         db.query(FacultySubstitution)
@@ -370,6 +419,7 @@ def find_and_rank_substitute_candidates(
             substitution_date=sub.substitution_date,
             original_faculty_id=sub.original_faculty_id,
             original_faculty_name=sub.original_faculty.user.name if (sub.original_faculty and sub.original_faculty.user) else "Unknown",
+            evaluation_status="CANNOT_DETERMINE",
             cannot_determine=True,
             cannot_determine_reason="Underlying timetable entry or time slot information is missing.",
             candidates=[],
@@ -381,7 +431,62 @@ def find_and_rank_substitute_candidates(
     target_dept_id = entry.department_id
     target_date = sub.substitution_date
 
-    # Fetch all active faculty members excluding original faculty
+    if target_course_id is None:
+        return CandidateRecommendationResponse(
+            substitution_id=sub.id,
+            timetable_entry_id=entry.id,
+            substitution_date=target_date,
+            original_faculty_id=sub.original_faculty_id,
+            original_faculty_name=sub.original_faculty.user.name if (sub.original_faculty and sub.original_faculty.user) else "Unknown",
+            evaluation_status="CANNOT_DETERMINE",
+            cannot_determine=True,
+            cannot_determine_reason="Class occurrence has no associated course reference.",
+            candidates=[],
+        )
+
+    # 1. Fetch trusted evidence of qualification for target_course_id
+    # Source A: Course assignments for target_course_id
+    course_assignments = (
+        db.query(CourseAssignment.faculty_id)
+        .filter(CourseAssignment.course_id == target_course_id)
+        .all()
+    )
+    ca_fac_ids: Set[int] = {ca[0] for ca in course_assignments if ca[0] is not None}
+
+    # Source B: Active published timetable entries teaching this course
+    teaching_assignments = (
+        db.query(TimetableEntry.faculty_id)
+        .join(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
+        .filter(
+            TimetableVersion.status == "PUBLISHED",
+            TimetableEntry.course_id == target_course_id,
+            TimetableEntry.status != "CANCELLED",
+        )
+        .all()
+    )
+    te_fac_ids: Set[int] = {te[0] for te in teaching_assignments if te[0] is not None}
+    qualified_faculty_ids: Set[int] = ca_fac_ids | te_fac_ids
+
+    # Fail closed with CANNOT_DETERMINE if no trusted qualification records exist anywhere for this course
+    # Fail closed with CANNOT_DETERMINE if no trusted curriculum qualification records exist
+    if not ca_fac_ids and not (te_fac_ids - {sub.original_faculty_id}):
+        return CandidateRecommendationResponse(
+            substitution_id=sub.id,
+            timetable_entry_id=entry.id,
+            substitution_date=target_date,
+            course_code=entry.course.course_code if entry.course else None,
+            course_name=entry.course.course_name if entry.course else None,
+            slot_day=target_slot.day,
+            slot_time=f"{target_slot.start_time.strftime('%H:%M')}-{target_slot.end_time.strftime('%H:%M')}" if (target_slot.start_time and target_slot.end_time) else None,
+            original_faculty_id=sub.original_faculty_id,
+            original_faculty_name=sub.original_faculty.user.name if (sub.original_faculty and sub.original_faculty.user) else "Unknown",
+            evaluation_status="CANNOT_DETERMINE",
+            cannot_determine=True,
+            cannot_determine_reason=f"No trusted faculty qualification or course assignment records exist for {entry.course.course_code if entry.course else 'this course'} in the database.",
+            candidates=[],
+        )
+
+    # Fetch all faculty members excluding original faculty
     all_faculty = (
         db.query(Faculty)
         .options(
@@ -403,18 +508,11 @@ def find_and_rank_substitute_candidates(
             slot_time=f"{target_slot.start_time.strftime('%H:%M')}-{target_slot.end_time.strftime('%H:%M')}" if (target_slot.start_time and target_slot.end_time) else None,
             original_faculty_id=sub.original_faculty_id,
             original_faculty_name=sub.original_faculty.user.name if (sub.original_faculty and sub.original_faculty.user) else "Unknown",
+            evaluation_status="CANNOT_DETERMINE",
             cannot_determine=True,
             cannot_determine_reason="No other faculty profiles exist in the system to consider.",
             candidates=[],
         )
-
-    # 1. Pre-fetch Course Assignments for target_course_id
-    course_assignments = (
-        db.query(CourseAssignment.faculty_id)
-        .filter(CourseAssignment.course_id == target_course_id)
-        .all()
-    )
-    direct_assignment_fac_ids: Set[int] = {ca[0] for ca in course_assignments if ca[0] is not None}
 
     # 2. Pre-fetch Timetable Entries clashing on target_slot_id in published timetables
     clashing_entries = (
@@ -457,9 +555,12 @@ def find_and_rank_substitute_candidates(
         cs.original_faculty_id for cs in conflicting_subs if cs.original_faculty_id is not None
     }
 
-    # 5. Pre-calculate weekly workload for all candidates
-    # Count of published timetable entries per faculty
-    workload_query = (
+    # 5. Pre-calculate weekly workload for all candidates in the specific week of target_date
+    start_of_week = target_date - datetime.timedelta(days=target_date.weekday())
+    end_of_week = start_of_week + datetime.timedelta(days=6)
+
+    # Base recurring classes in published timetable
+    base_workload_query = (
         db.query(TimetableEntry.faculty_id)
         .join(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
         .filter(
@@ -468,10 +569,40 @@ def find_and_rank_substitute_candidates(
         )
         .all()
     )
-    workload_counts: Dict[int, int] = {}
-    for w in workload_query:
+    base_workload_counts: Dict[int, int] = {}
+    for w in base_workload_query:
         if w[0] is not None:
-            workload_counts[w[0]] = workload_counts.get(w[0], 0) + 1
+            base_workload_counts[w[0]] = base_workload_counts.get(w[0], 0) + 1
+
+    # Approved absences during that week
+    week_absences = (
+        db.query(FacultySubstitution.original_faculty_id)
+        .filter(
+            FacultySubstitution.status == "APPROVED",
+            FacultySubstitution.substitution_date >= start_of_week,
+            FacultySubstitution.substitution_date <= end_of_week,
+        )
+        .all()
+    )
+    week_absences_counts: Dict[int, int] = {}
+    for a in week_absences:
+        if a[0] is not None:
+            week_absences_counts[a[0]] = week_absences_counts.get(a[0], 0) + 1
+
+    # Approved substitution duties during that week
+    week_coverages = (
+        db.query(FacultySubstitution.substitute_faculty_id)
+        .filter(
+            FacultySubstitution.status == "APPROVED",
+            FacultySubstitution.substitution_date >= start_of_week,
+            FacultySubstitution.substitution_date <= end_of_week,
+        )
+        .all()
+    )
+    week_coverages_counts: Dict[int, int] = {}
+    for c in week_coverages:
+        if c[0] is not None:
+            week_coverages_counts[c[0]] = week_coverages_counts.get(c[0], 0) + 1
 
     candidate_recommendations: List[SubstituteCandidateRecommendation] = []
 
@@ -479,43 +610,65 @@ def find_and_rank_substitute_candidates(
         fac_name = fac.user.name if fac.user else f"Faculty #{fac.id}"
         dept_name = fac.department.name if fac.department else None
         max_load = fac.max_weekly_load or 16
-        current_load = workload_counts.get(fac.id, 0)
-        load_pct = round((current_load / max_load) * 100.0, 1) if max_load > 0 else 100.0
+
+        base_load = base_workload_counts.get(fac.id, 0)
+        absences = week_absences_counts.get(fac.id, 0)
+        coverages = week_coverages_counts.get(fac.id, 0)
+        effective_load = max(0, base_load - absences + coverages)
+        load_pct = round((effective_load / max_load) * 100.0, 1) if max_load > 0 else 100.0
 
         breakdown: List[CandidateEligibilityReason] = []
         ineligibility_reasons: List[str] = []
 
-        # A. Qualification Check
-        if fac.id in direct_assignment_fac_ids:
-            tier = "DIRECT_ASSIGNMENT"
+        # 0. Active User Account Check
+        if not fac.user or not fac.user.is_active:
+            breakdown.append(
+                CandidateEligibilityReason(
+                    factor="ACTIVE_STATUS",
+                    status="FAIL",
+                    detail="Faculty user account is inactive or revoked.",
+                )
+            )
+            ineligibility_reasons.append("Inactive or revoked user account")
+        else:
+            breakdown.append(
+                CandidateEligibilityReason(
+                    factor="ACTIVE_STATUS",
+                    status="PASS",
+                    detail="Faculty user account is active.",
+                )
+            )
+
+        # A. Hard Qualification Gate
+        # Every proposed substitute must have trusted evidence of qualification or authorized teaching assignment
+        # A faculty member from the same department must NOT automatically qualify!
+        is_qualified = fac.id in qualified_faculty_ids
+        if not is_qualified:
+            tier = "UNQUALIFIED"
+            qual_score = 0.0
+            breakdown.append(
+                CandidateEligibilityReason(
+                    factor="QUALIFICATION",
+                    status="FAIL",
+                    detail=f"Not qualified to teach {entry.course.course_code if entry.course else 'this course'}: no verified course assignment or published teaching record exists for this faculty.",
+                )
+            )
+            ineligibility_reasons.append(f"Lacks verified qualification/assignment for course {entry.course.course_code if entry.course else ''}".strip())
+        else:
+            tier = "VERIFIED_QUALIFICATION"
             qual_score = 100.0
             breakdown.append(
                 CandidateEligibilityReason(
                     factor="QUALIFICATION",
                     status="PASS",
-                    detail=f"Currently assigned to teach this course ({entry.course.course_code if entry.course else 'Course'}).",
+                    detail=f"Holds verified teaching assignment/qualification for {entry.course.course_code if entry.course else 'this course'}.",
                 )
             )
-        elif target_dept_id is not None and fac.department_id == target_dept_id:
-            tier = "DEPARTMENT_MATCH"
-            qual_score = 70.0
-            breakdown.append(
-                CandidateEligibilityReason(
-                    factor="QUALIFICATION",
-                    status="PASS",
-                    detail=f"Member of the offering department ({dept_name or 'Department'}).",
-                )
-            )
-        else:
-            tier = "GENERAL"
-            qual_score = 30.0
-            breakdown.append(
-                CandidateEligibilityReason(
-                    factor="QUALIFICATION",
-                    status="PASS",
-                    detail="General faculty member (cross-departmental).",
-                )
-            )
+
+        # Department Affinity (Ranking bonus only after qualification passes)
+        dept_bonus = 0.0
+        if is_qualified and target_dept_id is not None and fac.department_id == target_dept_id:
+            dept_bonus = 30.0
 
         # B. Timetable Clash Check
         if fac.id in clashing_faculty_ids:
@@ -571,7 +724,7 @@ def find_and_rank_substitute_candidates(
                 CandidateEligibilityReason(
                     factor="AVAILABILITY",
                     status="PASS",
-                    detail="No negative availability constraints recorded.",
+                    detail="Available (no negative availability constraints recorded).",
                 )
             )
 
@@ -584,7 +737,7 @@ def find_and_rank_substitute_candidates(
                     detail=f"Already assigned to another substitution on {target_date} during this time slot.",
                 )
             )
-            ineligibility_reasons.append("Already assigned as substitute during this slot")
+            ineligibility_reasons.append("Already assigned as substitute during this slot on this date")
         elif fac.id in unavailable_as_original_ids:
             breakdown.append(
                 CandidateEligibilityReason(
@@ -593,7 +746,7 @@ def find_and_rank_substitute_candidates(
                     detail=f"Has an approved absence/substitution for their own class on {target_date} during this time slot.",
                 )
             )
-            ineligibility_reasons.append("Has approved absence during this slot")
+            ineligibility_reasons.append("Has approved absence during this slot on this date")
         else:
             breakdown.append(
                 CandidateEligibilityReason(
@@ -604,31 +757,30 @@ def find_and_rank_substitute_candidates(
             )
 
         # E. Workload Limit Check
-        if current_load + 1 > max_load:
+        if effective_load + 1 > max_load:
             breakdown.append(
                 CandidateEligibilityReason(
                     factor="WORKLOAD_LIMIT",
                     status="FAIL",
-                    detail=f"Adding this class ({current_load + 1} hrs) would exceed maximum load of {max_load} hrs/week.",
+                    detail=f"Adding this class ({effective_load + 1} hrs) would exceed maximum load of {max_load} hrs/week.",
                 )
             )
-            ineligibility_reasons.append(f"Workload limit exceeded ({current_load + 1}/{max_load} hrs)")
+            ineligibility_reasons.append(f"Workload limit exceeded ({effective_load + 1}/{max_load} hrs)")
         else:
             breakdown.append(
                 CandidateEligibilityReason(
                     factor="WORKLOAD_LIMIT",
                     status="PASS",
-                    detail=f"Within workload limits ({current_load + 1}/{max_load} hrs).",
+                    detail=f"Within workload limits ({effective_load + 1}/{max_load} hrs).",
                 )
             )
 
         is_eligible = len(ineligibility_reasons) == 0
 
-        # Load balancing score: More available headroom gets higher score
-        headroom = max(0, max_load - current_load)
-        load_score = min(30.0, headroom * 5.0)
+        # Load balancing score: More available headroom gets higher score (up to 20 pts)
+        load_score = max(0.0, min(20.0, 20.0 * (1.0 - (effective_load / max_load)))) if max_load > 0 else 0.0
 
-        total_score = qual_score + pref_score + load_score if is_eligible else 0.0
+        total_score = qual_score + dept_bonus + pref_score + load_score if is_eligible else 0.0
 
         candidate_recommendations.append(
             SubstituteCandidateRecommendation(
@@ -639,7 +791,7 @@ def find_and_rank_substitute_candidates(
                 department_name=dept_name,
                 designation=fac.designation,
                 qualification_tier=tier,
-                current_weekly_load=current_load,
+                current_weekly_load=effective_load,
                 max_weekly_load=max_load,
                 load_percentage=load_pct,
                 score=round(total_score, 2),
@@ -667,6 +819,16 @@ def find_and_rank_substitute_candidates(
     if target_slot.start_time and target_slot.end_time:
         slot_time_str = f"{target_slot.start_time.strftime('%H:%M')} - {target_slot.end_time.strftime('%H:%M')}"
 
+    has_eligible = any(c.is_eligible for c in candidate_recommendations)
+    if has_eligible:
+        eval_status = "ELIGIBLE"
+        cannot_det = False
+        cannot_det_reason = None
+    else:
+        eval_status = "NO_ELIGIBLE_CANDIDATE"
+        cannot_det = False
+        cannot_det_reason = "Evaluation completed: no candidates satisfy all mandatory eligibility criteria (qualification, slot availability, and workload limits)."
+
     return CandidateRecommendationResponse(
         substitution_id=sub.id,
         timetable_entry_id=entry.id,
@@ -677,8 +839,9 @@ def find_and_rank_substitute_candidates(
         slot_time=slot_time_str,
         original_faculty_id=sub.original_faculty_id,
         original_faculty_name=sub.original_faculty.user.name if (sub.original_faculty and sub.original_faculty.user) else "Unknown",
-        cannot_determine=False,
-        cannot_determine_reason=None,
+        evaluation_status=eval_status,
+        cannot_determine=cannot_det,
+        cannot_determine_reason=cannot_det_reason,
         candidates=candidate_recommendations,
     )
 
@@ -696,22 +859,10 @@ def approve_substitution_request(
 ) -> FacultySubstitution:
     """
     Approves a substitution request, assigning the chosen substitute faculty member.
-    Verifies reviewer authority (ADMIN or SUBSTITUTION_COORDINATOR / SUBSTITUTION_REVIEWER),
+    Verifies reviewer authority (ADMIN or scoped SUBSTITUTION_COORDINATOR / SUBSTITUTION_REVIEWER),
     optimistic locking version, candidate eligibility, and dispatches multi-party notifications.
     Strictly preserves the canonical master timetable unchanged.
     """
-    # Check reviewer authority
-    is_admin = reviewer_user.role == "ADMIN"
-    has_cap = (
-        check_user_has_capability(db, reviewer_user, "SUBSTITUTION_COORDINATOR")
-        or check_user_has_capability(db, reviewer_user, "SUBSTITUTION_REVIEWER")
-    )
-    if not (is_admin or has_cap):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You lack the required capability (SUBSTITUTION_COORDINATOR or SUBSTITUTION_REVIEWER) to approve substitutions.",
-        )
-
     sub = (
         db.query(FacultySubstitution)
         .options(
@@ -729,6 +880,21 @@ def approve_substitution_request(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Substitution request not found.",
+        )
+
+    entry = sub.timetable_entry
+    if not entry or not entry.slot:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Associated timetable entry is missing or invalid.",
+        )
+
+    # Check reviewer authority with department scoping
+    dept_id = entry.department_id
+    if not check_reviewer_authority(db, reviewer_user, dept_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You lack the required capability (SUBSTITUTION_COORDINATOR or SUBSTITUTION_REVIEWER) for this department to approve substitutions.",
         )
 
     # Optimistic locking check
@@ -769,11 +935,35 @@ def approve_substitution_request(
             detail="Substitute faculty profile not found.",
         )
 
-    entry = sub.timetable_entry
-    if not entry or not entry.slot:
+    # Check active user account
+    if not sub_fac.user or not sub_fac.user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Associated timetable entry is missing or invalid.",
+            detail="Selected substitute faculty account is inactive or revoked.",
+        )
+
+    # HARD QUALIFICATION CHECK AT APPROVAL TIME
+    target_course_id = entry.course_id
+    has_ca = (
+        db.query(CourseAssignment)
+        .filter(CourseAssignment.course_id == target_course_id, CourseAssignment.faculty_id == substitute_faculty_id)
+        .first()
+    )
+    has_te = (
+        db.query(TimetableEntry)
+        .join(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
+        .filter(
+            TimetableVersion.status == "PUBLISHED",
+            TimetableEntry.course_id == target_course_id,
+            TimetableEntry.faculty_id == substitute_faculty_id,
+            TimetableEntry.status != "CANCELLED",
+        )
+        .first()
+    )
+    if not (has_ca or has_te):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Selected faculty ({sub_fac.user.name if sub_fac.user else 'Faculty'}) does not hold verified qualification/assignment for course {entry.course.course_code if entry.course else ''}.",
         )
 
     # Re-validate substitute candidate availability in transaction to prevent double-booking
@@ -866,21 +1056,11 @@ def reject_substitution_request(
             detail="A substantive rejection reason is required (minimum 3 characters).",
         )
 
-    is_admin = reviewer_user.role == "ADMIN"
-    has_cap = (
-        check_user_has_capability(db, reviewer_user, "SUBSTITUTION_COORDINATOR")
-        or check_user_has_capability(db, reviewer_user, "SUBSTITUTION_REVIEWER")
-    )
-    if not (is_admin or has_cap):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You lack the required capability (SUBSTITUTION_COORDINATOR or SUBSTITUTION_REVIEWER) to reject substitutions.",
-        )
-
     sub = (
         db.query(FacultySubstitution)
         .options(
             joinedload(FacultySubstitution.timetable_entry).joinedload(TimetableEntry.course),
+            joinedload(FacultySubstitution.timetable_entry).joinedload(TimetableEntry.department),
             joinedload(FacultySubstitution.original_faculty).joinedload(Faculty.user),
         )
         .filter(FacultySubstitution.id == substitution_id)
@@ -890,6 +1070,14 @@ def reject_substitution_request(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Substitution request not found.",
+        )
+
+    entry = sub.timetable_entry
+    dept_id = entry.department_id if entry else None
+    if not check_reviewer_authority(db, reviewer_user, dept_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You lack the required capability (SUBSTITUTION_COORDINATOR or SUBSTITUTION_REVIEWER) for this department to reject substitutions.",
         )
 
     if sub.version != expected_version:

@@ -417,10 +417,38 @@ export function AdminSubstitutionPage() {
                   <Sparkles size={14} className="text-primary-600" />
                   Deterministic Ranked Candidates
                 </label>
-                <span className="text-xs text-gray-500">
-                  {candidateRecs?.candidates.filter((c) => c.is_eligible).length || 0} Eligible
-                </span>
+                <div className="flex items-center gap-2">
+                  {candidateRecs?.evaluation_status && (
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                        candidateRecs.evaluation_status === 'ELIGIBLE'
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                          : candidateRecs.evaluation_status === 'NO_ELIGIBLE_CANDIDATE'
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                          : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                      }`}
+                    >
+                      {candidateRecs.evaluation_status.replace(/_/g, ' ')}
+                    </span>
+                  )}
+                  <span className="text-xs text-gray-500">
+                    {candidateRecs?.candidates.filter((c) => c.is_eligible).length || 0} Eligible
+                  </span>
+                </div>
               </div>
+
+              {candidateRecs?.evaluation_status === 'CANNOT_DETERMINE' && (
+                <div className="mb-3 p-2.5 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs rounded-lg border border-amber-200 dark:border-amber-800">
+                  <span className="font-semibold">Cannot Determine Substitute:</span>{' '}
+                  {candidateRecs.cannot_determine_reason || 'Missing or ambiguous qualification data.'}
+                </div>
+              )}
+
+              {candidateRecs?.evaluation_status === 'NO_ELIGIBLE_CANDIDATE' && (
+                <div className="mb-3 p-2.5 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs rounded-lg border border-amber-200 dark:border-amber-800">
+                  <span className="font-semibold">No Eligible Substitute:</span> All evaluated faculty members have active timetable clashes, lack verified course qualifications, or exceed maximum teaching loads.
+                </div>
+              )}
 
               {candidatesLoading ? (
                 <div className="py-8 text-center text-xs text-gray-500">

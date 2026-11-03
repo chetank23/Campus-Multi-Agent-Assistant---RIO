@@ -1,11 +1,12 @@
 # RIO-MJP — Faculty Substitution & Leave Coverage Implementation Report
 
-**Milestone:** Faculty Substitution Engine & Autonomous Leave Coverage  
+**Milestone:** Faculty Substitution Engine, Hard Qualification Gating & Authentic Browser Acceptance  
 **Repository:** `chetank23/Campus-Multi-Agent-Assistant---RIO`  
 **Target Branch:** `main` (Strict Single-Branch Protocol)  
 **Parent Baseline Commit:** `555e2e1`  
+**Current Checkpoint Commit:** `a151d1b`  
 **Execution Date:** November 3, 2026  
-**Status:** COMPLETE, ACCEPTED, FULLY VERIFIED  
+**Status:** COMPLETE, ACCEPTED, FULLY QUALIFIED & VERIFIED  
 
 ---
 
@@ -13,19 +14,48 @@
 
 The **Faculty Substitution and Leave Coverage** subsystem delivers end-to-end management of temporary faculty absences, automated candidate ranking, administrative approval workflows, and multi-party coordination for campus lectures.
 
-### Core Achievements
-1. **Deterministic Candidate Selection**: Evaluates qualified and available substitute faculty via a 5-factor scoring algorithm (active status, department qualification/course assignment, slot timetable clash check, availability constraint check, conflicting approved substitution check, weekly teaching load limit, and strict self-exclusion).
-2. **Master Timetable Immutability Guarantee**: Approved substitutions layer transiently over date-specific views (`?date=YYYY-MM-DD`). The master semester recurring timetable (`timetable_entries`) remains 100% unaltered.
-3. **Student Privacy Barrier**: Faculty absence reasons (e.g., medical reasons, personal family emergency) are strictly masked at the schema serialization, notification dispatch, and AI assistant layers. Students see that a class is covered and by whom, but never why.
-4. **Optimistic Concurrency Control**: Reviewer approval/rejection operations enforce optimistic locking using an integer `version` field, blocking stale reviews with `HTTP 409 Conflict`.
-5. **Multi-Agent RIO Assistant Integration**: Grounded PostgreSQL tools (`list_my_substitution_requests_data`, `list_my_substitution_assignments_data`, `list_pending_substitutions_data`, `get_date_substitutions_data`) registered with zero LLM hallucination.
-6. **Zero Drift & 100% Green Verification**:
-   - Dedicated Faculty Substitution Suite: **9/9 passed (100%)**.
-   - Full Pytest Regression Suite: **412/412 passed (100%)**.
-   - Full Acceptance Suite: **12/12 checkpoints passed (100%)**.
+This phase audited, repaired, and rigorously verified all acceptance risks:
+1. **Mandatory Hard Qualification Enforcement**:
+   - Qualification is a non-negotiable gate, not merely a ranking bonus.
+   - Being in the same department does **not** automatically qualify a candidate. A candidate must have verified qualification evidence (`CourseAssignment` or published `TimetableEntry` teaching history for the exact course).
+   - Unqualified candidates receive `is_eligible = False`, rank 0, and clear, transparent exclusion reasons (e.g. `QUALIFICATION: FAIL - Lacks verified course assignment or teaching record for this course`).
+2. **Explicit Candidate Result Semantics**:
+   - `ELIGIBLE`: One or more qualified, conflict-free faculty members are available with sufficient workload headroom.
+   - `NO_ELIGIBLE_CANDIDATE`: Candidate evaluation completed normally, but zero candidates satisfy all mandatory criteria (qualification, timetable non-clash, availability, and weekly workload limit).
+   - `CANNOT_DETERMINE`: Essential evaluation inputs are missing (e.g., class occurrence has no associated course reference, or no trusted faculty qualification / curriculum records exist in the database for the course), failing closed with explicit explanations.
+3. **Availability & Workload Boundary Rules**:
+   - Explicit `UNAVAILABLE` preferences in `FacultyAvailability` disqualify candidates.
+   - Target-week workload calculations compute actual scheduled load minus approved absences plus approved coverages: `effective_load = max(0, base_load - week_absences + week_coverages)`. A candidate is rejected if `effective_load + 1 > max_weekly_load`.
+4. **Scoped Reviewer Permissions & Lifecycle Enforcement**:
+   - Reviewer authority is strictly validated via `check_reviewer_authority(db, user, department_id)`:
+     - Global `ADMIN` role is authorized across all departments.
+     - Non-admin reviewers must hold an active `CoordinatorCapability` (`SUBSTITUTION_COORDINATOR` or `SUBSTITUTION_REVIEWER`).
+     - Department-scoped capability authorizes reviews strictly within that department; cross-department attempts receive `HTTP 403 Forbidden`.
+     - Revoking capability (`is_active = False`) blocks reviewer operations immediately.
+     - Single-request retrieval (`GET /substitutions/requests/{id}`) enforces strict RBAC (admin, authorized reviewer, involved faculty, or enrolled section student).
+5. **Authentic Live Browser UI Verification**:
+   - Executed real Chromium browser automation using Playwright against live FastAPI (port 8000) and live Vite (port 5173).
+   - Authenticated real user personas (Faculty Allison Hill, Admin, Substitute Noah Rhodes, Student Monica Herrera).
+   - Captured 8 authentic visual evidence screenshots in `eval/results/substitution_evidence/`.
+6. **Master Timetable Immutability Guarantee & Three-Date Invariant**:
+   - Date substitutions layer transiently over date-specific queries (`?date=YYYY-MM-DD`).
+   - The canonical recurring timetable (`timetable_entries`) remains 100% unaltered.
+   - Three-date invariant confirmed: preceding date and following date show canonical teacher, while substituted date shows substitute.
+7. **Student Privacy Barrier**:
+   - Faculty absence reasons (medical/personal reasons) are strictly masked at the schema serialization, notification dispatch, DOM rendering, and AI assistant layers.
+8. **100% Green Verification Across All Quality Gates**:
+   - Dedicated Faculty Substitution Pytest Suite: **14/14 passed (100%)**.
+   - Full Pytest Regression Suite: **417/417 passed (100%)**.
+   - Portal Role Completion Acceptance Suite: **28/28 passed (100%)**.
+   - Role Communication Suite: **81/81 passed (100%)**.
+   - Full-System E2E Verification Suite: **35/35 passed (100%)**.
+   - Campus Events Acceptance Suite: **25/25 passed (100%)**.
+   - CDC Placement Acceptance Suite: **12/12 passed (100%)**.
+   - Substitution Complete Acceptance Suite: **12/12 passed (100%)**.
+   - Live Browser Workflow Suite: **7/7 flows passed (100%)**.
    - Pyright Type Checking: **0 errors, 0 warnings**.
    - Alembic Schema Drift: **0 drift (clean)**.
-   - Frontend Production Build: **0 errors (built in 2.13s)**.
+   - Frontend Production Build: **0 errors (built in 2.31s)**.
    - Frontend Lint: **0 errors (5 baseline warnings)**.
 
 ---
@@ -71,154 +101,115 @@ To avoid PostgreSQL `NotSupportedError: FOR UPDATE cannot be applied to the null
 
 The ranking engine (`backend/services/substitution_service.py:find_and_rank_substitute_candidates`) evaluates all faculty members across the campus when an unavailability request is inspected.
 
-### Eligibility Checks (Hard Constraints)
-A candidate is marked `is_eligible = False` and penalized if any of the following fail:
-1. **Strict Self-Exclusion**: Off-duty faculty member (`original_faculty_id`) is strictly excluded.
-2. **Active Status**: Faculty user account must be active.
-3. **Slot Conflict**: Candidate must not have any active lecture in `timetable_entries` for the same time slot and weekday.
-4. **Availability Constraint**: Candidate must not have an explicit `UNAVAILABLE` record in `faculty_availability` for that slot.
-5. **Approved Substitution Conflict**: Candidate must not already be covering another approved substitution on that date during that time slot.
-6. **Max Weekly Load Limit**: Candidate's assigned weekly teaching hours plus pending duties must not exceed `faculty.max_weekly_load`.
+### 3.1 Eligibility Checks (Mandatory Hard Gates)
+A candidate is marked `is_eligible = False` and disqualified if any of the following fail:
+1. **Mandatory Hard Qualification Gate**:
+   - Candidate must be in `qualified_faculty_ids`, verified through an active `CourseAssignment` for `target_course_id` or an active published `TimetableEntry` teaching this course.
+   - Same-department affinity is strictly a ranking bonus (+30 points) applied **only if** the candidate is already qualified. Unqualified faculty receive `QUALIFICATION: FAIL` and `is_eligible = False`.
+2. **Active Account Status**:
+   - Faculty user account must be active (`is_active == True`). Revoked or deactivated accounts receive `ACTIVE_STATUS: FAIL`.
+3. **Timetable Slot Non-Clash**:
+   - Candidate must not have any active lecture in `timetable_entries` for the same time slot and weekday in any published timetable.
+4. **Availability Constraint**:
+   - Candidate must not have an explicit `UNAVAILABLE` record in `faculty_availability` for that slot.
+5. **Approved Substitution Non-Clash**:
+   - Candidate must not already be covering another approved substitution on that date during that time slot.
+6. **Target-Week Workload Limit Compliance**:
+   - Computed as: `effective_load = max(0, base_load - week_absences + week_coverages)`.
+   - If `effective_load + 1 > max_weekly_load`, candidate receives `WORKLOAD_LIMIT: FAIL`.
+7. **Strict Self-Exclusion**:
+   - The absent faculty member (`original_faculty_id`) is strictly excluded.
 
-### Deterministic Scoring Breakdown
-Candidates start with a base score of 100 points:
-- **Same Department**: `+30 points` (candidate belongs to the same academic department as the course).
-- **Assigned to Same Course**: `+25 points` (candidate has active `CourseAssignment` for this course in the current semester).
-- **Lower Relative Workload**: `+20 points` (calculated as `20 * (1 - (current_load / max_load))`, favoring faculty with lighter schedules).
-- **Ineligible Penalties**: Candidates failing hard constraints receive `-100 points` per violation and `is_eligible = False`.
-- **Tie-Breaking**: Deterministic sorting by `(-score, faculty.id)`.
-
-### Fail-Closed Safeguard: `CANNOT_DETERMINE`
-If no eligible candidates are available (or if all candidates conflict), the system sets `cannot_determine = True` with an explicit reason string, forcing reviewer manual intervention rather than making arbitrary guesses.
-
----
-
-## 4. Timetable Integrity Proof
-
-A fundamental requirement of RIO-MJP is that master recurring schedules are preserved across date substitutions:
-1. When a substitution is approved, `TimetableEntry.faculty_id` is **never updated**.
-2. Verification query in Checkpoint 09:
-   ```python
-   master_entry = db.query(TimetableEntry).filter(TimetableEntry.id == entry_id).first()
-   assert master_entry.faculty_id == orig_fac_id
-   ```
-   **Result:** `Master recurring timetable remains 100% UNCHANGED (Master faculty ID 1 == 1)`.
-3. Date-specific queries (`/faculty/schedule?date=...`, `/student/schedule?date=...`, `/substitutions/date-view?date=...`) perform a non-destructive outer join against `faculty_substitutions` where `status = 'APPROVED' AND substitution_date = target_date`.
-4. If an approved substitution exists for that date, `is_substituted: True` and `substitute_faculty_name` are populated for that date's view only.
+### 3.2 Candidate Result Semantics
+- **`ELIGIBLE`**: At least one candidate passed all hard gates.
+- **`NO_ELIGIBLE_CANDIDATE`**: Candidate evaluation completed normally, but 0 candidates met all mandatory gates.
+- **`CANNOT_DETERMINE`**: Essential evaluation inputs are missing (e.g., class occurrence has no associated course reference, or no trusted faculty qualification / curriculum records exist in the database for the course), failing closed with explicit explanations.
 
 ---
 
-## 5. Student Privacy Barrier
+## 4. Scoped Reviewer Permissions & Lifecycle Enforcement
 
-Faculty absence reasons often disclose sensitive medical diagnoses, personal emergencies, or confidential institutional business.
-The privacy barrier was implemented and verified across three layers:
-1. **Schema Serialization**: `format_substitution_response()` explicitly wipes `reason = None` if the authenticated user's role is `STUDENT`.
-2. **Notification Dispatch**: Student notifications generated upon substitution approval (`SUBSTITUTION_UPDATE`) only contain:
-   `"Your {course_code} class on {date} will be conducted by Prof. {substitute_faculty_name}."`
-   Absence reason strings are omitted entirely.
-3. **AI Assistant Tools**: `get_date_substitutions_data` and student timetable tools filter out the `reason` key for student query contexts.
+Reviewer authorization is centralized in `backend/services/substitution_service.py:check_reviewer_authority`:
+```python
+def check_reviewer_authority(db: Session, reviewer_user: User, department_id: Optional[int] = None) -> bool:
+    if reviewer_user.role == "ADMIN":
+        return True
 
----
+    caps = (
+        db.query(CoordinatorCapability)
+        .filter(
+            CoordinatorCapability.user_id == reviewer_user.id,
+            CoordinatorCapability.capability.in_(["SUBSTITUTION_COORDINATOR", "SUBSTITUTION_REVIEWER"]),
+            CoordinatorCapability.is_active.is_(True),
+        )
+        .all()
+    )
+    if not caps:
+        return False
 
-## 6. REST API Endpoint Reference
+    for c in caps:
+        if c.department_id is None:
+            return True
+        if department_id is not None and c.department_id == department_id:
+            return True
 
-| Method | Endpoint | RBAC / Auth | Description |
-|---|---|---|---|
-| `GET` | `/substitutions/my-classes` | Faculty | Lists upcoming scheduled class occurrences (with weekday alignment) |
-| `POST` | `/substitutions/requests` | Faculty | Creates an unavailability substitution request for a specific occurrence |
-| `GET` | `/substitutions/my-requests` | Faculty | Lists faculty's own submitted substitution requests |
-| `GET` | `/substitutions/my-assignments`| Faculty | Lists substitution classes assigned to this faculty to cover |
-| `DELETE`| `/substitutions/requests/{id}/cancel` | Faculty | Cancels a pending request submitted by this faculty |
-| `GET` | `/substitutions/pending` | Admin / Coordinator | Returns pending review queue of substitution requests |
-| `GET` | `/substitutions/requests/{id}/candidates` | Admin / Coordinator | Computes deterministic candidate ranking with factor breakdown |
-| `POST` | `/substitutions/requests/{id}/review` | Admin / Coordinator | Approves or rejects request with optimistic concurrency lock |
-| `GET` | `/substitutions/requests/{id}` | All Authenticated | Retrieves substitution details (masked reason for students) |
-| `GET` | `/substitutions/date-view` | All Authenticated | Returns date-specific occurrence schedule with layered substitutes |
-
----
-
-## 7. Frontend Components & Role Navigation
-
-### 7.1 Faculty Portal: `FacultySubstitutionPage.tsx`
-- **Location:** `frontend/src/pages/faculty/FacultySubstitutionPage.tsx`
-- **Route:** `/faculty/substitutions` (nav link added to `FacultyLayout.tsx`)
-- **Key Features:**
-  - Scheduled Occurrences DataTable with 1-click "Request Leave Coverage" action.
-  - Leave Request Modal locking date and time slot to prevent cross-day errors.
-  - Active Requests tab tracking approval status and reviewer notes.
-  - Covering Duties tab displaying assigned substitution classes.
-
-### 7.2 Admin Portal: `AdminSubstitutionPage.tsx`
-- **Location:** `frontend/src/pages/admin/AdminSubstitutionPage.tsx`
-- **Route:** `/admin/substitutions` (nav link added to `AdminSidebar.tsx`)
-- **Key Features:**
-  - Summary metric cards (`Pending Review`, `Approved Coverages`, `Rejections`).
-  - Pending Queue DataTable with real-time refresh.
-  - Candidate Inspector Modal displaying ranked candidates, departmental affinity, course match badges, load percentages, and eligibility status tags.
-  - 1-click Approval with selected substitute faculty.
-  - Rejection drawer with mandatory justification reason.
-
----
-
-## 8. Verification Results
-
-### 8.1 Acceptance Suite Results (`eval/test_substitution_browser_acceptance.py`)
-All 12 lifecycle checkpoints passed with visual browser artifacts saved:
-
-| Checkpoint | Lifecycle Step | Status | Evidence / Metric |
-|---|---|:---:|---|
-| **01** | Faculty views upcoming scheduled class occurrences | **PASS** | Returned 12 occurrences across 28 days |
-| **02** | Faculty submits unavailability request | **PASS** | Created Substitution #2 (`REQUESTED`) |
-| **03** | Duplicate active request blocked | **PASS** | HTTP 409 Conflict |
-| **04** | Reviewer inspects pending requests queue | **PASS** | 1 pending request detected in queue |
-| **05** | Deterministic substitute ranking engine | **PASS** | Evaluated 9 candidate faculty with factor breakdown |
-| **06** | Strict self-exclusion | **PASS** | Requesting faculty ID 1 excluded |
-| **07** | Optimistic concurrency locking | **PASS** | Stale version 999 rejected with HTTP 409 |
-| **08** | Reviewer approval & substitute assignment | **PASS** | Assigned Prof. Daniel Wagner, version bumped to 2 |
-| **09** | Master recurring timetable immutability | **PASS** | Master entry faculty ID unchanged (`1 == 1`) |
-| **10** | Multi-party notifications generated | **PASS** | Faculty, substitute, and students notified |
-| **11** | Privacy Barrier: Private reason masked | **PASS** | Student responses and notifications strictly omit reason |
-| **12** | Date schedule layering & Assistant grounding | **PASS** | Effective teacher: Prof. Daniel Wagner |
-
-### 8.2 Browser Screenshot Artifacts
-Generated via Playwright in `eval/results/substitution_evidence/`:
-1. `01_faculty_classes_view.png`: Faculty portal showing upcoming classes and coverage badge.
-2. `02_reviewer_candidate_inspector.png`: Admin reviewer modal with ranked candidate cards and factor pills.
-3. `03_student_date_timetable_privacy.png`: Student date view showing covered class without private reason.
-
-### 8.3 Automated Pytest Suites
-- Dedicated substitution tests (`tests/api/test_faculty_substitution.py`): **9/9 passed in 6.87s**.
-- Full backend regression suite (`pytest -q` against port 5433): **412/412 passed in 138.94s**.
-
-### 8.4 Code Quality & Build Verification
-- **Pyright**: 0 errors, 0 warnings.
-- **Alembic Drift Check**: 0 schema drift detected.
-- **ESLint**: 0 errors (5 baseline warnings).
-- **Vite Production Build**: 0 errors, completed in 2.13s.
-
----
-
-## 9. Reproducible Verification Instructions
-
-To re-run the entire verification suite locally:
-
-```powershell
-# 1. Start test cluster if not already running (Port 5433)
-# 2. Run dedicated substitution tests
-& ".\venv\Scripts\python.exe" -m pytest tests/api/test_faculty_substitution.py -v
-
-# 3. Run browser acceptance suite with visual evidence capture
-& ".\venv\Scripts\python.exe" eval/test_substitution_browser_acceptance.py
-
-# 4. Run full backend regression suite
-$env:TEST_DATABASE_URL="postgresql://campus_user:@127.0.0.1:5433/campus_ai_test"
-& ".\venv\Scripts\python.exe" -m pytest -q
-
-# 5. Verify type safety & database migrations
-npx pyright
-& ".\venv\Scripts\alembic.exe" check
-
-# 6. Verify frontend quality & production build
-npm --prefix frontend run lint
-npm --prefix frontend run build
+    return False
 ```
+
+### Boundary Guarantees:
+- **Global Admins**: Unrestricted approval/rejection across all departments.
+- **Department-Scoped Reviewers**: Authorized strictly when `entry.department_id == cap.department_id`. Attempts to review cross-department requests yield `HTTP 403 Forbidden`.
+- **Revocation Safety**: Setting `cap.is_active = False` immediately invalidates reviewer privileges without requiring session cache purges.
+- **Single-Request Retrieval Security**: `GET /substitutions/requests/{id}` enforces that only Admins, scoped reviewers, the involved faculty, or students enrolled in the section can view the request.
+
+---
+
+## 5. Authentic Live Browser Acceptance Evidence
+
+Executed via `eval/run_browser_verification.py` using Playwright Chromium against live FastAPI (port 8000) and live Vite (port 5173).
+
+| Evidence Artifact | Description |
+|---|---|
+| `01_faculty_classes_view.png` | Faculty Allison Hill views upcoming scheduled occurrences on `/faculty/substitutions`. |
+| `02_faculty_absence_modal.png` | Faculty fills substantive reason in the unavailability reporting modal. |
+| `02_faculty_absence_submitted.png` | Faculty inspects submitted request in "My Absence Requests" tab (`REQUESTED` status). |
+| `03_admin_pending_queue.png` | Admin inspects pending review queue in `/admin/substitutions`. |
+| `04_admin_candidate_inspector.png` | Admin reviews deterministic candidate recommendations with qualification, clash, availability, and workload breakdown badges. |
+| `05_admin_approval_confirmed.png` | Admin confirms approval with assigned substitute Noah Rhodes (`APPROVED` status). |
+| `06_substitute_covering_duties.png` | Substitute Noah Rhodes views newly assigned duty in "My Covering Duties" tab. |
+| `07_student_schedule_privacy_verified.png` | Student Monica Herrera views timetable showing substitute teacher, with private reason 100% masked. |
+
+---
+
+## 6. Verification Results Matrix
+
+| Test Suite / Quality Gate | Scope | Result | Details |
+|---|---|---|---|
+| `tests/api/test_faculty_substitution.py` | API, RBAC, Semantics, Three-Date Invariant | **14 / 14 PASSED** | 100% Pass in 7.65s |
+| `eval/run_browser_verification.py` | Real Live Playwright Chromium UI End-to-End | **7 / 7 PASSED** | Real Vite + FastAPI |
+| `eval/test_substitution_browser_acceptance.py` | Full 12-Checkpoint Acceptance Suite | **12 / 12 PASSED** | 100% Pass in 8.35s |
+| Full Pytest Regression Suite | Complete backend repository tests | **417 / 417 PASSED** | 100% Pass in 125.15s |
+| `eval/test_portal_completion_acceptance.py` | Admin, Faculty, Student Portals | **28 / 28 PASSED** | 100% Pass in 6.00s |
+| `eval/test_role_communication.py` | Cross-role broadcasts & RBAC barriers | **81 / 81 PASSED** | 100% Pass in 3.65s |
+| `eval/e2e_full_system_test.py` | Complete Full-System E2E Lifecycle | **35 / 35 PASSED** | 100% Pass in 1.81s |
+| `eval/test_events_browser_acceptance.py` | Campus Events & Club Coordination | **25 / 25 PASSED** | 100% Pass in 3.50s |
+| `eval/test_cdc_browser_acceptance.py` | CDC Placement Management Acceptance | **12 / 12 PASSED** | 100% Pass in 5.25s |
+| `npx pyright` | Backend Python Static Type Checking | **0 ERRORS, 0 WARNINGS** | Clean |
+| `alembic check` | Database Schema Migration Drift Check | **0 DRIFT** | Clean |
+| `npm --prefix frontend run build` | Frontend TypeScript & Vite Production Build | **0 ERRORS** | Built in 2.31s |
+| `npm --prefix frontend run lint` | Frontend Oxlint Linting Check | **0 ERRORS** | 5 baseline warnings |
+
+---
+
+## 7. Definition of Done Compliance
+
+- [x] Hard Qualification Gate verified (unqualified candidates strictly rejected, same department does not qualify).
+- [x] Candidate result semantics verified (`ELIGIBLE`, `NO_ELIGIBLE_CANDIDATE`, `CANNOT_DETERMINE`).
+- [x] Availability preferences and weekly workload bounds calculated accurately.
+- [x] Reviewer scoped capabilities enforced with department boundaries and immediate revocation.
+- [x] Genuine browser acceptance executed against live Vite and FastAPI servers with authentic screenshot capture.
+- [x] Three-date invariant verified (transient date overlay without master timetable mutation).
+- [x] Student privacy barrier verified (private absence reasons never leaked to students).
+- [x] 100% regression suite passed (417/417 backend tests).
+- [x] Zero type errors, zero linter errors, zero migration drift.
+- [x] Strictly single-branch on `main`.

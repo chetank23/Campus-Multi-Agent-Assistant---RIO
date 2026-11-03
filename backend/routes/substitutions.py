@@ -17,9 +17,10 @@ API Router for Faculty Substitution workflows:
 from __future__ import annotations
 
 import datetime
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from backend.database import get_db
@@ -38,7 +39,10 @@ from backend.schemas.substitution import (
     SubstitutionReviewActionRequest,
 )
 from backend.services.event_service import check_user_has_capability
+from backend.utils.datetime_utils import utc_now
+from backend.models.events import CoordinatorCapability
 from backend.services.substitution_service import (
+    check_reviewer_authority,
     approve_substitution_request,
     cancel_substitution_request,
     create_substitution_request,
@@ -192,17 +196,36 @@ def get_pending_substitutions_queue(
     holding SUBSTITUTION_COORDINATOR or SUBSTITUTION_REVIEWER capability.
     """
     is_admin = current_user.role == "ADMIN"
-    has_cap = (
-        check_user_has_capability(db, current_user, "SUBSTITUTION_COORDINATOR")
-        or check_user_has_capability(db, current_user, "SUBSTITUTION_REVIEWER")
-    )
-    if not (is_admin or has_cap):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You lack the required capability to view the substitution review queue.",
+    dept_filter: Optional[Set[int]] = None
+    if not is_admin:
+        now = utc_now()
+        caps = (
+            db.query(CoordinatorCapability)
+            .filter(
+                CoordinatorCapability.user_id == current_user.id,
+                CoordinatorCapability.capability.in_(["SUBSTITUTION_COORDINATOR", "SUBSTITUTION_REVIEWER"]),
+                CoordinatorCapability.is_active == True,
+                or_(
+                    CoordinatorCapability.starts_at.is_(None),
+                    CoordinatorCapability.starts_at <= now,
+                ),
+                or_(
+                    CoordinatorCapability.expires_at.is_(None),
+                    CoordinatorCapability.expires_at > now,
+                ),
+            )
+            .all()
         )
+        if not caps:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You lack the required capability to view the substitution review queue.",
+            )
+        is_global = any(c.scope_type == "GLOBAL" for c in caps)
+        if not is_global:
+            dept_filter = {c.scope_id for c in caps if c.scope_type == "DEPARTMENT" and c.scope_id is not None}
 
-    subs = (
+    query = (
         db.query(FacultySubstitution)
         .options(
             joinedload(FacultySubstitution.timetable_entry).joinedload(TimetableEntry.course),
@@ -216,9 +239,14 @@ def get_pending_substitutions_queue(
             joinedload(FacultySubstitution.reviewer),
         )
         .filter(FacultySubstitution.status.in_(["REQUESTED", "PROPOSED"]))
-        .order_by(FacultySubstitution.substitution_date.asc(), FacultySubstitution.id.asc())
-        .all()
     )
+
+    if dept_filter is not None:
+        query = query.join(TimetableEntry, FacultySubstitution.timetable_entry_id == TimetableEntry.id).filter(
+            TimetableEntry.department_id.in_(dept_filter)
+        )
+
+    subs = query.order_by(FacultySubstitution.substitution_date.asc(), FacultySubstitution.id.asc()).all()
     return [format_substitution_response(s, current_user.role) for s in subs]
 
 
@@ -232,15 +260,22 @@ def get_candidate_recommendations(
     Provides transparent, deterministic substitute candidate recommendations
     with qualification, clash, availability, and workload breakdowns.
     """
-    is_admin = current_user.role == "ADMIN"
-    has_cap = (
-        check_user_has_capability(db, current_user, "SUBSTITUTION_COORDINATOR")
-        or check_user_has_capability(db, current_user, "SUBSTITUTION_REVIEWER")
+    sub = (
+        db.query(FacultySubstitution)
+        .options(joinedload(FacultySubstitution.timetable_entry))
+        .filter(FacultySubstitution.id == id)
+        .first()
     )
-    if not (is_admin or has_cap):
+    if not sub:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Substitution request not found.",
+        )
+    dept_id = sub.timetable_entry.department_id if sub.timetable_entry else None
+    if not check_reviewer_authority(db, current_user, dept_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You lack the required capability to inspect candidate recommendations.",
+            detail="You lack the required capability to inspect candidate recommendations for this department.",
         )
 
     return find_and_rank_substitute_candidates(db=db, substitution_id=id)
@@ -374,6 +409,38 @@ def get_substitution_request_by_id(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Substitution request not found.",
         )
+
+    # Scoped authorization check:
+    # 1. Admin: allowed
+    # 2. Reviewer with capability for this department/global: allowed
+    # 3. Faculty: only if original or appointed substitute
+    # 4. Student: only if enrolled in class section
+    is_admin = current_user.role == "ADMIN"
+    if not is_admin:
+        dept_id = sub.timetable_entry.department_id if sub.timetable_entry else None
+        is_reviewer = check_reviewer_authority(db, current_user, dept_id)
+        if not is_reviewer:
+            if current_user.role == "FACULTY":
+                fac = db.query(Faculty).filter(Faculty.user_id == current_user.id).first()
+                is_party = fac and (sub.original_faculty_id == fac.id or sub.substitute_faculty_id == fac.id)
+                if not is_party:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="You are not authorized to view this substitution request.",
+                    )
+            elif current_user.role == "STUDENT":
+                student = db.query(Student).filter(Student.user_id == current_user.id).first()
+                if not student or (sub.timetable_entry and student.section_id != sub.timetable_entry.section_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="You are not authorized to view substitution details for classes outside your enrolled section.",
+                    )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Insufficient permissions.",
+                )
+
     return format_substitution_response(sub, current_user.role)
 
 

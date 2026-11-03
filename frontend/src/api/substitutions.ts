@@ -93,6 +93,7 @@ export interface CandidateRecommendationResponse {
   slot_time?: string | null;
   original_faculty_id: number;
   original_faculty_name: string;
+  evaluation_status?: 'ELIGIBLE' | 'NO_ELIGIBLE_CANDIDATE' | 'CANNOT_DETERMINE' | string;
   cannot_determine: boolean;
   cannot_determine_reason?: string | null;
   candidates: SubstituteCandidate[];

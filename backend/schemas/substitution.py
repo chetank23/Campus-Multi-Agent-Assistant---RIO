@@ -81,6 +81,7 @@ class CandidateRecommendationResponse(BaseModel):
     slot_time: Optional[str] = None
     original_faculty_id: int
     original_faculty_name: str
+    evaluation_status: str = Field(default="ELIGIBLE", pattern="^(ELIGIBLE|NO_ELIGIBLE_CANDIDATE|CANNOT_DETERMINE)$")
     cannot_determine: bool = False
     cannot_determine_reason: Optional[str] = None
     candidates: List[SubstituteCandidateRecommendation] = []
