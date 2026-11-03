@@ -32,7 +32,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(
         String(30),
         CheckConstraint(
-            "role IN ('STUDENT','FACULTY','ADMIN')",
+            "role IN ('STUDENT','FACULTY','ADMIN','SUPER_ADMIN')",
             name="ck_users_role",
         ),
         nullable=False,

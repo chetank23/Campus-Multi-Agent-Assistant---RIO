@@ -9,7 +9,7 @@ class UserAdminResponse(BaseModel):
     id: int
     name: str
     email: EmailStr
-    role: Literal["ADMIN", "FACULTY", "STUDENT"]
+    role: Literal["ADMIN", "FACULTY", "STUDENT", "SUPER_ADMIN"]
     department_id: Optional[int] = None
     department_name: Optional[str] = None
     is_active: bool
@@ -22,7 +22,7 @@ class UserAdminCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=150)
     email: EmailStr
     password: str = Field(..., min_length=6, max_length=128)
-    role: Literal["ADMIN", "FACULTY", "STUDENT"]
+    role: Literal["ADMIN", "FACULTY", "STUDENT", "SUPER_ADMIN"]
     department_id: Optional[int] = None
 
 

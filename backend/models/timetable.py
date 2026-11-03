@@ -73,6 +73,9 @@ class TimetableVersion(Base):
     )
     published_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
     reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    curriculum_version_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("curriculum_versions.id", name="fk_tv_curriculum_version_id"), nullable=True
+    )
 
     academic_year: Mapped[Optional["AcademicYear"]] = relationship(
         "AcademicYear", back_populates="timetable_versions"

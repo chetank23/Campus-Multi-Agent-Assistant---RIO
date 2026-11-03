@@ -66,6 +66,41 @@ def validate_and_load_input(db: Session, scope: GenerationScope) -> OptimizerInp
     loaded_batch_ids = [b.id for b in batches_db]
 
     # 4. Course Assignments & Faculty
+    # If curriculum_version_id is provided, validate snapshot and ensure course assignments are synced
+    if scope.curriculum_version_id:
+        from backend.models.curriculum import CurriculumVersion, SectionCourseOffering
+        curr_ver = db.query(CurriculumVersion).filter(CurriculumVersion.id == scope.curriculum_version_id).first()
+        if not curr_ver:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Curriculum version #{scope.curriculum_version_id} not found.")
+
+        offerings = db.query(SectionCourseOffering).filter(
+            SectionCourseOffering.curriculum_version_id == curr_ver.id,
+            SectionCourseOffering.academic_year_id == scope.academic_year_id,
+            SectionCourseOffering.semester_id == scope.semester_id,
+            SectionCourseOffering.section_id.in_(loaded_section_ids),
+        ).all()
+
+        for off in offerings:
+            sm = off.subject_mapping
+            if sm and sm.course_id:
+                for fa in off.faculty_allocations:
+                    if fa.is_active and fa.faculty_id:
+                        ca = db.query(CourseAssignment).filter(
+                            CourseAssignment.course_id == sm.course_id,
+                            CourseAssignment.faculty_id == fa.faculty_id,
+                            CourseAssignment.section_id == off.section_id,
+                            CourseAssignment.batch_id == off.batch_id,
+                        ).first()
+                        if not ca:
+                            ca = CourseAssignment(
+                                course_id=sm.course_id,
+                                faculty_id=fa.faculty_id,
+                                section_id=off.section_id,
+                                batch_id=off.batch_id,
+                            )
+                            db.add(ca)
+        db.flush()
+
     # We only care about courses assigned to the loaded sections and batches
     assignments_db = db.query(CourseAssignment).filter(
         (CourseAssignment.section_id.in_(loaded_section_ids)) | (CourseAssignment.batch_id.in_(loaded_batch_ids))

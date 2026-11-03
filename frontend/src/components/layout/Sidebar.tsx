@@ -232,6 +232,8 @@ function getNavGroups(role: UserRole): NavGroup[] {
           ],
         },
       ];
+    case 'SUPER_ADMIN':
+      return [];
     case 'STUDENT':
       return [
         {

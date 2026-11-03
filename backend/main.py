@@ -15,6 +15,7 @@ from backend.routes import (
     chat,
     change_requests,
     clubs,
+    curriculum,
     course,
     course_assignment,
     data_import,
@@ -113,3 +114,6 @@ app.include_router(disruptions.router)
 app.include_router(users.router)
 app.include_router(analytics.router)
 app.include_router(data_import.router)
+app.include_router(curriculum.router)
+app.include_router(curriculum.super_admin_router)
+app.include_router(curriculum.admin_curriculum_router)

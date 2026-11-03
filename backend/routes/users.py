@@ -31,7 +31,7 @@ router = APIRouter(prefix="/users", tags=["Users & Roles"])
 
 def _to_user_admin_response(u: User) -> UserAdminResponse:
     dept_name = u.department.name if u.department else None
-    role_lit = cast(Literal["ADMIN", "FACULTY", "STUDENT"], u.role if u.role in ("ADMIN", "FACULTY", "STUDENT") else "STUDENT")
+    role_lit = cast(Literal["ADMIN", "FACULTY", "STUDENT", "SUPER_ADMIN"], u.role if u.role in ("ADMIN", "FACULTY", "STUDENT", "SUPER_ADMIN") else "STUDENT")
     return UserAdminResponse(
         id=u.id,
         name=u.name,
@@ -49,7 +49,7 @@ def _to_user_admin_response(u: User) -> UserAdminResponse:
 def list_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    role: Optional[str] = Query(None, pattern="^(ADMIN|FACULTY|STUDENT)$"),
+    role: Optional[str] = Query(None, pattern="^(ADMIN|FACULTY|STUDENT|SUPER_ADMIN)$"),
     department_id: Optional[int] = Query(None, gt=0),
     search: Optional[str] = Query(None, min_length=1),
     is_active: Optional[bool] = Query(None),

@@ -51,3 +51,6 @@ backend/package-lock.json
 
 logindetails.html
 .
+# Uploads & Storage
+storage/curriculum_documents/*
+!storage/curriculum_documents/.gitkeep

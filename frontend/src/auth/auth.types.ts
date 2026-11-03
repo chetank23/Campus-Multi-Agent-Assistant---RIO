@@ -6,8 +6,8 @@
  *   backend/models/identity.py — role constraint: 'ADMIN' | 'FACULTY' | 'STUDENT'
  */
 
-/** The three roles enforced by the database CHECK constraint. */
-export type UserRole = 'ADMIN' | 'FACULTY' | 'STUDENT';
+/** The four roles enforced by the database CHECK constraint. */
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'FACULTY' | 'STUDENT';
 
 /** POST /auth/login request body */
 export interface LoginRequest {

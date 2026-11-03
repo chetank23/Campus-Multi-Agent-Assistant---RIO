@@ -21,6 +21,7 @@ interface TopbarProps {
 }
 
 const roleLabel: Record<UserRole, string> = {
+  SUPER_ADMIN: 'Super Administrator',
   ADMIN: 'System Admin',
   FACULTY: 'Faculty Member',
   STUDENT: 'Enrolled Student',

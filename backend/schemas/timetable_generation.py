@@ -12,6 +12,7 @@ class GenerationScope(BaseModel):
     room_ids: Optional[List[int]] = None
     lab_ids: Optional[List[int]] = None
     time_slot_ids: Optional[List[int]] = None
+    curriculum_version_id: Optional[int] = None
 
 # Internal structures for the optimizer
 class OptSection(BaseModel):

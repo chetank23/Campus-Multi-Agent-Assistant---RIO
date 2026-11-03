@@ -206,6 +206,16 @@ class Student(Base):
     batch_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("batches.id", name="fk_students_batch_id"), nullable=True
     )
+    admission_cohort_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("admission_cohorts.id", name="fk_students_cohort_id"), nullable=True
+    )
+    regulation_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("regulations.id", name="fk_students_regulation_id"), nullable=True
+    )
+    curriculum_version_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("curriculum_versions.id", name="fk_students_curriculum_version_id"), nullable=True
+    )
+    current_curriculum_semester: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="student_profile")
     department: Mapped[Optional["Department"]] = relationship(

@@ -41,7 +41,7 @@ def require_role(*roles):
     return role_checker
 
 def require_department_scope(current_user: User, requested_department_id: int):
-    if current_user.role == "ADMIN":
+    if current_user.role in ("ADMIN", "SUPER_ADMIN"):
         return True
     if current_user.department_id != requested_department_id:
         raise HTTPException(

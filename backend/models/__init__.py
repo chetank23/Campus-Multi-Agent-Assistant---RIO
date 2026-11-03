@@ -67,6 +67,22 @@ from .placements import PlacementDrive, PlacementSchedule, StudentAcademicRecord
 # Faculty Substitution
 from .substitution import FacultySubstitution  # noqa: F401
 
+# Central Academic Curriculum Registry
+from .curriculum import (  # noqa: F401
+    Regulation,
+    AdmissionCohort,
+    CurriculumVersion,
+    CurriculumSemester,
+    CurriculumSubjectMapping,
+    CurriculumDocument,
+    CurriculumExtractionJob,
+    CurriculumRelease,
+    CurriculumRequest,
+    CurriculumRequestMessage,
+    SectionCourseOffering,
+    FacultyCourseOffering,
+)
+
 # Expose the metadata object Alembic needs
 metadata = Base.metadata
 
@@ -112,4 +128,16 @@ __all__ = [
     "PlacementSchedule",
     "StudentAcademicRecord",
     "FacultySubstitution",
+    "Regulation",
+    "AdmissionCohort",
+    "CurriculumVersion",
+    "CurriculumSemester",
+    "CurriculumSubjectMapping",
+    "CurriculumDocument",
+    "CurriculumExtractionJob",
+    "CurriculumRelease",
+    "CurriculumRequest",
+    "CurriculumRequestMessage",
+    "SectionCourseOffering",
+    "FacultyCourseOffering",
 ]

@@ -19,6 +19,8 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   GraduationCap,
+  BookOpen,
+  Inbox,
   Home,
   LayoutGrid,
   Layers,
@@ -103,6 +105,37 @@ const adminSections: NavSection[] = [
           { label: 'Faculty Directory', to: '/admin/people/faculty' },
           { label: 'Course Catalog', to: '/admin/courses' },
         ],
+      },
+    ],
+  },
+  {
+    id: 'curriculum',
+    title: 'CURRICULUM & ALLOCATION',
+    icon: <BookOpen size={15} className="text-[#2563EB] shrink-0" />,
+    items: [
+      {
+        id: 'curriculum-inbox',
+        label: 'Curriculum Inbox',
+        icon: <Inbox size={17} className="shrink-0" />,
+        to: '/admin/curriculum/inbox',
+      },
+      {
+        id: 'course-allocation',
+        label: 'Section & Faculty Alloc',
+        icon: <Layers size={17} className="shrink-0" />,
+        to: '/admin/curriculum/allocation',
+      },
+      {
+        id: 'curriculum-readiness',
+        label: 'Readiness Preflight',
+        icon: <ShieldCheck size={17} className="shrink-0" />,
+        to: '/admin/curriculum/readiness',
+      },
+      {
+        id: 'curriculum-requests',
+        label: 'Correction Tickets',
+        icon: <ClipboardList size={17} className="shrink-0" />,
+        to: '/admin/curriculum/requests',
       },
     ],
   },

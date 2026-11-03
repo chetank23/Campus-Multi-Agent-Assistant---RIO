@@ -60,6 +60,21 @@ import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage';
 import { AdminChangeRequestsPage } from '@/pages/admin/AdminChangeRequestsPage';
 import { AdminAuditLogsPage } from '@/pages/admin/AdminAuditLogsPage';
 
+import { SuperAdminLayout } from '@/layouts/SuperAdminLayout';
+import { SuperAdminDashboard } from '@/pages/super_admin/SuperAdminDashboard';
+import { SuperAdminRegulationsPage } from '@/pages/super_admin/SuperAdminRegulationsPage';
+import { SuperAdminCohortsPage } from '@/pages/super_admin/SuperAdminCohortsPage';
+import { SuperAdminCurriculumVersionsPage } from '@/pages/super_admin/SuperAdminCurriculumVersionsPage';
+import { SuperAdminSemesterWorkspacePage } from '@/pages/super_admin/SuperAdminSemesterWorkspacePage';
+import { SuperAdminPDFExtractionPage } from '@/pages/super_admin/SuperAdminPDFExtractionPage';
+import { SuperAdminRequestsPage } from '@/pages/super_admin/SuperAdminRequestsPage';
+import { SuperAdminAuditHistoryPage } from '@/pages/super_admin/SuperAdminAuditHistoryPage';
+
+import { AdminCurriculumInboxPage } from '@/pages/admin/curriculum/AdminCurriculumInboxPage';
+import { AdminCurriculumAllocationPage } from '@/pages/admin/curriculum/AdminCurriculumAllocationPage';
+import { AdminCurriculumReadinessPage } from '@/pages/admin/curriculum/AdminCurriculumReadinessPage';
+import { AdminCurriculumRequestsPage } from '@/pages/admin/curriculum/AdminCurriculumRequestsPage';
+
 import { FacultyTimetablePage } from '@/pages/faculty/FacultyTimetablePage';
 import { FacultyDeptTimetablePage } from '@/pages/faculty/FacultyDeptTimetablePage';
 import { FacultyAvailabilityPage } from '@/pages/faculty/FacultyAvailabilityPage';
@@ -78,6 +93,7 @@ import { StudentNotificationsPage } from '@/pages/student/StudentNotificationsPa
 import type { UserRole } from '@/auth/auth.types';
 
 const roleHome: Record<UserRole, string> = {
+  SUPER_ADMIN: '/super-admin',
   ADMIN: '/admin',
   FACULTY: '/faculty',
   STUDENT: '/student',
@@ -116,6 +132,26 @@ export function AppRoutes() {
         <Route path="/app" element={<RoleRedirect />} />
       </Route>
 
+      {/* ── Protected: SUPER_ADMIN ─────────────────────────────────── */}
+      <Route element={<ProtectedRoute />}>
+        <Route
+          element={
+            <RoleRoute roles={['SUPER_ADMIN']}>
+              <SuperAdminLayout />
+            </RoleRoute>
+          }
+        >
+          <Route path="/super-admin" element={<SuperAdminDashboard />} />
+          <Route path="/super-admin/regulations" element={<SuperAdminRegulationsPage />} />
+          <Route path="/super-admin/cohorts" element={<SuperAdminCohortsPage />} />
+          <Route path="/super-admin/curriculum" element={<SuperAdminCurriculumVersionsPage />} />
+          <Route path="/super-admin/curriculum/:versionId/workspace" element={<SuperAdminSemesterWorkspacePage />} />
+          <Route path="/super-admin/ai-extraction" element={<SuperAdminPDFExtractionPage />} />
+          <Route path="/super-admin/requests" element={<SuperAdminRequestsPage />} />
+          <Route path="/super-admin/audit" element={<SuperAdminAuditHistoryPage />} />
+        </Route>
+      </Route>
+
       {/* ── Protected: ADMIN ─────────────────────────────────────────── */}
       <Route element={<ProtectedRoute />}>
         <Route
@@ -141,6 +177,13 @@ export function AppRoutes() {
           <Route path="/admin/campus/buildings" element={<BuildingsPage />} />
           <Route path="/admin/campus/rooms" element={<RoomsPage />} />
           <Route path="/admin/campus/calendar-slots" element={<CalendarTimeSlotsPage />} />
+          {/* Curriculum & Academic Operations */}
+          <Route path="/admin/curriculum" element={<Navigate to="/admin/curriculum/inbox" replace />} />
+          <Route path="/admin/curriculum/inbox" element={<AdminCurriculumInboxPage />} />
+          <Route path="/admin/curriculum/allocation" element={<AdminCurriculumAllocationPage />} />
+          <Route path="/admin/curriculum/readiness" element={<AdminCurriculumReadinessPage />} />
+          <Route path="/admin/curriculum/requests" element={<AdminCurriculumRequestsPage />} />
+
           {/* Timetable Engine */}
           <Route path="/admin/timetable" element={<Navigate to="/admin/timetable/versions" replace />} />
           <Route path="/admin/timetable/versions" element={<AdminTimetableVersionsPage />} />

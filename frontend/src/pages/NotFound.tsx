@@ -11,6 +11,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import type { UserRole } from '@/auth/auth.types';
 
 const roleHome: Record<UserRole, string> = {
+  SUPER_ADMIN: '/super-admin',
   ADMIN: '/admin',
   FACULTY: '/faculty',
   STUDENT: '/student',

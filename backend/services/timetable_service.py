@@ -104,6 +104,7 @@ def execute_timetable_generation(
         try:
             new_version = TimetableVersion(
                 academic_year_id=scope.academic_year_id,
+                curriculum_version_id=scope.curriculum_version_id,
                 status="GENERATED",
                 created_by=current_user.id,
             )
