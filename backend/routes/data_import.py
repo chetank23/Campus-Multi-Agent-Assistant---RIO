@@ -442,10 +442,3 @@ def commit_import(
         imported_count=count,
         message=f"Successfully imported {count} {body.entity_type} records.",
     )
-
-    return ImportCommitResponse(
-        success=True,
-        entity_type=body.entity_type,
-        imported_count=count,
-        message=f"Successfully imported {count} {body.entity_type} records.",
-    )

@@ -145,8 +145,10 @@ class TestAidsAImportAndLogin:
                 else:
                     assert len(stu.user.name) > 0, f"Expected non-blank name for {expected_srn}"
 
-        # Test API login specifically for R23EH001, R23EH002, and R23EH060 (blank name student)
-        for test_srn in ["R23EH001", "R23EH002", "R23EH060"]:
+        # Verify API login, identity mapping, and timetable access for all 60 students
+        student_tokens = {}
+        for idx in range(1, 61):
+            test_srn = f"R23EH{idx:03d}"
             test_email = f"{test_srn.lower()}@rio-mjp.test"
             res = client.post("/auth/login", json={
                 "email": test_email,
@@ -154,12 +156,22 @@ class TestAidsAImportAndLogin:
             })
             assert res.status_code == 200, f"Login failed for {test_srn}: {res.text}"
             token = res.json()["access_token"]
+            student_tokens[test_srn] = token
 
             me_res = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
             assert me_res.status_code == 200
             me_data = me_res.json()
             assert me_data["role"] == "STUDENT"
             assert me_data["email"] == test_email
+
+            # Verify timetable access for each student
+            tt_res = client.get("/student/my-timetable", headers={"Authorization": f"Bearer {token}"})
+            assert tt_res.status_code == 200
+            tt_data = tt_res.json()
+            assert tt_data["student_code"] == test_srn
+            assert tt_data["section_name"] == "AIDS-A"
+
+        TestAidsAImportAndLogin.saved_tokens = student_tokens
 
     def test_04_building_rooms_and_labs_inventory(self):
         with Session(engine) as test_db:
@@ -232,3 +244,24 @@ class TestAidsAImportAndLogin:
         tt_data = res_tt.json()
         assert tt_data["student_code"] == "R23EH001"
         assert tt_data["section_name"] == "AIDS-A"
+
+        # 4. Cross-student data isolation: student 1 cannot access student 2's or student 60's record
+        with Session(engine) as test_db:
+            s2 = test_db.query(Student).filter(Student.student_id == "R23EH002").first()
+            s60 = test_db.query(Student).filter(Student.student_id == "R23EH060").first()
+            assert s2 is not None and s60 is not None
+            s2_id = s2.id
+            s60_id = s60.id
+
+        res_s2 = client.get(f"/students/{s2_id}", headers=headers)
+        assert res_s2.status_code == 403, f"Expected 403 when accessing another student's record, got {res_s2.status_code}"
+
+        res_s60 = client.get(f"/students/{s60_id}", headers=headers)
+        assert res_s60.status_code == 403, f"Expected 403 when accessing another student's record, got {res_s60.status_code}"
+
+        # 5. Plural list /students/ must only return the authenticated student's own record
+        res_list = client.get("/students/", headers=headers)
+        assert res_list.status_code == 200
+        items = res_list.json()
+        assert len(items) == 1, f"Expected 1 record (self), got {len(items)}"
+        assert items[0]["student_id"] == "R23EH001"

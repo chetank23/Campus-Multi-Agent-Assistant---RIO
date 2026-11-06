@@ -39,8 +39,8 @@ def get_students(
         # Faculty can see students of their department via section? Actually student has department_id directly.
         return db.query(Student).filter(Student.department_id == current_user.department_id).all()
     else:  # STUDENT
-        # Students can only see themselves
-        return db.query(Student).filter(Student.id == current_user.id).all()  # assuming user.id matches student.id via user_id foreign key; but we don't have that link here. We'll implement later.
+        # Students can only see their own profile
+        return db.query(Student).filter(Student.user_id == current_user.id).all()
 
 
 def _get_student_my_timetable_handler(
