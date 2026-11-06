@@ -1,5 +1,5 @@
 import email_validator
-email_validator.TEST_ENVIRONMENT = True
+setattr(email_validator, "TEST_ENVIRONMENT", True)
 import os
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse

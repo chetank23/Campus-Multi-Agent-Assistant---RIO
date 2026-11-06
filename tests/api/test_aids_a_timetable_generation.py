@@ -19,8 +19,18 @@ from backend.models.academic import AcademicYear, Department, Program, Section, 
 from backend.models.identity import User
 from backend.models.space_time import Building, Room
 from backend.models.timetable import TimetableEntry, TimetableVersion
+from backend.config import engine
+from scripts.import_aids_a_dataset import import_aids_a_dataset
 
 client = TestClient(app)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def ensure_aids_a_dataset():
+    """Ensure the AIDS-A dataset is imported into the test database before running tests."""
+    with Session(engine) as db:
+        import_aids_a_dataset(db, configure_candidate_rooms=True)
+    yield
 
 
 @pytest.fixture
@@ -68,19 +78,18 @@ class TestAidsATimetableGeneration:
             bldg = db.query(Building).filter(Building.code == "SMV-BLK-01").first()
             assert bldg is not None
 
-            # Select 10 candidate classrooms from SIR M VISHWESH BLOCK with capacity >= 60
-            rooms = (
+            candidate_rooms = (
                 db.query(Room)
                 .filter(
                     Room.building_id == bldg.id,
-                    Room.room_type == "CLASSROOM",
-                    Room.capacity >= 60,
                     Room.status == "ACTIVE",
+                    ((Room.room_type == "CLASSROOM") & (Room.capacity >= 60))
+                    | ((Room.room_type == "LAB") & (Room.capacity >= 40)),
                 )
                 .limit(10)
                 .all()
             )
-            room_ids = [r.id for r in rooms]
+            room_ids = [r.id for r in candidate_rooms]
 
             scope = {
                 "academic_year_id": ay.id,

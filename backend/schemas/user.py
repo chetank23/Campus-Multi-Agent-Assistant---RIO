@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import email_validator
-email_validator.TEST_ENVIRONMENT = True
+setattr(email_validator, "TEST_ENVIRONMENT", True)
 
 from datetime import datetime
 from typing import List, Literal, Optional

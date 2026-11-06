@@ -66,7 +66,42 @@ from backend.models.timetable import (
     TimetableVersion,
 )
 
-DEFAULT_EXCEL_PATH = r"C:/Users/Chethan Kumar/.gemini/antigravity/brain/76a7f300-364a-4771-833a-c7670d38435c/.user_uploaded/media_1793980094606_098e9839.xlsx"
+REPO_RAW_DATA_PATH = REPO_ROOT / "data" / "raw" / "RIO_MJP_AIDS_A_Clean_Merged_Test_Data.xlsx"
+FALLBACK_USER_UPLOAD_PATH = Path(r"C:/Users/Chethan Kumar/.gemini/antigravity/brain/76a7f300-364a-4771-833a-c7670d38435c/.user_uploaded/media_1793980094606_098e9839.xlsx")
+
+
+def resolve_excel_path(path_arg: Optional[str | Path] = None) -> Path:
+    """Resolve authoritative path to the AIDS-A test dataset workbook."""
+    if path_arg and Path(path_arg).exists():
+        return Path(path_arg)
+    env_path = os.environ.get("AIDS_A_EXCEL_PATH")
+    if env_path and Path(env_path).exists():
+        return Path(env_path)
+    if REPO_RAW_DATA_PATH.exists():
+        return REPO_RAW_DATA_PATH
+    if FALLBACK_USER_UPLOAD_PATH.exists():
+        return FALLBACK_USER_UPLOAD_PATH
+    return REPO_RAW_DATA_PATH
+
+
+def safe_int(val: Any, default: int = 0) -> int:
+    """Safely convert any cell or string value to integer without raising ValueError/TypeError."""
+    if val is None:
+        return default
+    if isinstance(val, bool):
+        return int(val)
+    if isinstance(val, (int, float)):
+        return int(val)
+    s = str(val).strip()
+    if not s:
+        return default
+    try:
+        return int(float(s))
+    except (ValueError, TypeError):
+        return default
+
+
+DEFAULT_EXCEL_PATH = str(REPO_RAW_DATA_PATH)
 CREDENTIALS_REPORT_PATH = REPO_ROOT / "aids_a_seed_credentials.json"
 DEFAULT_TEST_PASSWORD = "Password@123"
 
@@ -84,12 +119,13 @@ def get_db_session(db_url: str) -> Session:
 
 def import_aids_a_dataset(
     db: Session,
-    excel_path: str = DEFAULT_EXCEL_PATH,
+    excel_path: Optional[str | Path] = None,
     test_password: str = DEFAULT_TEST_PASSWORD,
     configure_candidate_rooms: bool = True,
 ) -> Dict[str, Any]:
-    print(f"[*] Opening Excel workbook: {excel_path}")
-    wb = openpyxl.load_workbook(excel_path, data_only=True)
+    resolved_path = resolve_excel_path(excel_path)
+    print(f"[*] Opening Excel workbook: {resolved_path}")
+    wb = openpyxl.load_workbook(str(resolved_path), data_only=True)
 
     pw_hash = get_password_hash(test_password)
     report_data: Dict[str, Any] = {
@@ -100,26 +136,6 @@ def import_aids_a_dataset(
         "student_accounts": [],
         "import_summary": {},
     }
-
-    # Reset sequences for test_schema so that auto-increment IDs do not collide with existing seed rows
-    db.execute(text("""
-        DO $$
-                DECLARE
-                    seq RECORD;
-                BEGIN
-                    FOR seq IN
-                        SELECT c.relname as seq_name, t.relname as table_name
-                        FROM pg_class c
-                        JOIN pg_depend d ON d.objid = c.oid
-                        JOIN pg_class t ON d.refobjid = t.oid
-                        JOIN pg_namespace n ON n.oid = c.relnamespace
-                        WHERE c.relkind = 'S' AND n.nspname = 'test_schema'
-                    LOOP
-                        EXECUTE format('SELECT setval(%L, COALESCE((SELECT MAX(id) FROM test_schema.%I), 1), true)', 'test_schema.' || seq.seq_name, seq.table_name);
-                    END LOOP;
-                END $$;
-    """))
-    db.commit()
 
     # =========================================================================
     # 1. ACADEMIC STRUCTURE (Department, Program, AcademicYear, Semester, Section, Batch)
@@ -343,9 +359,9 @@ def import_aids_a_dataset(
         # Determine hours / credits defaults for scheduling
         # In AIDS-A curriculum: Theory = 3-4 hours, Project/Internship = 3-6 hours
         is_lab = (c_type == "LAB")
-        lec_hours = 3
+        lec_hours = 3 if c_type in ("THEORY", "ELECTIVE") else 0
         tut_hours = 0
-        prac_hours = 3 if is_lab else 0
+        prac_hours = 3 if is_lab else (3 if c_type == "PROJECT" else 0)
         credits_val = 3
 
         course = db.query(Course).filter(Course.course_code == code).first()
@@ -370,7 +386,6 @@ def import_aids_a_dataset(
             course.credits = credits_val
             course.lecture_hours = lec_hours
             course.practical_hours = prac_hours
-            course.requires_lab = is_lab
             db.flush()
 
         course_map[code] = course
@@ -394,34 +409,21 @@ def import_aids_a_dataset(
             if nimrita_fac:
                 assigned_faculty_objs.append(nimrita_fac)
 
-        # Core active curriculum courses for Section AIDS-A Semester VII
-        aids_a_active_courses = {
-            "B25CS0701",  # PFL
-            "B22EH0704",  # PP-1
-            "B22EF0704",  # Internship
-            "B25CSS712",  # PE-6 (ECET)
-            "B23ASO711",  # OE-3
-            "B23MEO720",  # OE-4
-            "B22EA001X",  # Placement
-            "B22EA002X",  # SDP
-        }
-
-        if code in aids_a_active_courses:
-            for af in assigned_faculty_objs:
-                ca = db.query(CourseAssignment).filter(
-                    CourseAssignment.course_id == course.id,
-                    CourseAssignment.section_id == sec.id,
-                    CourseAssignment.faculty_id == af.id,
-                ).first()
-                if not ca:
-                    ca = CourseAssignment(
-                        course_id=course.id,
-                        faculty_id=af.id,
-                        section_id=sec.id,
-                        batch_id=batch.id,
-                    )
-                    db.add(ca)
-                    db.flush()
+        for af in assigned_faculty_objs:
+            ca = db.query(CourseAssignment).filter(
+                CourseAssignment.course_id == course.id,
+                CourseAssignment.section_id == sec.id,
+                CourseAssignment.faculty_id == af.id,
+            ).first()
+            if not ca:
+                ca = CourseAssignment(
+                    course_id=course.id,
+                    faculty_id=af.id,
+                    section_id=sec.id,
+                    batch_id=batch.id,
+                )
+                db.add(ca)
+                db.flush()
 
     # =========================================================================
     # 4. BUILDING, FLOORS, ROOMS & LABS (Buildings, Floors, Rooms Sheets)
@@ -455,7 +457,7 @@ def import_aids_a_dataset(
     for r_row in room_rows:
         if not r_row or not r_row[5]:
             continue
-        floor_idx = int(str(r_row[2])) if r_row[2] is not None else 0
+        floor_idx = safe_int(r_row[2], default=0)
         floor_name = str(r_row[3]).strip() if r_row[3] else "Floor"
         room_no = str(r_row[5]).strip()
         code_str = str(r_row[6]).strip() if r_row[6] else room_no
@@ -476,8 +478,9 @@ def import_aids_a_dataset(
         # Ground and 1st floor rooms 101, 102, 103, 104, 105, 001, 002, G-08, G-09, F-08, F-09
         # are configured with active status and standard capacity (60 for classrooms, 40 for labs)
         # to allow CP-SAT solver and timetabling engine to schedule classes.
-        room_capacity = 60 if not is_lab else 40
-        room_status = "ACTIVE"
+        is_candidate = configure_candidate_rooms and (floor_idx in (0, 1, 2) and safe_int(room_no.split("-")[-1], default=999) <= 10)
+        room_capacity = 60 if is_candidate else None
+        room_status = "ACTIVE" if is_candidate else status_str
 
         if not room:
             room = Room(
@@ -487,17 +490,18 @@ def import_aids_a_dataset(
                 capacity=room_capacity,
                 room_type=room_type,
                 department_id=dept.id,
-                has_projector=True,
-                has_smart_board=True,
-                status="ACTIVE",
+                has_projector=True if is_candidate else False,
+                has_smart_board=True if is_candidate else False,
+                status=room_status,
             )
             db.add(room)
             db.flush()
         else:
             room.floor_number = floor_idx
             room.room_type = room_type
-            room.capacity = room_capacity
-            room.status = "ACTIVE"
+            if is_candidate:
+                room.capacity = room_capacity
+                room.status = "ACTIVE"
             db.flush()
 
         rooms_imported += 1
@@ -509,7 +513,7 @@ def import_aids_a_dataset(
                     room_id=room.id,
                     lab_name=lab_name or f"Lab {code_str}",
                     department_id=dept.id,
-                    computer_count=35,
+                    computer_count=35 if is_candidate else 0,
                     equipment="High-Performance AI Workstations",
                     software="PyTorch, TensorFlow, Python 3.13, JupyterLab",
                 )
@@ -678,27 +682,28 @@ def import_aids_a_dataset(
     timetable_sheet = wb["Timetable"]
     tt_rows = list(timetable_sheet.iter_rows(values_only=True))[1:]
 
-    # Reference version (kept as ARCHIVED/REFERENCE draft so it does not overwrite fresh generation)
+    # Reference version (set as PUBLISHED reference so student & faculty views are populated)
     ref_version = db.query(TimetableVersion).filter(
         TimetableVersion.academic_year_id == ay.id,
         TimetableVersion.version_number == "AIDS-A-REF",
     ).first()
 
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
     if not ref_version:
         ref_version = TimetableVersion(
             academic_year_id=ay.id,
             version_number="AIDS-A-REF",
             status="PUBLISHED",
+            published_at=now_utc,
             reason="Imported Reference Timetable from Master Excel (AIDS-A Semester VII)",
-            published_at=datetime.datetime.now(datetime.timezone.utc),
-            created_at=datetime.datetime.now(datetime.timezone.utc),
+            created_at=now_utc,
         )
         db.add(ref_version)
         db.flush()
     else:
         ref_version.status = "PUBLISHED"
         if not ref_version.published_at:
-            ref_version.published_at = datetime.datetime.now(datetime.timezone.utc)
+            ref_version.published_at = now_utc
         db.flush()
 
     # Pick a classroom from SMV-BLK-01 for reference entries (e.g. 101 or 001)
@@ -770,11 +775,14 @@ def import_aids_a_dataset(
                 faculty_id=matched_fac.id if matched_fac else None,
                 room_id=chosen_room.id if chosen_room else None,
                 slot_id=ts.id,
-                status="DRAFT",
+                status="ACTIVE",
             )
             db.add(entry)
             db.flush()
             tt_entries_count += 1
+        else:
+            entry.status = "ACTIVE"
+            db.flush()
 
     print(f"  [+] Saved reference timetable entries: {tt_entries_count}")
 

@@ -170,11 +170,12 @@ def _get_student_my_timetable_handler(
     ct_desig = ct.designation if ct else None
     ct_contact = ct.contact_number if ct else None
     first_ver = sorted_entries[0].version if (sorted_entries and sorted_entries[0].version) else None
-    ay_name = (
-        stu.semester.academic_year.name
-        if (stu.semester and stu.semester.academic_year)
-        else (first_ver.academic_year.name if (first_ver and first_ver.academic_year) else None)
-    )
+    if stu.semester and stu.semester.academic_year:
+        ay_name = stu.semester.academic_year.name
+    elif first_ver and first_ver.academic_year:
+        ay_name = first_ver.academic_year.name
+    else:
+        ay_name = None
     adm_batch = stu.batch.batch_name if stu.batch else "2023"
 
     return StudentTimetableResponse(

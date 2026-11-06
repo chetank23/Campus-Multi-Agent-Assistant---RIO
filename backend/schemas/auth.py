@@ -1,5 +1,5 @@
 import email_validator
-email_validator.TEST_ENVIRONMENT = True
+setattr(email_validator, "TEST_ENVIRONMENT", True)
 
 from pydantic import BaseModel, EmailStr
 from typing import Optional

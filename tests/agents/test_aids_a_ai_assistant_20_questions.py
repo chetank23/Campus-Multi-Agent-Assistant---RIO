@@ -49,9 +49,19 @@ from fastapi.testclient import TestClient
 
 from backend.main import app
 from backend.models.identity import User
-from backend.config import SessionLocal
+from backend.config import SessionLocal, engine
+from sqlalchemy.orm import Session
+from scripts.import_aids_a_dataset import import_aids_a_dataset
 
 client = TestClient(app)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def ensure_aids_a_dataset():
+    """Ensure the AIDS-A dataset is imported into the test database before running tests."""
+    with Session(engine) as db:
+        import_aids_a_dataset(db, configure_candidate_rooms=True)
+    yield
 
 
 @pytest.fixture(scope="module")
