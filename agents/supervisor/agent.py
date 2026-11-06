@@ -127,6 +127,30 @@ def classify_intent(message: str) -> str:
         if re.search(pat, msg):
             return "COMPOSITE_BOOKING_SUPERVISION"
 
+    # 4.8 Specific building infrastructure inventory or AIDS-A queries stay in QUERY_AGENT
+    if any(k in msg for k in ["sir m vishwesh block", "smv-blk", "vishwesh block", "aids-a", "aids a"]) and not any(k in msg for k in ["book", "reserve", "generate"]):
+        return "QUERY_AGENT"
+
+    # 4.9 Academic Identity, Profile, Section, Roster & Break Queries
+    academic_identity_patterns = [
+        r"\bwho\s+am\s+i\b",
+        r"\b(?:what\s+is\s+my|my)\s+(?:srn|usn|roll|id|profile)\b",
+        r"\b(?:which|what)\s+department\b",
+        r"\b(?:which|what)\s+section\b",
+        r"\bclass\s+teacher\b",
+        r"\b(?:lunch|tea|coffee)?\s*breaks?\b",
+        r"\bwhat\s+time\s+is\s+(?:my\s+)?(?:lunch|tea)\b",
+        r"\bstudents?\b",
+        r"\bsrn\b",
+        r"\bshow\s+(?:my\s+)?(?:weekly\s+)?timetable\b",
+        r"\bwhich\s+students\b",
+        r"\bhow\s+many\s+students\b",
+        r"\blist\s+(?:the\s+)?students\b",
+    ]
+    for pat in academic_identity_patterns:
+        if re.search(pat, msg):
+            return "QUERY_AGENT"
+
     # 5. Resource Agent requests (Discovery, Availability, Booking, Status, Cancellation, Pending queries)
     resource_patterns = [
         r"\bpending\s+(?:resource\s+)?(?:bookings?|requests?)\b",
@@ -196,7 +220,7 @@ def classify_intent(message: str) -> str:
         "workshop", "workshops", "webinar", "webinars", "hackathon", "hackathons", "cultural", "fest",
         "placement", "placements", "placement drive", "placement drives", "cdc", "recruitment", "eligible drives",
         "am i eligible", "eligibility", "job role", "package", "ctc", "internship", "hiring",
-        "department schedule", "calendar", "announcement", "announcements", "notice", "notices", "broadcast"
+        "department schedule", "calendar", "department", "section", "student", "students", "srn", "lunch", "break", "breaks", "semester", "announcement", "announcements", "notice", "notices", "broadcast"
     ]
     for q in query_patterns:
         if " " in q or "." in q:

@@ -54,3 +54,6 @@ logindetails.html
 # Uploads & Storage
 storage/curriculum_documents/*
 !storage/curriculum_documents/.gitkeep
+
+*credentials*
+aids_a_seed_credentials.json

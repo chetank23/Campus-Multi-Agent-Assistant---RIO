@@ -203,6 +203,7 @@ export interface FacultyTimetableResponse {
   designation?: string | null;
   department_name?: string | null;
   total_teaching_hours: number;
+  sections_as_class_teacher?: string[];
   entries: PersonalTimetableEntry[];
 }
 
@@ -215,6 +216,11 @@ export interface StudentTimetableResponse {
   semester_number?: number | null;
   section_name?: string | null;
   batch_name?: string | null;
+  academic_year_name?: string | null;
+  admission_batch?: string | null;
+  class_teacher_name?: string | null;
+  class_teacher_designation?: string | null;
+  class_teacher_contact?: string | null;
   total_class_hours: number;
   entries: PersonalTimetableEntry[];
 }

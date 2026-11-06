@@ -165,6 +165,18 @@ def _get_student_my_timetable_handler(
             )
         )
 
+    ct = stu.section.class_teacher if (stu.section and stu.section.class_teacher) else None
+    ct_name = ct.user.name if (ct and ct.user) else None
+    ct_desig = ct.designation if ct else None
+    ct_contact = ct.contact_number if ct else None
+    first_ver = sorted_entries[0].version if (sorted_entries and sorted_entries[0].version) else None
+    ay_name = (
+        stu.semester.academic_year.name
+        if (stu.semester and stu.semester.academic_year)
+        else (first_ver.academic_year.name if (first_ver and first_ver.academic_year) else None)
+    )
+    adm_batch = stu.batch.batch_name if stu.batch else "2023"
+
     return StudentTimetableResponse(
         student_id=stu.id,
         student_code=stu.student_id,
@@ -174,6 +186,11 @@ def _get_student_my_timetable_handler(
         semester_number=stu.semester_id,
         section_name=stu.section.section_name if stu.section else None,
         batch_name=stu.batch.batch_name if stu.batch else None,
+        academic_year_name=ay_name,
+        admission_batch=adm_batch,
+        class_teacher_name=ct_name,
+        class_teacher_designation=ct_desig,
+        class_teacher_contact=ct_contact,
         total_class_hours=total_hours,
         entries=result_entries,
     )

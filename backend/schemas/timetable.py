@@ -102,6 +102,7 @@ class FacultyTimetableResponse(BaseModel):
     designation: Optional[str] = None
     department_name: Optional[str] = None
     total_teaching_hours: int = 0
+    sections_as_class_teacher: List[str] = []
     entries: List[PersonalTimetableEntry] = []
 
     model_config = ConfigDict(from_attributes=True)
@@ -116,6 +117,11 @@ class StudentTimetableResponse(BaseModel):
     semester_number: Optional[int] = None
     section_name: Optional[str] = None
     batch_name: Optional[str] = None
+    academic_year_name: Optional[str] = None
+    admission_batch: Optional[str] = None
+    class_teacher_name: Optional[str] = None
+    class_teacher_designation: Optional[str] = None
+    class_teacher_contact: Optional[str] = None
     total_class_hours: int = 0
     entries: List[PersonalTimetableEntry] = []
 

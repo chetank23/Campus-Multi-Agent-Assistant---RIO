@@ -644,6 +644,26 @@ export function StudentDashboard() {
                   </div>
                 </div>
 
+                {/* Class Teacher */}
+                {timetable?.class_teacher_name && (
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-[#EBF4FF] text-[#2B6CB0] flex items-center justify-center shrink-0">
+                      <GraduationCap size={13} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-[#71819A]">Class Teacher</p>
+                      <p className="font-semibold text-[#17243B] truncate">
+                        {timetable.class_teacher_name}
+                      </p>
+                      {timetable.class_teacher_designation && (
+                        <p className="text-[10px] text-[#71819A] truncate">
+                          {timetable.class_teacher_designation}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Academic Status */}
                 <div className="flex items-start gap-2.5">
                   <div className="w-7 h-7 rounded-lg bg-[#DDF7EC] text-[#1B7A53] flex items-center justify-center shrink-0">

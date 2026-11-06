@@ -214,6 +214,8 @@ def get_faculty_my_timetable(
             )
         result_entries.sort(key=lambda x: x.start_time or "00:00")
 
+    ct_sections = [s.section_name for s in fac.sections_as_class_teacher if s.section_name]
+
     return FacultyTimetableResponse(
         faculty_id=fac.id,
         faculty_code=fac.faculty_id,
@@ -221,6 +223,7 @@ def get_faculty_my_timetable(
         designation=fac.designation,
         department_name=fac.department.name if fac.department else None,
         total_teaching_hours=total_hours,
+        sections_as_class_teacher=ct_sections,
         entries=result_entries,
     )
 

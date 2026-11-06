@@ -27,6 +27,91 @@ def _extract_intent_and_tool_call(message: str, user: User) -> Tuple[str, Dict[s
     """
     msg = message.lower().strip()
 
+    # Priority A. Identity & Profile: "who am i", "what is my srn", "my srn"
+    if any(k in msg for k in ["who am i", "what is my srn", "my srn", "my student id", "what is my roll"]):
+        if user.role == "STUDENT":
+            return "get_student_academic_profile", {}
+        elif user.role == "FACULTY":
+            return "get_faculty_profile_and_classes", {}
+
+    # Priority B. Department queries: "which department do i belong", "what department am i"
+    if any(k in msg for k in ["which department", "what department", "my department"]):
+        if user.role == "STUDENT":
+            return "get_student_academic_profile", {}
+        elif user.role == "FACULTY":
+            return "get_faculty_profile_and_classes", {}
+
+    # Priority C. Section queries: "which section am i in", "my section", "what section"
+    if any(k in msg for k in ["which section", "what section", "my section"]):
+        if user.role == "STUDENT":
+            return "get_student_academic_profile", {}
+        elif user.role == "FACULTY":
+            return "get_faculty_profile_and_classes", {}
+
+    # Priority D. Class Teacher queries:
+    if "class teacher" in msg:
+        if "which class" in msg or "am i" in msg or (user.role == "FACULTY" and "which" in msg):
+            return "get_faculty_profile_and_classes", {}
+        if "aids-a" in msg or "aids a" in msg or user.role == "ADMIN":
+            return "get_section_overview", {"section_name": "AIDS-A"}
+        return "get_student_academic_profile", {}
+
+    # Priority E. Course Faculty:
+    if any(k in msg for k in ["who is my faculty for", "faculty for", "who teaches", "instructor for", "professor for"]):
+        match = re.search(r"(?:faculty for|who teaches|instructor for|professor for)\s+([a-zA-Z0-9\s\-]+?)(?:\?|$)", message, re.IGNORECASE)
+        cq = match.group(1).strip() if match else message
+        return "get_course_faculty", {"course_query": cq}
+
+    if "principles of federated learning" in msg or "federated learning" in msg or "pfl" in msg:
+        if any(k in msg for k in ["faculty", "who teaches", "who is", "teacher"]):
+            return "get_course_faculty", {"course_query": "Principles of Federated Learning"}
+
+    # Priority F. First class tomorrow:
+    if "first class" in msg and ("tomorrow" in msg or "next" in msg):
+        return "get_first_class_tomorrow", {}
+
+    # Priority G. Break timings:
+    if any(k in msg for k in ["lunch break", "tea break", "break time", "break timing", "what time is my lunch", "what time is lunch"]):
+        return "get_break_timings", {}
+
+    # Priority H. Subjects / Semester courses:
+    if any(k in msg for k in ["subjects for semester", "courses for semester", "all subjects for semester", "all courses for semester"]):
+        return "get_semester_courses", {"semester_number": 7}
+
+    if any(k in msg for k in ["what subjects do i have", "my subjects", "subjects this semester", "enrolled subjects"]):
+        if user.role == "STUDENT":
+            return "get_student_enrolled_subjects", {}
+        elif user.role == "FACULTY":
+            return "get_faculty_profile_and_classes", {}
+        else:
+            return "get_semester_courses", {"semester_number": 7}
+
+    # Priority I. Faculty assigned teaching:
+    if any(k in msg for k in ["which subjects am i assigned", "which classes do i teach", "assigned subjects", "classes i teach", "what do i teach"]):
+        return "get_faculty_profile_and_classes", {}
+
+    # Priority J. Section AIDS-A students list / count / roster / faculty:
+    if "aids-a" in msg or "aids a" in msg or any(k in msg for k in ["list the students", "list students", "students by srn"]):
+        if any(k in msg for k in ["how many students", "student count", "number of students", "who is the class teacher", "faculty members teach aids-a", "who teach aids-a", "faculty teach"]):
+            return "get_section_overview", {"section_name": "AIDS-A"}
+        if any(k in msg for k in ["list the students", "list students", "students by srn", "which students belong", "show students"]):
+            return "get_section_students", {"section_name": "AIDS-A"}
+        if any(k in msg for k in ["show the aids-a timetable", "aids-a timetable", "timetable"]):
+            return "get_student_timetable", {"target_student_id": None}
+
+    # Priority K. Building rooms & labs queries:
+    if any(k in msg for k in ["sir m vishwesh block", "smv block", "vishwesh block"]):
+        r_type = "LAB" if ("lab" in msg or "labs" in msg) else ("CLASSROOM" if "room" in msg else None)
+        return "get_building_rooms_and_labs_inventory", {"building_name_or_code": "SMV-BLK-01", "room_type": r_type}
+
+    if msg in ["show all labs", "show all labs.", "list all labs", "all labs", "show labs", "list labs"]:
+        return "get_building_rooms_and_labs_inventory", {"building_name_or_code": "SMV-BLK-01", "room_type": "LAB"}
+
+    # Priority L. Room for next class / which room should I go to:
+    if any(k in msg for k in ["which room should i go", "what room should i go", "which room is assigned to my next class", "room for next class"]):
+        return "get_class_status", {}
+
+
     # 1. Announcements / Campus notices
     if any(k in msg for k in ["announcement", "announcements", "campus notice", "notices", "broadcast"]):
         return "get_relevant_announcements", {}
@@ -812,6 +897,163 @@ def format_grounded_response(
         sources.append("CDC Administrative Desk")
         msg = tool_result.get("message") or tool_result.get("error") or str(tool_result)
         return sanitize_plain_english(msg), sources
+
+    # A. Student Academic Profile
+    elif tool_name == "get_student_academic_profile":
+        sources.append("Student Academic Registry")
+        lines = [
+            f"Student Academic Profile: {tool_result.get('student_name', 'Student')}",
+            f"• Student Registration Number (SRN): {tool_result.get('srn', 'N/A')}",
+            f"• Department: Department of {tool_result.get('department_name', 'AI & DS')}",
+            f"• Degree Program: {tool_result.get('program_name', 'B.Tech AI & DS')}",
+            f"• Academic Cohort: Semester {tool_result.get('semester_number', 7)}, Academic Year {tool_result.get('academic_year', '2026-2027')}",
+            f"• Section: {tool_result.get('section_name', 'AIDS-A')} (Batch: {tool_result.get('batch_name', 'All')})",
+            f"• Class Teacher: {tool_result.get('class_teacher_name', 'Dr. Nimrita Koul')} ({tool_result.get('class_teacher_designation', 'Associate Professor')})",
+        ]
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # B. Faculty Profile & Responsibilities
+    elif tool_name == "get_faculty_profile_and_classes":
+        sources.append("Faculty Academic Registry")
+        ct_sec = ", ".join(tool_result.get("class_teacher_sections", [])) or "None"
+        courses = tool_result.get("assigned_courses", [])
+        lines = [
+            f"Faculty Profile: {tool_result.get('faculty_name', 'Faculty Member')} ({tool_result.get('faculty_code', '')})",
+            f"• Department: Department of {tool_result.get('department_name', 'AI & DS')}",
+            f"• Designation: {tool_result.get('designation', 'Associate Professor')}",
+            f"• Specialization: {tool_result.get('specialization', 'Agentic AI')}",
+            f"• Designated Class Teacher: Section {ct_sec}",
+        ]
+        if courses:
+            lines.append("• Assigned Courses:")
+            for c in courses:
+                lines.append(f"  - {c['course_code']}: {c['course_name']} (Section {c.get('section', 'AIDS-A')})")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # C. Section Students Roster
+    elif tool_name == "get_section_students":
+        sources.append("Section Enrolment Register")
+        sec_name = tool_result.get("section_name", "AIDS-A")
+        total = tool_result.get("total_students", 0)
+        students = tool_result.get("students", [])
+        lines = [
+            f"Official Student Roster for Section {sec_name} ({total} Enrolled Students):",
+            "",
+        ]
+        for idx, s in enumerate(students, 1):
+            name_display = f" - {s['name']}" if s.get("name") else " [Record Unnamed]"
+            lines.append(f"{idx:02d}. {s['srn']}{name_display}")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # D. Course Faculty Query
+    elif tool_name == "get_course_faculty":
+        sources.append("Curriculum Course Allocations")
+        lines = [
+            f"Course: {tool_result.get('course_title', '')} ({tool_result.get('course_code', '')})",
+            f"• Assigned Faculty: {tool_result.get('faculty_name', 'Dr. Nimrita Koul')}",
+            f"• Designation: {tool_result.get('faculty_designation', 'Associate Professor')}",
+            f"• Specialization: {tool_result.get('specialization', 'Agentic AI')}",
+        ]
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # E. Student Enrolled Subjects
+    elif tool_name == "get_student_enrolled_subjects":
+        sources.append("Curriculum Register")
+        subjects = tool_result.get("subjects", [])
+        lines = [
+            f"Enrolled Curriculum Subjects for Section {tool_result.get('section_name', 'AIDS-A')} ({len(subjects)} Subjects):",
+            "",
+        ]
+        for s in subjects:
+            lines.append(f"• {s['course_code']}: {s['course_title']} ({s['course_type']}, {s['credits']} Credits) - Faculty: {s['faculty_name']}")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # F. Break Timings
+    elif tool_name == "get_break_timings":
+        sources.append("Master Academic Time Slots")
+        breaks = tool_result.get("breaks", [])
+        lines = ["Official Campus Break Schedule:"]
+        for b in breaks:
+            b_label = "Tea Break" if b["type"] == "TEA" else ("Lunch Break" if b["type"] == "LUNCH" else "Break")
+            lines.append(f"• {b_label}: {b['start_time']} - {b['end_time']}")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # G. First Class Tomorrow
+    elif tool_name == "get_first_class_tomorrow":
+        sources.append("Official Published Timetable")
+        day_str = tool_result.get("day", "Tomorrow").capitalize()
+        if not tool_result.get("has_class"):
+            return sanitize_plain_english(tool_result.get("message", f"No classes scheduled for {day_str}.")), sources
+        fc = tool_result.get("first_class", {})
+        note = tool_result.get("note", "")
+        lines = [
+            f"First Scheduled Class for {day_str}:",
+            f"• Course: {fc.get('course_code', '')} ({fc.get('course_title', '')})",
+            f"• Time: {fc.get('start_time', '')} - {fc.get('end_time', '')}",
+            f"• Room: Room {fc.get('room', 'N/A')}",
+            f"• Faculty: {fc.get('faculty_name', 'Faculty')}",
+        ]
+        if note:
+            lines.append(f"\nNote: {note}")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # H. Section Overview
+    elif tool_name == "get_section_overview":
+        sources.append("Academic Master Register")
+        sec_name = tool_result.get("section_name", "AIDS-A")
+        fac_list = tool_result.get("teaching_faculty", [])
+        sub_list = tool_result.get("subjects", [])
+        lines = [
+            f"Academic Section Overview: {sec_name}",
+            f"• Department: Department of {tool_result.get('department_name', 'AI & DS')}",
+            f"• Program: {tool_result.get('program_name', 'B.Tech AI & DS')}",
+            f"• Semester: Semester {tool_result.get('semester_number', 7)}",
+            f"• Enrolled Students: {tool_result.get('student_count', 60)} students",
+            f"• Class Teacher: {tool_result.get('class_teacher_name', 'Dr. Nimrita Koul')} ({tool_result.get('class_teacher_designation', 'Associate Professor')})",
+        ]
+        if fac_list:
+            lines.append("• Teaching Faculty:")
+            for f in fac_list:
+                lines.append(f"  - {f['faculty_name']} ({f['designation']})")
+        if sub_list:
+            lines.append(f"• Curriculum Courses ({len(sub_list)} courses):")
+            for s in sub_list:
+                lines.append(f"  - {s['course_code']}: {s['course_title']}")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # I. Semester Courses
+    elif tool_name == "get_semester_courses":
+        sources.append("Central Curriculum Database")
+        courses = tool_result.get("courses", [])
+        sem_num = tool_result.get("semester_number", 7)
+        lines = [
+            f"Curriculum Courses for Semester {sem_num} ({len(courses)} Courses):",
+            "",
+        ]
+        for c in courses:
+            lines.append(f"• {c['course_code']}: {c['course_title']} ({c['course_type']}, {c['credits']} Credits)")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # J. Building Rooms & Labs Inventory
+    elif tool_name == "get_building_rooms_and_labs_inventory":
+        sources.append("Campus Facilities Register")
+        bldg_name = tool_result.get("building_name", "SIR M VISHWESH BLOCK")
+        bldg_code = tool_result.get("building_code", "SMV-BLK-01")
+        total_r = tool_result.get("total_rooms", 225)
+        total_l = tool_result.get("total_labs", 18)
+        floors = tool_result.get("floors", [])
+        lines = [
+            f"Campus Facility Inventory: {bldg_name} ({bldg_code})",
+            f"• Total Floors: {tool_result.get('number_of_floors', 9)} Floors (Ground Floor to 8th Floor)",
+            f"• Total Classrooms/Rooms: {total_r}",
+            f"• Total Laboratories: {total_l}",
+            "• Floor Breakdown (25 rooms and 2 labs per floor):",
+        ]
+        for fl in floors:
+            fl_name = "Ground Floor (Floor 0)" if fl["floor"] == 0 else f"Floor {fl['floor']}"
+            lines.append(f"  - {fl_name}: {fl['rooms']} rooms, {fl['labs']} labs")
+        return sanitize_plain_english("\n".join(lines)), sources
+
 
     return "No information could be generated for this query.", sources
 

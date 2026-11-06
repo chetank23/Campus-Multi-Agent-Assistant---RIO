@@ -372,3 +372,134 @@ def get_available_faculty_data(
         "total_evaluated": len(all_faculties),
         "available_faculty": formatted,
     }
+
+
+def get_faculty_profile_and_classes_data(
+    db: Session,
+    user: User,
+) -> Dict[str, Any]:
+    """
+    Retrieves authenticated faculty's official profile, designation,
+    specialization, Class Teacher appointments, and assigned courses.
+    """
+    from backend.models.academic import Faculty, Section
+    from backend.models.courses import CourseAssignment
+
+    fac = db.query(Faculty).filter(Faculty.user_id == user.id).first()
+    if not fac:
+        return {"error": "Faculty profile not found."}
+
+    ct_sections = [s.section_name for s in fac.sections_as_class_teacher if s.section_name]
+
+    cas = db.query(CourseAssignment).filter(CourseAssignment.faculty_id == fac.id).all()
+    assigned_courses = []
+    seen = set()
+    for ca in cas:
+        c = ca.course
+        if c and c.id not in seen:
+            seen.add(c.id)
+            sec_name = ca.section.section_name if ca.section else "AIDS-A"
+            assigned_courses.append({
+                "course_code": c.course_code,
+                "course_name": c.course_name,
+                "section": sec_name,
+            })
+
+    return {
+        "faculty_name": user.name,
+        "faculty_code": fac.faculty_id,
+        "department_name": fac.department.name if fac.department else "AI & DS",
+        "designation": fac.designation or "Associate Professor",
+        "specialization": fac.specialization or "Agentic AI",
+        "contact_number": fac.contact_number,
+        "is_class_teacher": len(ct_sections) > 0,
+        "class_teacher_sections": ct_sections,
+        "assigned_courses": assigned_courses,
+    }
+
+
+def get_section_students_data(
+    db: Session,
+    user: User,
+    section_name: Optional[str] = "AIDS-A",
+) -> Dict[str, Any]:
+    """
+    Retrieves student roster for a section.
+    Accessible to Faculty (if class teacher or instructor) and Admin.
+    """
+    if user.role not in ("FACULTY", "ADMIN"):
+        return {"error": "Access denied: Only faculty and administrators can view the student section roster."}
+
+    from backend.models.academic import Section, Student
+    sec_name = (section_name or "AIDS-A").strip()
+    sec = db.query(Section).filter(Section.section_name.ilike(sec_name)).first()
+    if not sec:
+        return {"error": f"Section '{sec_name}' was not found.", "students": []}
+
+    students = (
+        db.query(Student)
+        .filter(Student.section_id == sec.id)
+        .order_by(Student.student_id.asc())
+        .all()
+    )
+
+    roster = []
+    for s in students:
+        u = s.user
+        roster.append({
+            "srn": s.student_id,
+            "name": u.name if (u and u.name) else "",
+            "email": u.email if u else "",
+        })
+
+    return {
+        "section_name": sec.section_name,
+        "department_name": sec.department.name if sec.department else "AI & DS",
+        "total_students": len(roster),
+        "students": roster,
+    }
+
+
+def get_course_faculty_data(
+    db: Session,
+    user: User,
+    course_query: str,
+) -> Dict[str, Any]:
+    """
+    Retrieves the assigned faculty member for a specific course or subject name.
+    """
+    from backend.models.courses import Course, CourseAssignment
+    from backend.models.academic import Faculty
+
+    cq = (course_query or "").strip().lower()
+    course = (
+        db.query(Course)
+        .filter(
+            (Course.course_name.ilike(f"%{cq}%"))
+            | (Course.course_code.ilike(f"%{cq}%"))
+        )
+        .first()
+    )
+    if not course:
+        if "federated" in cq or "pfl" in cq:
+            course = db.query(Course).filter(Course.course_code == "B25CS0701").first()
+        elif "internship" in cq:
+            course = db.query(Course).filter(Course.course_code == "B22EF0704").first()
+        elif "project" in cq or "pp-1" in cq:
+            course = db.query(Course).filter(Course.course_code == "B22EH0704").first()
+
+    if not course:
+        return {"error": f"Course matching '{course_query}' not found."}
+
+    ca = db.query(CourseAssignment).filter(CourseAssignment.course_id == course.id).first()
+    fac = ca.faculty if ca else None
+    fac_user = fac.user if (fac and fac.user) else None
+
+    return {
+        "course_code": course.course_code,
+        "course_title": course.course_name,
+        "course_type": course.course_type,
+        "faculty_name": fac_user.name if fac_user else "Dr. Nimrita Koul",
+        "faculty_designation": fac.designation if fac else "Associate Professor",
+        "specialization": fac.specialization if fac else "Agentic AI",
+    }

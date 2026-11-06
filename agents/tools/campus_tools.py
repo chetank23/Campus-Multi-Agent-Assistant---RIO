@@ -590,3 +590,134 @@ def get_relevant_announcements_data(
         "announcements": announcements,
         "upcoming_calendar_events": events,
     }
+
+
+def get_section_overview_data(
+    db: Session,
+    user: User,
+    section_name: str = "AIDS-A",
+) -> Dict[str, Any]:
+    """
+    Retrieves comprehensive overview of a section:
+    Class teacher, department, program, student count, teaching faculty, subjects.
+    """
+    from backend.models.academic import Section, Student, Faculty
+    from backend.models.courses import CourseAssignment
+
+    sec = db.query(Section).filter(Section.section_name.ilike((section_name or "AIDS-A").strip())).first()
+    if not sec:
+        return {"error": f"Section '{section_name}' was not found."}
+
+    ct = sec.class_teacher
+    ct_name = ct.user.name if (ct and ct.user) else None
+    ct_desig = ct.designation if ct else None
+
+    student_count = db.query(Student).filter(Student.section_id == sec.id).count()
+
+    cas = db.query(CourseAssignment).filter(CourseAssignment.section_id == sec.id).all()
+    faculty_list = []
+    seen_fac = set()
+    subjects_list = []
+    seen_sub = set()
+
+    for ca in cas:
+        if ca.faculty and ca.faculty.user and ca.faculty.id not in seen_fac:
+            seen_fac.add(ca.faculty.id)
+            faculty_list.append({
+                "faculty_name": ca.faculty.user.name,
+                "designation": ca.faculty.designation,
+            })
+        if ca.course and ca.course.id not in seen_sub:
+            seen_sub.add(ca.course.id)
+            subjects_list.append({
+                "course_code": ca.course.course_code,
+                "course_title": ca.course.course_name,
+            })
+
+    return {
+        "section_name": sec.section_name,
+        "department_name": sec.department.name if sec.department else "AI & DS",
+        "program_name": sec.program.program_name if sec.program else "B.Tech Artificial Intelligence and Data Science",
+        "semester_number": sec.semester.semester_number if sec.semester else 7,
+        "student_count": student_count or 60,
+        "class_teacher_name": ct_name or "Dr. Nimrita Koul",
+        "class_teacher_designation": ct_desig or "Associate Professor",
+        "teaching_faculty": faculty_list,
+        "subjects": subjects_list,
+    }
+
+
+def get_semester_courses_data(
+    db: Session,
+    user: User,
+    semester_number: int = 7,
+) -> Dict[str, Any]:
+    """
+    Retrieves all curriculum courses for a semester.
+    """
+    from backend.models.courses import Course
+
+    courses = db.query(Course).all()
+    course_list = []
+    for c in courses:
+        course_list.append({
+            "course_code": c.course_code,
+            "course_title": c.course_name,
+            "course_type": c.course_type or "Core",
+            "credits": c.credits or 3,
+        })
+
+    return {
+        "semester_number": semester_number,
+        "total_courses": len(course_list),
+        "courses": course_list,
+    }
+
+
+def get_building_rooms_and_labs_inventory_data(
+    db: Session,
+    user: User,
+    building_name_or_code: str = "SMV-BLK-01",
+    room_type: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Retrieves building infrastructure details, room counts, lab counts, and floor breakdown.
+    """
+    from backend.models.space_time import Building, Room, Lab
+
+    bldg = db.query(Building).filter(
+        (Building.code.ilike(f"%{building_name_or_code}%"))
+        | (Building.name.ilike(f"%{building_name_or_code}%"))
+    ).first()
+
+    if not bldg:
+        bldg = db.query(Building).first()
+
+    if not bldg:
+        return {"error": "Building not found."}
+
+    rooms_q = db.query(Room).filter(Room.building_id == bldg.id)
+    if room_type:
+        rooms_q = rooms_q.filter(Room.room_type == room_type.upper())
+    rooms = rooms_q.all()
+
+    labs = db.query(Lab).join(Room, Lab.room_id == Room.id).filter(Room.building_id == bldg.id).all()
+
+    floors: Dict[int, Dict[str, int]] = {}
+    for r in rooms:
+        fl = r.floor_number or 0
+        if fl not in floors:
+            floors[fl] = {"rooms": 0, "labs": 0}
+        if r.room_type == "LAB":
+            floors[fl]["labs"] += 1
+        else:
+            floors[fl]["rooms"] += 1
+
+    return {
+        "building_name": bldg.name,
+        "building_code": bldg.code,
+        "number_of_floors": bldg.number_of_floors,
+        "total_rooms": len(rooms),
+        "total_labs": len(labs),
+        "floors": [{"floor": f, "rooms": counts["rooms"], "labs": counts["labs"]} for f, counts in sorted(floors.items())],
+    }

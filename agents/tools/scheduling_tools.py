@@ -47,6 +47,11 @@ def resolve_academic_scope_data(
     """
     text = query_text.lower()
 
+    # Check if a known specific section like AIDS-A is referenced
+    sec_match = None
+    if "aids-a" in text or "aids a" in text or "aids" in text:
+        sec_match = db.query(Section).filter(Section.section_name.ilike("%AIDS-A%")).first()
+
     # 1. Academic Year
     if not academic_year_id:
         # Default to the most active/latest academic year
@@ -113,6 +118,12 @@ def resolve_academic_scope_data(
             sem_match = re.search(r"\b(\d+)(?:st|nd|rd|th)\s*(?:semester|sem)\b", text)
         
         target_num = int(sem_match.group(1)) if sem_match else None
+        if target_num is None:
+            roman_map = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8}
+            for r_num, val in roman_map.items():
+                if re.search(r"\b(?:semester|sem)\s*" + r_num + r"\b", text):
+                    target_num = val
+                    break
         
         if target_num is not None:
             # Look up semester with this number
@@ -130,6 +141,13 @@ def resolve_academic_scope_data(
             if "current" in text or "active" in text:
                 # Get the first active semester in the academic year
                 sem_obj = db.query(Semester).filter(Semester.academic_year_id == academic_year_id).first()
+
+    if sec_match and (not dept_obj or not sem_obj):
+        dept_obj = dept_obj or sec_match.department
+        prog_obj = prog_obj or sec_match.program
+        sem_obj = sem_obj or sec_match.semester
+        if sem_obj and sem_obj.academic_year:
+            ay_obj = ay_obj or sem_obj.academic_year
 
     # Assess completeness
     missing = []

@@ -211,6 +211,12 @@ export function FacultyDashboard() {
             <p className="text-sm font-semibold text-[#647795] mt-1.5">
               {designation} <span className="mx-1">•</span> Department of {departmentName}
             </p>
+            {timetable?.sections_as_class_teacher && timetable.sections_as_class_teacher.length > 0 && (
+              <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EBF4FF] text-[#2B6CB0] text-xs font-bold border border-[#D0E2FF]">
+                <GraduationCap size={13} />
+                <span>Class Teacher: Section {timetable.sections_as_class_teacher.join(', ')}</span>
+              </div>
+            )}
             <p className="text-xs italic text-[#8FA3BF] mt-2 font-medium">
               “Teach. Guide. Inspire. Shape brighter futures.”
             </p>

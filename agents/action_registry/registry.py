@@ -91,7 +91,7 @@ class ActionRegistry:
                 parameters=[
                     ActionParameter(name="day", param_type="str", description="Optional day of week filter (e.g. MONDAY)", required=False),
                 ],
-                permitted_roles=["STUDENT", "ADMIN"],
+                permitted_roles=["STUDENT", "ADMIN", "FACULTY"],
                 authoritative_service="agents.tools.student_tools.get_student_timetable_data",
                 validation_rules=["User must be authenticated student or admin", "Day must be valid weekday if provided"],
                 requires_confirmation=False,

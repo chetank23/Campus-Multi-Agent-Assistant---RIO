@@ -13,6 +13,10 @@ from agents.tools.student_tools import (
     get_student_timetable_data,
     get_my_timetable_data,
     get_class_status_data,
+    get_student_academic_profile_data,
+    get_student_enrolled_subjects_data,
+    get_break_timings_data,
+    get_first_class_tomorrow_data,
 )
 from agents.tools.faculty_tools import (
     get_faculty_schedule_data,
@@ -20,6 +24,9 @@ from agents.tools.faculty_tools import (
     get_faculty_profile_data,
     get_faculty_information_data,
     get_available_faculty_data,
+    get_faculty_profile_and_classes_data,
+    get_section_students_data,
+    get_course_faculty_data,
 )
 from agents.tools.campus_tools import (
     get_course_details_data,
@@ -32,6 +39,9 @@ from agents.tools.campus_tools import (
     get_published_timetable_status_data,
     get_recent_timetable_changes_data,
     get_relevant_announcements_data,
+    get_section_overview_data,
+    get_semester_courses_data,
+    get_building_rooms_and_labs_inventory_data,
 )
 from agents.tools.department_tools import get_department_timetable_data
 from agents.tools.resource_tools import (
@@ -114,7 +124,7 @@ QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                 },
             },
         },
-        "allowed_roles": ["STUDENT", "ADMIN"],
+        "allowed_roles": ["STUDENT", "ADMIN", "FACULTY"],
     },
     # 3. get_faculty_timetable
     {
@@ -810,6 +820,99 @@ QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         },
         "allowed_roles": ["FACULTY", "ADMIN"],
     },
+    # AIDS-A and Academic Tools
+    {
+        "name": "get_student_academic_profile",
+        "description": "Retrieves the student's complete academic profile including SRN, section, department, program, semester, academic year, and class teacher details.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target_srn": {"type": "string", "description": "Optional SRN to inspect (for Admin or Faculty)"}
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_student_enrolled_subjects",
+        "description": "Retrieves the active curriculum subjects for the student's section this semester.",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_break_timings",
+        "description": "Retrieves official campus lunch break and tea break schedules.",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_first_class_tomorrow",
+        "description": "Retrieves the first scheduled class tomorrow for the authenticated user.",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_faculty_profile_and_classes",
+        "description": "Retrieves faculty profile, department, designation, specialization, Class Teacher responsibilities, and assigned classes.",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_section_students",
+        "description": "Retrieves the official student roster for a section.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "section_name": {"type": "string", "description": "Section name e.g. 'AIDS-A'"}
+            },
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_course_faculty",
+        "description": "Retrieves assigned faculty member, designation, and specialization for a course.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "course_query": {"type": "string", "description": "Course title or code e.g. 'Principles of Federated Learning'"}
+            },
+            "required": ["course_query"],
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_section_overview",
+        "description": "Retrieves complete overview of a section (department, student count, class teacher, faculty list, subjects).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "section_name": {"type": "string", "description": "Section name e.g. 'AIDS-A'"}
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_semester_courses",
+        "description": "Retrieves all subjects for a semester e.g. Semester VII.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "semester_number": {"type": "integer", "description": "Semester number e.g. 7"}
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_building_rooms_and_labs_inventory",
+        "description": "Retrieves room and lab count, floor breakdown, and inventory for a campus building.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "building_name_or_code": {"type": "string", "description": "Building code e.g. 'SMV-BLK-01'"},
+                "room_type": {"type": "string", "description": "Optional filter e.g. 'CLASSROOM' or 'LAB'"}
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
 ]
 
 
@@ -1279,6 +1382,61 @@ def execute_tool(
                 user=user,
                 drive_id=tool_args["drive_id"],
                 reason=tool_args["reason"],
+            )
+
+        elif tool_name == "get_student_academic_profile":
+            return get_student_academic_profile_data(
+                db=db,
+                user=user,
+                target_srn=tool_args.get("target_srn"),
+            )
+
+        elif tool_name == "get_student_enrolled_subjects":
+            return get_student_enrolled_subjects_data(db=db, user=user)
+
+        elif tool_name == "get_break_timings":
+            return get_break_timings_data(db=db, user=user)
+
+        elif tool_name == "get_first_class_tomorrow":
+            return get_first_class_tomorrow_data(db=db, user=user)
+
+        elif tool_name == "get_faculty_profile_and_classes":
+            return get_faculty_profile_and_classes_data(db=db, user=user)
+
+        elif tool_name == "get_section_students":
+            return get_section_students_data(
+                db=db,
+                user=user,
+                section_name=tool_args.get("section_name", "AIDS-A"),
+            )
+
+        elif tool_name == "get_course_faculty":
+            return get_course_faculty_data(
+                db=db,
+                user=user,
+                course_query=tool_args.get("course_query", ""),
+            )
+
+        elif tool_name == "get_section_overview":
+            return get_section_overview_data(
+                db=db,
+                user=user,
+                section_name=tool_args.get("section_name", "AIDS-A"),
+            )
+
+        elif tool_name == "get_semester_courses":
+            return get_semester_courses_data(
+                db=db,
+                user=user,
+                semester_number=tool_args.get("semester_number", 7),
+            )
+
+        elif tool_name == "get_building_rooms_and_labs_inventory":
+            return get_building_rooms_and_labs_inventory_data(
+                db=db,
+                user=user,
+                building_name_or_code=tool_args.get("building_name_or_code", "SMV-BLK-01"),
+                room_type=tool_args.get("room_type"),
             )
 
         else:
