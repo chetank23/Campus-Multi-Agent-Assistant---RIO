@@ -57,3 +57,5 @@ storage/curriculum_documents/*
 
 *credentials*
 aids_a_seed_credentials.json
+backups/
+*.dump

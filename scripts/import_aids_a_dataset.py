@@ -66,6 +66,7 @@ from backend.models.timetable import (
     TimetableVersion,
 )
 
+REPO_CLEAN_DATA_PATH = REPO_ROOT / "data" / "raw" / "RIO_MJP_AIDS_A_Clean_Test_Data.xlsx"
 REPO_RAW_DATA_PATH = REPO_ROOT / "data" / "raw" / "RIO_MJP_AIDS_A_Clean_Merged_Test_Data.xlsx"
 FALLBACK_USER_UPLOAD_PATH = Path(r"C:/Users/Chethan Kumar/.gemini/antigravity/brain/76a7f300-364a-4771-833a-c7670d38435c/.user_uploaded/media_1793980094606_098e9839.xlsx")
 
@@ -77,11 +78,13 @@ def resolve_excel_path(path_arg: Optional[str | Path] = None) -> Path:
     env_path = os.environ.get("AIDS_A_EXCEL_PATH")
     if env_path and Path(env_path).exists():
         return Path(env_path)
+    if REPO_CLEAN_DATA_PATH.exists():
+        return REPO_CLEAN_DATA_PATH
     if REPO_RAW_DATA_PATH.exists():
         return REPO_RAW_DATA_PATH
     if FALLBACK_USER_UPLOAD_PATH.exists():
         return FALLBACK_USER_UPLOAD_PATH
-    return REPO_RAW_DATA_PATH
+    return REPO_CLEAN_DATA_PATH
 
 
 def safe_int(val: Any, default: int = 0) -> int:
@@ -409,18 +412,69 @@ def import_aids_a_dataset(
             if nimrita_fac:
                 assigned_faculty_objs.append(nimrita_fac)
 
+        # Elective group tracking
+        if group_str:
+            clean_group_name = group_str.replace(" option", "").strip()
+            eg = db.query(ElectiveGroup).filter(
+                ElectiveGroup.name == clean_group_name,
+                ElectiveGroup.department_id == dept.id,
+                ElectiveGroup.semester_id == sem.id,
+            ).first()
+            if not eg:
+                eg = ElectiveGroup(
+                    name=clean_group_name,
+                    department_id=dept.id,
+                    semester_id=sem.id,
+                )
+                db.add(eg)
+                db.flush()
+
+            egc = db.query(ElectiveGroupCourse).filter(
+                ElectiveGroupCourse.group_id == eg.id,
+                ElectiveGroupCourse.course_id == course.id,
+            ).first()
+            if not egc:
+                egc = ElectiveGroupCourse(
+                    group_id=eg.id,
+                    course_id=course.id,
+                )
+                db.add(egc)
+                db.flush()
+
         for af in assigned_faculty_objs:
+            # Determine whether this assignment is Section AIDS-A's primary scheduled section course:
+            # - Hardcore courses: B25CS0701, B22EF0704, B22EH0704 (Dr. Nimrita Koul)
+            # - Section electives: B25CSS712 (ECET - Prof. Suhasini N), B23EAS701 (AIH - Dr. Swimpy Pahuja),
+            #                      B23ASO711 (AISR - Prof. Kiran M), B23MEO720 (PEP - Prof. K Jeevan Pradeep)
+            # Alternate tracks and co-instructors are preserved with section_id = None so that
+            # Section AIDS-A is not overloaded with 57 non-overlapping hours in a 42-hour week.
+            is_section_course = False
+            fac_user_name = af.user.name if (af.user and af.user.name) else ""
+            if code in ("B25CS0701", "B22EF0704", "B22EH0704"):
+                is_section_course = True
+            elif code == "B25CSS712" and "Suhasini" in fac_user_name:
+                is_section_course = True
+            elif code == "B23EAS701" and "Swimpy" in fac_user_name:
+                is_section_course = True
+            elif code == "B23ASO711" and "Kiran" in fac_user_name:
+                is_section_course = True
+            elif code == "B23MEO720" and "Jeevan" in fac_user_name:
+                is_section_course = True
+
+            target_sec_id = sec.id if is_section_course else None
+            target_batch_id = batch.id if is_section_course else None
+
             ca = db.query(CourseAssignment).filter(
                 CourseAssignment.course_id == course.id,
-                CourseAssignment.section_id == sec.id,
+                CourseAssignment.section_id == target_sec_id,
                 CourseAssignment.faculty_id == af.id,
             ).first()
             if not ca:
                 ca = CourseAssignment(
                     course_id=course.id,
                     faculty_id=af.id,
-                    section_id=sec.id,
-                    batch_id=batch.id,
+                    section_id=target_sec_id,
+                    batch_id=target_batch_id,
                 )
                 db.add(ca)
                 db.flush()
