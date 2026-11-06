@@ -99,10 +99,21 @@ def get_faculty_schedule_data(
 
     published_version = (
         db.query(TimetableVersion)
-        .filter(TimetableVersion.status == "PUBLISHED")
+        .join(TimetableEntry, TimetableEntry.version_id == TimetableVersion.id)
+        .filter(
+            TimetableVersion.status == "PUBLISHED",
+            TimetableEntry.faculty_id == faculty.id,
+        )
         .order_by(TimetableVersion.published_at.desc(), TimetableVersion.id.desc())
         .first()
     )
+    if not published_version:
+        published_version = (
+            db.query(TimetableVersion)
+            .filter(TimetableVersion.status == "PUBLISHED")
+            .order_by(TimetableVersion.published_at.desc(), TimetableVersion.id.desc())
+            .first()
+        )
 
     if not published_version:
         return {

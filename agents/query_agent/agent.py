@@ -342,7 +342,9 @@ def format_grounded_response(
 
         entries = tool_result.get("entries", [])
         if not entries:
-            msg = tool_result.get("message", "No classes found for your section in the active published timetable.")
+            sec_name = tool_result.get("section", "AIDS-A")
+            default_msg = f"Schedule for {sec_name}: No classes found for your section in the active published timetable."
+            msg = tool_result.get("message", default_msg)
             return sanitize_plain_english(msg), sources
 
         # If faculty schedule returned via get_my_timetable

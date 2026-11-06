@@ -48,9 +48,7 @@ def space_time_data():
     db = TestingSessionLocal()
     
     # Pre-cleanup
-    db.query(FacultyAvailability).filter(FacultyAvailability.availability == "AVAILABLE").delete(synchronize_session=False)
-    db.query(TimeSlot).filter(TimeSlot.day == "MONDAY").delete(synchronize_session=False)
-    db.query(AcademicCalendar).filter(AcademicCalendar.event_type == "EVENT").delete(synchronize_session=False)
+    db.query(AcademicCalendar).filter(AcademicCalendar.description == "Test Event").delete(synchronize_session=False)
     db.query(Faculty).filter(Faculty.faculty_id == "SFAC001").delete(synchronize_session=False)
     db.query(User).filter(User.email == "st_faculty@test.com").delete(synchronize_session=False)
     db.query(Department).filter(Department.department_code == "ST_DPT").delete(synchronize_session=False)
@@ -106,9 +104,9 @@ def space_time_data():
     yield data
     
     db = TestingSessionLocal()
-    db.query(FacultyAvailability).filter(FacultyAvailability.faculty_id == data["fac_id"]).delete(synchronize_session=False)
-    db.query(TimeSlot).filter(TimeSlot.day == "MONDAY").delete(synchronize_session=False)
-    db.query(AcademicCalendar).filter(AcademicCalendar.academic_year_id == data["ay_id"]).delete(synchronize_session=False)
+    db.query(FacultyAvailability).filter(FacultyAvailability.id == data["fa_id"]).delete(synchronize_session=False)
+    db.query(TimeSlot).filter(TimeSlot.id == data["ts_id"]).delete(synchronize_session=False)
+    db.query(AcademicCalendar).filter(AcademicCalendar.id == data["ac_id"]).delete(synchronize_session=False)
     db.query(Faculty).filter(Faculty.id == data["fac_id"]).delete(synchronize_session=False)
     db.query(User).filter(User.id == data["user_id"]).delete(synchronize_session=False)
     db.query(Department).filter(Department.id == data["dept_id"]).delete(synchronize_session=False)

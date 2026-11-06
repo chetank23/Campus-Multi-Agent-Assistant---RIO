@@ -82,17 +82,31 @@ def get_student_timetable_data(
             "entries": [],
         }
 
-    # Only inspect the PUBLISHED timetable version
+    # Only inspect the PUBLISHED timetable version for this student's section
     published_version = (
         db.query(TimetableVersion)
-        .filter(TimetableVersion.status == "PUBLISHED")
+        .join(TimetableEntry, TimetableEntry.version_id == TimetableVersion.id)
+        .filter(
+            TimetableVersion.status == "PUBLISHED",
+            TimetableEntry.section_id == student.section_id,
+        )
         .order_by(TimetableVersion.published_at.desc(), TimetableVersion.id.desc())
         .first()
     )
+    if not published_version:
+        published_version = (
+            db.query(TimetableVersion)
+            .filter(TimetableVersion.status == "PUBLISHED")
+            .order_by(TimetableVersion.published_at.desc(), TimetableVersion.id.desc())
+            .first()
+        )
 
     if not published_version:
+        section = db.query(Section).filter(Section.id == student.section_id).first() if student.section_id else None
+        sec_name = section.section_name if section else "AIDS-A"
         return {
-            "message": "No published timetable is currently active for your semester.",
+            "section": sec_name,
+            "message": f"Schedule for {sec_name}: No published timetable is currently active for your semester.",
             "entries": [],
         }
 

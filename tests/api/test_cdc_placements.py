@@ -482,9 +482,19 @@ def test_deterministic_student_eligibility_engine(admin_auth, faculty_auth, stud
     student_without_record = (
         db_session.query(Student)
         .outerjoin(StudentAcademicRecord, Student.id == StudentAcademicRecord.student_id)
-        .filter(StudentAcademicRecord.id == None)
+        .filter(StudentAcademicRecord.id == None, Student.department_id == student_dept_id)
         .first()
     )
+    if not student_without_record:
+        test_user = User(name="No Acad Student", email="no_acad_dept@test.com", password_hash="hash", role="STUDENT", department_id=student_dept_id)
+        db_session.add(test_user)
+        db_session.commit()
+        db_session.refresh(test_user)
+        student_without_record = Student(user_id=test_user.id, usn="1MS22CS998", department_id=student_dept_id)
+        db_session.add(student_without_record)
+        db_session.commit()
+        db_session.refresh(student_without_record)
+
     if student_without_record:
         drive_obj = db_session.query(PlacementDrive).filter(PlacementDrive.id == drive_a["id"]).first()
         assert drive_obj is not None
