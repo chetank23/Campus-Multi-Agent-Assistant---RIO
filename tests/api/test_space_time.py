@@ -75,7 +75,7 @@ def space_time_data():
     db.commit()
     db.refresh(fac)
     
-    ts = TimeSlot(day="MONDAY", start_time=datetime.time(9, 0), end_time=datetime.time(10, 0), slot_type="CLASS")
+    ts = TimeSlot(day="SUNDAY", start_time=datetime.time(9, 0), end_time=datetime.time(10, 0), slot_type="CLASS")
     db.add(ts)
     db.commit()
     db.refresh(ts)
@@ -118,16 +118,16 @@ def test_create_time_slot(space_time_data, auth_headers):
     response = client.post(
         "/time-slots/",
         json={
-            "day": "MONDAY",
+            "day": "SUNDAY",
             "start_time": "10:00:00",
             "end_time": "11:00:00",
             "slot_type": "CLASS"
         },
         headers=auth_headers
     )
-    assert response.status_code == 200
+    assert response.status_code == 200, f"Create slot failed: {response.text}"
     data = response.json()
-    assert data["day"] == "MONDAY"
+    assert data["day"] == "SUNDAY"
     assert data["start_time"] == "10:00:00"
 
     db = TestingSessionLocal()
@@ -138,7 +138,7 @@ def test_create_time_slot(space_time_data, auth_headers):
 def test_get_time_slot(space_time_data, auth_headers):
     response = client.get(f"/time-slots/{space_time_data['ts_id']}", headers=auth_headers)
     assert response.status_code == 200
-    assert response.json()["day"] == "MONDAY"
+    assert response.json()["day"] == "SUNDAY"
 
 def test_update_time_slot(space_time_data, auth_headers):
     response = client.put(
@@ -152,9 +152,10 @@ def test_update_time_slot(space_time_data, auth_headers):
 def test_delete_time_slot(space_time_data, auth_headers):
     response = client.post(
         "/time-slots/",
-        json={"day": "MONDAY", "start_time": "11:00:00", "end_time": "12:00:00", "slot_type": "BREAK"},
+        json={"day": "SUNDAY", "start_time": "11:00:00", "end_time": "12:00:00", "slot_type": "BREAK"},
         headers=auth_headers
     )
+    assert response.status_code == 200, f"Create slot failed: {response.text}"
     new_id = response.json()["id"]
     response = client.delete(f"/time-slots/{new_id}", headers=auth_headers)
     assert response.status_code == 200
