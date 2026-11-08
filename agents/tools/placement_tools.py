@@ -11,7 +11,7 @@ Authoritative LangGraph agent tools for CDC Placement Management:
 from __future__ import annotations
 
 import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -239,16 +239,21 @@ def create_placement_drive_draft_data(
     if not dl:
         return {"error": f"Invalid application deadline '{application_deadline}'. Use YYYY-MM-DD HH:MM format."}
 
-    jt = "FULL_TIME"
-    if job_type.upper() in ("INTERNSHIP", "INTERN_PLUS_FULL_TIME", "FULL_TIME"):
-        jt = job_type.upper()
+    jt_raw = job_type.upper()
+    jt: Literal["FULL_TIME", "INTERNSHIP", "INTERN_PLUS_FULL_TIME"]
+    if jt_raw == "INTERNSHIP":
+        jt = "INTERNSHIP"
+    elif jt_raw == "INTERN_PLUS_FULL_TIME":
+        jt = "INTERN_PLUS_FULL_TIME"
+    else:
+        jt = "FULL_TIME"
 
     req = PlacementDriveCreateRequest(
         company_name=company_name,
         title=title,
         job_role=job_role,
         application_deadline=dl,
-        job_type=jt,  # type: ignore
+        job_type=jt,
         work_location=work_location,
         compensation_details=compensation_details,
         min_cgpa=min_cgpa,

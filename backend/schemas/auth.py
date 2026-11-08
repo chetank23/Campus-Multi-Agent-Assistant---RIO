@@ -1,11 +1,11 @@
 import email_validator
 setattr(email_validator, "TEST_ENVIRONMENT", True)
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 class TokenResponse(BaseModel):

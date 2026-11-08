@@ -59,10 +59,22 @@ class ValidationResult(BaseModel):
         )
 
 
+DAY_NORM_MAP = {
+    "MON": "MON", "MONDAY": "MON",
+    "TUE": "TUE", "TUESDAY": "TUE",
+    "WED": "WED", "WEDNESDAY": "WED",
+    "THU": "THU", "THURSDAY": "THU",
+    "FRI": "FRI", "FRIDAY": "FRI",
+    "SAT": "SAT", "SATURDAY": "SAT",
+    "SUN": "SUN", "SUNDAY": "SUN",
+}
+
+
 def slots_overlap(s1, s2) -> bool:
     """
     Returns True if slot s1 and slot s2 overlap in time on the same day.
     Works for both OptTimeSlot Pydantic objects and TimeSlot SQLAlchemy models.
+    Day comparisons are normalized to prevent Mon vs Monday collision misses.
     """
     if s1 is None or s2 is None:
         return False
@@ -72,7 +84,9 @@ def slots_overlap(s1, s2) -> bool:
         return True
     day1 = getattr(s1, "day", None)
     day2 = getattr(s2, "day", None)
-    if day1 != day2 or not day1:
+    d1 = DAY_NORM_MAP.get(str(day1).strip().upper(), str(day1).strip().upper()[:3]) if day1 else None
+    d2 = DAY_NORM_MAP.get(str(day2).strip().upper(), str(day2).strip().upper()[:3]) if day2 else None
+    if not d1 or not d2 or d1 != d2:
         return False
     st1 = getattr(s1, "start_time", None)
     et1 = getattr(s1, "end_time", None)
@@ -127,7 +141,7 @@ def validate_timetable(entries: List[TimetableEntryResult], opt_input: Optimizer
         # 2. Capacity requirement (H4 - Hard Constraint)
         student_count = sections[a.section_id].student_count if a.section_id and a.section_id in sections else (batches[a.batch_id].student_count if a.batch_id and a.batch_id in batches else 0)
         room = rooms.get(entry.room_id)
-        if room and room.capacity < student_count:
+        if room and room.capacity is not None and room.capacity < student_count:
             violations.append(
                 ValidationViolation(
                     severity="BLOCKER",
@@ -248,8 +262,8 @@ def validate_timetable(entries: List[TimetableEntryResult], opt_input: Optimizer
         c = courses.get(a.course_id)
         if not c:
             continue
-        req_theory = c.lecture_hours + c.tutorial_hours
-        req_practical = c.practical_hours
+        req_theory = (c.lecture_hours or 0) + (c.tutorial_hours or 0)
+        req_practical = c.practical_hours or 0
 
         if req_theory > 0:
             assigned = course_hours_assigned.get((a.id, "THEORY"), 0)

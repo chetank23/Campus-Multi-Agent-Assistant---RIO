@@ -9,7 +9,7 @@ Enforces strict server-side RBAC and audience privacy barriers.
 from __future__ import annotations
 
 import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from sqlalchemy.orm import Session
 
 from backend.models.identity import User
@@ -174,8 +174,17 @@ def create_event_draft_data(
         return {"error": "Invalid start_time or end_time format."}
 
     # Normalize target audience
-    aud = target_audience.upper() if target_audience else "ALL"
-    if aud not in ("ALL", "STUDENT", "FACULTY", "DEPARTMENT_ONLY", "MEMBERS_ONLY"):
+    aud_cand = target_audience.upper() if target_audience else "ALL"
+    aud: Literal["ALL", "STUDENT", "FACULTY", "DEPARTMENT_ONLY", "MEMBERS_ONLY"]
+    if aud_cand == "STUDENT":
+        aud = "STUDENT"
+    elif aud_cand == "FACULTY":
+        aud = "FACULTY"
+    elif aud_cand == "DEPARTMENT_ONLY":
+        aud = "DEPARTMENT_ONLY"
+    elif aud_cand == "MEMBERS_ONLY":
+        aud = "MEMBERS_ONLY"
+    else:
         aud = "ALL"
 
     try:
@@ -189,7 +198,7 @@ def create_event_draft_data(
             room_id=room_id,
             building_id=building_id,
             venue_name=venue_name,
-            target_audience=aud,  # type: ignore
+            target_audience=aud,
             requires_approval=requires_approval,
         )
         ev = create_event(db=db, creator=user, payload=req)

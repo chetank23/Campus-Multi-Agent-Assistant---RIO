@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
-from typing import List
+from typing import List, Optional
 
 from backend.database import get_db
-from backend.models.academic import Section, Faculty
+from backend.models.academic import Section, Faculty, Semester
 from backend.models.identity import User
 from backend.schemas.section import SectionCreate, SectionUpdate, SectionResponse, ClassTeacherSummary
 from backend.dependencies import get_current_user, require_role, require_department_scope
@@ -24,16 +24,29 @@ def _to_response(sec: Section) -> SectionResponse:
 @router.get("", include_in_schema=False)
 @router.get("/", response_model=List[SectionResponse])
 def get_sections(
+    academic_year_id: Optional[int] = None,
+    semester_id: Optional[int] = None,
+    department_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Section).options(
         joinedload(Section.class_teacher).joinedload(Faculty.user)
     )
+    if academic_year_id:
+        query = query.join(Semester, Section.semester_id == Semester.id).filter(
+            Semester.academic_year_id == academic_year_id
+        )
+    if semester_id:
+        query = query.filter(Section.semester_id == semester_id)
+    if department_id:
+        query = query.filter(Section.department_id == department_id)
+
     if current_user.role in ("ADMIN", "SUPER_ADMIN"):
         sections = query.all()
     elif current_user.role == "FACULTY":
-        sections = query.filter(Section.department_id == current_user.department_id).all()
+        dept_id = department_id or current_user.department_id
+        sections = query.filter(Section.department_id == dept_id).all()
     else:  # STUDENT
         return []
     return [_to_response(s) for s in sections]

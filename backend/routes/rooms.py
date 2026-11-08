@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 import csv
 import io
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/rooms", tags=["Rooms"])
 
 @router.get("/", response_model=List[RoomResponse])
 def get_rooms(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)): 
-    return db.query(Room).all()
+    return db.query(Room).options(joinedload(Room.building)).order_by(Room.room_number.asc()).all()
 
 @router.post("/", response_model=RoomResponse)
 def create_room(room: RoomCreate, admin_user: User = Depends(require_role("ADMIN")), db: Session = Depends(get_db)): 
@@ -29,7 +29,7 @@ def create_room(room: RoomCreate, admin_user: User = Depends(require_role("ADMIN
 
 @router.get("/{room_id}", response_model=RoomResponse)
 def get_room(room_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)): 
-    db_room = db.query(Room).filter(Room.id == room_id).first()
+    db_room = db.query(Room).options(joinedload(Room.building)).filter(Room.id == room_id).first()
     if not db_room:
         raise HTTPException(status_code=404, detail="Room not found")
     return db_room

@@ -73,7 +73,7 @@ class TimetableSolver:
 
         eligible = []
         for r_id, room in self.rooms.items():
-            if room.capacity < student_count:
+            if room.capacity is not None and room.capacity > 0 and room.capacity < student_count:
                 continue
                 
             if hour_type == 'PRACTICAL':
@@ -121,8 +121,8 @@ class TimetableSolver:
             batch_id = a.batch_id
             
             hours_needed = {
-                'THEORY': course.lecture_hours + course.tutorial_hours,
-                'PRACTICAL': course.practical_hours
+                'THEORY': (course.lecture_hours or 0) + (course.tutorial_hours or 0),
+                'PRACTICAL': course.practical_hours or 0
             }
             
             for h_type, req_hours in hours_needed.items():
@@ -192,7 +192,9 @@ class TimetableSolver:
             for j in range(i + 1, len(slot_list)):
                 sl1 = slot_list[i]
                 sl2 = slot_list[j]
-                if sl1.day == sl2.day and sl1.start_time and sl1.end_time and sl2.start_time and sl2.end_time:
+                d1 = sl1.day.strip().upper()[:3] if sl1.day else ''
+                d2 = sl2.day.strip().upper()[:3] if sl2.day else ''
+                if d1 and d2 and d1 == d2 and sl1.start_time and sl1.end_time and sl2.start_time and sl2.end_time:
                     if max(sl1.start_time, sl2.start_time) < min(sl1.end_time, sl2.end_time):
                         for f_id in self.faculty.keys():
                             v1 = f_t_vars.get((f_id, sl1.id), [])
@@ -513,7 +515,7 @@ class TimetableSolver:
         for a in self.assignments:
             c = self.courses.get(a.course_id)
             if c:
-                total_required_hours += c.lecture_hours + c.tutorial_hours + c.practical_hours
+                total_required_hours += (c.lecture_hours or 0) + (c.tutorial_hours or 0) + (c.practical_hours or 0)
                 
         total_room_slots = len(self.rooms) * len(self.slots)
         if total_required_hours > total_room_slots:
@@ -526,7 +528,7 @@ class TimetableSolver:
                 if a.faculty_id == f.id:
                     c = self.courses.get(a.course_id)
                     if c:
-                        f_req += c.lecture_hours + c.tutorial_hours + c.practical_hours
+                        f_req += (c.lecture_hours or 0) + (c.tutorial_hours or 0) + (c.practical_hours or 0)
             
             f_avail = sum(1 for slot_id, av in self.faculty_availability.get(f.id, {}).items() if av.availability in ('AVAILABLE', 'PREFERRED') and slot_id in self.slots)
             if f_req > f_avail:
@@ -538,7 +540,7 @@ class TimetableSolver:
         for a in self.assignments:
             c = self.courses.get(a.course_id)
             if c and c in lab_courses:
-                total_lab_hours += c.practical_hours if c.practical_hours > 0 else (c.lecture_hours + c.tutorial_hours)
+                total_lab_hours += (c.practical_hours or 0) if (c.practical_hours or 0) > 0 else ((c.lecture_hours or 0) + (c.tutorial_hours or 0))
                 
         lab_rooms = [r for r in self.rooms.values() if r.room_type == 'LAB']
         total_lab_slots = len(lab_rooms) * len(self.slots)

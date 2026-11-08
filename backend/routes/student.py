@@ -7,7 +7,7 @@ from backend.database import get_db
 from backend.models.academic import Student, Faculty
 from backend.models.courses import Course, CourseAssignment
 from backend.models.identity import User
-from backend.models.timetable import TimetableVersion, TimetableEntry
+from backend.models.timetable import Timetable, TimetableVersion, TimetableEntry
 from backend.models.space_time import Room, TimeSlot
 from backend.schemas.student import StudentCreate, StudentUpdate, StudentResponse, StudentCourseResponse
 from backend.schemas.timetable import StudentTimetableResponse, PersonalTimetableEntry
@@ -74,9 +74,11 @@ def _get_student_my_timetable_handler(
 
     query = (
         db.query(TimetableEntry)
-        .join(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
+        .outerjoin(Timetable, TimetableEntry.timetable_id == Timetable.id)
+        .outerjoin(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
         .filter(
-            TimetableVersion.status == "PUBLISHED",
+            ((Timetable.id != None) & (Timetable.status == "PUBLISHED")) |  # noqa: E711
+            ((TimetableVersion.id != None) & (TimetableVersion.status == "PUBLISHED")),  # noqa: E711
             TimetableEntry.section_id == stu.section_id,
             TimetableEntry.status != "CANCELLED",
         )
@@ -91,7 +93,10 @@ def _get_student_my_timetable_handler(
         query = query.filter(TimetableEntry.batch_id == None)  # noqa: E711
 
     if academic_year_id:
-        query = query.filter(TimetableVersion.academic_year_id == academic_year_id)
+        query = query.filter(
+            (Timetable.academic_year_id == academic_year_id) |
+            (TimetableVersion.academic_year_id == academic_year_id)
+        )
 
     raw_entries = (
         query.options(
@@ -103,6 +108,7 @@ def _get_student_my_timetable_handler(
             joinedload(TimetableEntry.batch),
             joinedload(TimetableEntry.department),
             joinedload(TimetableEntry.program),
+            joinedload(TimetableEntry.timetable).joinedload(Timetable.academic_year),
             joinedload(TimetableEntry.version).joinedload(TimetableVersion.academic_year),
         )
         .all()
@@ -133,12 +139,18 @@ def _get_student_my_timetable_handler(
         eff_fac_name = sub.substitute_faculty.user.name if (sub and sub.substitute_faculty and sub.substitute_faculty.user) else orig_fac_name
         sub_name = sub.substitute_faculty.user.name if (sub and sub.substitute_faculty and sub.substitute_faculty.user) else None
 
+        entry_ay = None
+        if e.timetable and e.timetable.academic_year:
+            entry_ay = e.timetable.academic_year.name
+        elif e.version and e.version.academic_year:
+            entry_ay = e.version.academic_year.name
+
         result_entries.append(
             PersonalTimetableEntry(
                 id=e.id,
-                version_id=e.version_id,
-                version_number=e.version.version_number if e.version else None,
-                academic_year_name=e.version.academic_year.name if (e.version and e.version.academic_year) else None,
+                version_id=e.version_id or (e.timetable_id if e.timetable_id else None),
+                version_number=e.version.version_number if e.version else "CANONICAL",
+                academic_year_name=entry_ay,
                 semester_number=e.semester_id,
                 department_name=e.department.name if e.department else None,
                 program_name=e.program.program_name if e.program else None,
@@ -169,14 +181,18 @@ def _get_student_my_timetable_handler(
     ct_name = ct.user.name if (ct and ct.user) else None
     ct_desig = ct.designation if ct else None
     ct_contact = ct.contact_number if ct else None
+    first_tt = sorted_entries[0].timetable if (sorted_entries and sorted_entries[0].timetable) else None
     first_ver = sorted_entries[0].version if (sorted_entries and sorted_entries[0].version) else None
     if stu.semester and stu.semester.academic_year:
         ay_name = stu.semester.academic_year.name
+    elif first_tt and first_tt.academic_year:
+        ay_name = first_tt.academic_year.name
     elif first_ver and first_ver.academic_year:
         ay_name = first_ver.academic_year.name
     else:
         ay_name = None
     adm_batch = stu.batch.batch_name if stu.batch else "2023"
+    effective_working_days = first_tt.working_days if (first_tt and getattr(first_tt, "working_days", None)) else "MON_SAT"
 
     return StudentTimetableResponse(
         student_id=stu.id,
@@ -193,6 +209,7 @@ def _get_student_my_timetable_handler(
         class_teacher_designation=ct_desig,
         class_teacher_contact=ct_contact,
         total_class_hours=total_hours,
+        working_days=effective_working_days,
         entries=result_entries,
     )
 

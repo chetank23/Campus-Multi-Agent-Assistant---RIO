@@ -6,13 +6,14 @@ class GenerationScope(BaseModel):
     academic_year_id: int
     semester_id: int
     department_id: int
-    program_id: int
+    program_id: Optional[int] = None
     section_ids: Optional[List[int]] = None
     building_ids: Optional[List[int]] = None
     room_ids: Optional[List[int]] = None
     lab_ids: Optional[List[int]] = None
     time_slot_ids: Optional[List[int]] = None
     curriculum_version_id: Optional[int] = None
+    working_days: Optional[str] = "MON_SAT"
 
 # Internal structures for the optimizer
 class OptSection(BaseModel):
@@ -66,7 +67,7 @@ class OptTimeSlot(BaseModel):
 class OptRoom(BaseModel):
     id: int
     building_id: int
-    capacity: int
+    capacity: Optional[int] = None
     room_type: str
     department_id: Optional[int] = None
 

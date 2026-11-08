@@ -1,17 +1,37 @@
 import datetime
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from backend.database import get_db
 from backend.models.identity import User
 from backend.dependencies import get_current_user, require_role
-from backend.schemas.timetable_generation import GenerationScope, GenerationSummary, TimetableEntryResult, TimetableScore
+from backend.models.academic import AcademicYear, Semester, Department, Program, Section, Faculty
+from backend.models.space_time import Room
+from backend.models.timetable import Timetable, TimetableVersion, TimetableEntry
+from backend.models.workflow import AuditLog
+from backend.schemas.timetable_generation import (
+    GenerationScope,
+    GenerationSummary,
+    TimetableEntryResult,
+    TimetableScore,
+)
 from backend.schemas.timetable import (
+    CanonicalTimetableResponse,
+    TimetablePreviewResponse,
+    PublishTimetableRequest,
+    PublishTimetableResponse,
     TimetableVersionResponse,
     TimetableVersionDetailResponse,
     TimetableEntryResponse,
+    TimetableEntryDetailResponse,
     TimetableEntryUpdate,
+)
+from backend.services.timetable_service import (
+    generate_timetable_preview,
+    publish_canonical_timetable,
+    get_canonical_timetables,
+    execute_timetable_generation,
 )
 from backend.services.timetable_input_loader import validate_and_load_input
 from backend.optimizer.validator import (
@@ -20,11 +40,142 @@ from backend.optimizer.validator import (
     ValidationResult,
     ValidationViolation,
 )
-from backend.models.timetable import TimetableVersion, TimetableEntry
-from backend.models.workflow import AuditLog
 from backend.services.notification_service import notify_timetable_published
 
 router = APIRouter(prefix="/timetable", tags=["timetable"])
+
+
+# ── Canonical Timetable Management Endpoints ──────────────────────────────
+
+@router.get("/academic-years")
+def get_timetable_academic_years(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    years = db.query(AcademicYear).order_by(AcademicYear.name.desc()).all()
+    return [{"id": y.id, "name": y.name, "start_date": str(y.start_date) if y.start_date else None, "end_date": str(y.end_date) if y.end_date else None} for y in years]
+
+
+@router.get("/semesters")
+def get_timetable_semesters(
+    academic_year_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    query = db.query(Semester)
+    if academic_year_id:
+        query = query.filter(Semester.academic_year_id == academic_year_id)
+    sems = query.order_by(Semester.semester_number.asc()).all()
+    return [{"id": s.id, "semester_number": s.semester_number, "academic_year_id": s.academic_year_id} for s in sems]
+
+
+@router.get("/departments")
+def get_timetable_departments(
+    academic_year_id: Optional[int] = None,
+    semester_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    depts = db.query(Department).order_by(Department.name.asc()).all()
+    result = []
+    for d in depts:
+        sec_query = db.query(Section).filter(Section.department_id == d.id)
+        if semester_id:
+            sec_query = sec_query.filter(Section.semester_id == semester_id)
+        sec_count = sec_query.count()
+        result.append({
+            "id": d.id,
+            "department_code": d.department_code,
+            "name": d.name,
+            "sections_count": sec_count,
+        })
+    return result
+
+
+@router.get("/sections")
+def get_timetable_sections(
+    academic_year_id: Optional[int] = None,
+    semester_id: Optional[int] = None,
+    department_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    query = db.query(Section)
+    if department_id:
+        query = query.filter(Section.department_id == department_id)
+    if semester_id:
+        query = query.filter(Section.semester_id == semester_id)
+    if academic_year_id:
+        query = query.join(Semester, Section.semester_id == Semester.id).filter(
+            Semester.academic_year_id == academic_year_id
+        )
+    sections = query.order_by(Section.section_name.asc()).all()
+    return [
+        {
+            "id": s.id,
+            "section_name": s.section_name,
+            "department_id": s.department_id,
+            "semester_id": s.semester_id,
+            "academic_year_id": academic_year_id or (s.semester.academic_year_id if s.semester else None),
+            "student_count": s.student_count or 0,
+        }
+        for s in sections
+    ]
+
+
+@router.get("/canonical", response_model=List[CanonicalTimetableResponse])
+def get_canonical_timetable_endpoint(
+    academic_year_id: int,
+    semester_id: int,
+    department_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    """
+    Retrieves the published canonical timetables and entries for the selected academic scope.
+    Exactly ONE canonical timetable exists per Academic Year + Semester + Section.
+    """
+    return get_canonical_timetables(
+        db=db,
+        academic_year_id=academic_year_id,
+        semester_id=semester_id,
+        department_id=department_id,
+    )
+
+
+@router.post("/generate-preview", response_model=TimetablePreviewResponse)
+def generate_timetable_preview_route(
+    scope: GenerationScope,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    """
+    Generates a temporary timetable preview for Admin with independent validation.
+    Does NOT persist any draft records or versions to the database.
+    """
+    return generate_timetable_preview(
+        db=db,
+        scope=scope,
+        current_user=current_user,
+    )
+
+
+@router.post("/publish", response_model=PublishTimetableResponse)
+def publish_canonical_timetable_route(
+    request: PublishTimetableRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    """
+    Authoritatively validates and transactionally saves or replaces the canonical
+    timetables for the selected academic scope.
+    """
+    return publish_canonical_timetable(
+        db=db,
+        request=request,
+        current_user=current_user,
+    )
+
 
 @router.post("/generate", response_model=GenerationSummary)
 def generate_timetable(

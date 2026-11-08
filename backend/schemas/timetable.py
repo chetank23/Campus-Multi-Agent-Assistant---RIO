@@ -9,6 +9,7 @@ class TimetableEntryUpdate(BaseModel):
 
 class TimetableEntryResponse(BaseModel):
     id: int
+    timetable_id: Optional[int] = None
     version_id: Optional[int] = None
     department_id: Optional[int] = None
     program_id: Optional[int] = None
@@ -102,6 +103,7 @@ class FacultyTimetableResponse(BaseModel):
     designation: Optional[str] = None
     department_name: Optional[str] = None
     total_teaching_hours: int = 0
+    working_days: Optional[str] = "MON_SAT"
     sections_as_class_teacher: List[str] = []
     entries: List[PersonalTimetableEntry] = []
 
@@ -123,6 +125,7 @@ class StudentTimetableResponse(BaseModel):
     class_teacher_designation: Optional[str] = None
     class_teacher_contact: Optional[str] = None
     total_class_hours: int = 0
+    working_days: Optional[str] = "MON_SAT"
     entries: List[PersonalTimetableEntry] = []
 
     model_config = ConfigDict(from_attributes=True)
@@ -136,3 +139,87 @@ class DepartmentTimetableResponse(BaseModel):
     entries: List[PersonalTimetableEntry] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ── Canonical Timetable Schemas (Single Timetable per AY + Sem + Section) ──
+
+class CanonicalTimetableResponse(BaseModel):
+    id: int
+    academic_year_id: int
+    semester_id: int
+    section_id: int
+    academic_year_name: Optional[str] = None
+    semester_number: Optional[int] = None
+    section_name: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
+    program_name: Optional[str] = None
+    status: str = "PUBLISHED"
+    working_days: str = "MON_SAT"
+    created_at: datetime
+    published_at: Optional[datetime] = None
+    class_teacher_name: Optional[str] = None
+    class_teacher_designation: Optional[str] = None
+    class_teacher_contact: Optional[str] = None
+    entries: List[TimetableEntryDetailResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TimetablePreviewEntry(BaseModel):
+    section_id: int
+    section_name: str
+    course_assignment_id: int
+    course_id: int
+    course_code: str
+    course_name: str
+    course_type: str = "CORE"
+    faculty_id: int
+    faculty_name: str
+    faculty_designation: Optional[str] = None
+    faculty_contact: Optional[str] = None
+    room_id: int
+    room_number: str
+    building_name: Optional[str] = None
+    slot_id: int
+    day: str
+    start_time: str
+    end_time: str
+    slot_type: str = "CLASS"
+    hour_type: str = "THEORY"
+
+
+class TimetablePreviewResponse(BaseModel):
+    academic_year_id: int
+    semester_id: int
+    department_id: int
+    academic_year_name: str
+    semester_number: int
+    department_name: str
+    status: str
+    is_valid: bool
+    can_publish: bool
+    blocker_count: int = 0
+    warning_count: int = 0
+    violations: List[dict] = []
+    sections: List[dict] = []
+    entries: List[TimetablePreviewEntry] = []
+    solve_time_seconds: float = 0.0
+    score: Optional[dict] = None
+    existing_published: bool = False
+    working_days: str = "MON_SAT"
+
+
+class PublishTimetableRequest(BaseModel):
+    academic_year_id: int
+    semester_id: int
+    department_id: int
+    working_days: Optional[str] = "MON_SAT"
+    entries: List[TimetablePreviewEntry]
+
+
+class PublishTimetableResponse(BaseModel):
+    success: bool
+    message: str
+    published_timetables: List[CanonicalTimetableResponse] = []
+    total_entries_published: int = 0
