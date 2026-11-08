@@ -22,6 +22,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -42,6 +43,80 @@ if TYPE_CHECKING:
     )
     from .courses import Course
     from .space_time import Room, TimeSlot
+
+
+class Timetable(Base):
+    """
+    Canonical Timetable model:
+    Enforces exactly ONE canonical timetable per (Academic Year + Semester + Section).
+    Department is determined by the section's academic relationship.
+    """
+    __tablename__ = "timetables"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "academic_year_id",
+            "semester_id",
+            "section_id",
+            name="uq_timetables_ay_sem_sec",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    academic_year_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("academic_years.id", name="fk_tt_academic_year_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    semester_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("semesters.id", name="fk_tt_semester_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    section_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("sections.id", name="fk_tt_section_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        CheckConstraint(
+            "status IN ('DRAFT','PUBLISHED','ARCHIVED')",
+            name="ck_timetable_status",
+        ),
+        default="PUBLISHED",
+        server_default="'PUBLISHED'",
+    )
+    working_days: Mapped[str] = mapped_column(
+        String(10),
+        CheckConstraint(
+            "working_days IN ('MON_FRI','MON_SAT')",
+            name="ck_timetable_working_days",
+        ),
+        default="MON_SAT",
+        server_default="'MON_SAT'",
+    )
+    created_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", name="fk_tt_created_by"), nullable=True
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=utc_now, server_default=func.now()
+    )
+    published_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime, default=utc_now, server_default=func.now(), nullable=True
+    )
+
+    academic_year: Mapped["AcademicYear"] = relationship(
+        "AcademicYear", back_populates="timetables"
+    )
+    semester: Mapped["Semester"] = relationship("Semester", foreign_keys=[semester_id])
+    section: Mapped["Section"] = relationship("Section", back_populates="timetables")
+    creator: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[created_by]
+    )
+    timetable_entries: Mapped[list["TimetableEntry"]] = relationship(
+        "TimetableEntry", back_populates="timetable", cascade="all, delete-orphan"
+    )
 
 
 class TimetableVersion(Base):
@@ -99,9 +174,15 @@ class TimetableEntry(Base):
         Index("ix_timetable_entries_faculty_slot", "faculty_id", "slot_id"),
         Index("ix_timetable_entries_room_slot", "room_id", "slot_id"),
         Index("ix_timetable_entries_section_slot", "section_id", "slot_id"),
+        Index("ix_timetable_entries_timetable_id", "timetable_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timetable_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("timetables.id", name="fk_tte_timetable_id", ondelete="CASCADE"),
+        nullable=True,
+    )
     version_id: Mapped[Optional[int]] = mapped_column(
         Integer,
         ForeignKey("timetable_versions.id", name="fk_tt_version_id"),
@@ -146,6 +227,9 @@ class TimetableEntry(Base):
         server_default="'DRAFT'",
     )
 
+    timetable: Mapped[Optional["Timetable"]] = relationship(
+        "Timetable", back_populates="timetable_entries"
+    )
     version: Mapped[Optional["TimetableVersion"]] = relationship(
         "TimetableVersion", back_populates="timetable_entries"
     )

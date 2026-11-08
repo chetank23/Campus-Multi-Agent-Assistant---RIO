@@ -44,7 +44,7 @@ from .space_time import (  # noqa: F401
 )
 
 # Timetable (includes composite indexes via __table_args__)
-from .timetable import TimetableEntry, TimetableVersion  # noqa: F401
+from .timetable import Timetable, TimetableEntry, TimetableVersion  # noqa: F401
 
 # Resources
 from .resources import Resource, ResourceBooking  # noqa: F401

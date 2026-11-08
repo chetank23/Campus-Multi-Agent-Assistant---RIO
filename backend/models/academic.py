@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from .identity import User
     from .courses import Course, CourseAssignment, ElectiveGroup
     from .space_time import FacultyAvailability, Room
-    from .timetable import TimetableEntry, TimetableVersion
+    from .timetable import Timetable, TimetableEntry, TimetableVersion
 
 
 class Department(Base):
@@ -90,6 +90,9 @@ class AcademicYear(Base):
 
     semesters: Mapped[list["Semester"]] = relationship(
         "Semester", back_populates="academic_year"
+    )
+    timetables: Mapped[list["Timetable"]] = relationship(
+        "Timetable", back_populates="academic_year"
     )
     timetable_versions: Mapped[list["TimetableVersion"]] = relationship(
         "TimetableVersion", back_populates="academic_year"
@@ -158,6 +161,9 @@ class Section(Base):
     )
     timetable_entries: Mapped[list["TimetableEntry"]] = relationship(
         "TimetableEntry", back_populates="section"
+    )
+    timetables: Mapped[list["Timetable"]] = relationship(
+        "Timetable", back_populates="section"
     )
 
 

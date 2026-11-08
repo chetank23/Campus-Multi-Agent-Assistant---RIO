@@ -87,6 +87,14 @@ class Room(Base):
         "TimetableEntry", back_populates="room"
     )
 
+    @property
+    def building_name(self) -> Optional[str]:
+        return self.building.name if self.building else None
+
+    @property
+    def building_code(self) -> Optional[str]:
+        return self.building.code if self.building else None
+
 
 class Lab(Base):
     __tablename__ = "labs"
