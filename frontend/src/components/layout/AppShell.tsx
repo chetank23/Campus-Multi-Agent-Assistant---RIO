@@ -9,7 +9,7 @@
 
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { CampusAssistantDrawer } from '@/components/chat';

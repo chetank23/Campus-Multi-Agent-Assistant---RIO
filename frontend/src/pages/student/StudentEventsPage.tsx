@@ -61,21 +61,23 @@ export function StudentEventsPage() {
   });
 
   // Filtered views
-  const filteredEvents = useMemo(() => {
+  const filteredEvents: CampusEventItem[] = useMemo((): CampusEventItem[] => {
     const now = new Date();
     const todayStr = now.toISOString().slice(0, 10);
+    const eventList: CampusEventItem[] = Array.isArray(events) ? events : [];
+    const liveList: CampusEventItem[] = Array.isArray(liveEvents) ? liveEvents : (((liveEvents as any)?.ongoing_events as CampusEventItem[]) || []);
 
     switch (activeTab) {
       case 'ongoing':
-        return liveEvents;
+        return liveList;
       case 'today':
-        return events.filter((e) => e.start_time.startsWith(todayStr));
+        return eventList.filter((e) => e.start_time?.startsWith(todayStr));
       case 'upcoming':
-        return events.filter((e) => new Date(e.start_time) > now);
+        return eventList.filter((e) => new Date(e.start_time) > now);
       case 'clubs':
-        return events.filter((e) => e.category === 'CLUB_ACTIVITY' || e.club_id != null);
+        return eventList.filter((e) => e.category === 'CLUB_ACTIVITY' || e.club_id != null);
       default:
-        return events;
+        return eventList;
     }
   }, [events, liveEvents, activeTab]);
 

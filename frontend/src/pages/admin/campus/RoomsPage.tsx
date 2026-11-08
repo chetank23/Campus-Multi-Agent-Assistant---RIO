@@ -34,13 +34,14 @@ export function RoomsPage() {
     if (!searchTerm.trim()) return data;
     const term = searchTerm.toLowerCase();
     return data.filter((rm) => {
-      const bldgName = buildings?.find((b) => b.id === rm.building_id)?.building_name?.toLowerCase() || '';
+      const b = buildings?.find((bldg) => bldg.id === rm.building_id);
+      const bldgName = (b?.building_name || b?.name || rm.building_name || '').toLowerCase();
       return (
-        rm.room_number.toLowerCase().includes(term) ||
-        rm.room_type.toLowerCase().includes(term) ||
+        (rm.room_number || '').toLowerCase().includes(term) ||
+        (rm.room_type || '').toLowerCase().includes(term) ||
         bldgName.includes(term) ||
         String(rm.id).includes(term) ||
-        String(rm.capacity).includes(term)
+        (rm.capacity ? String(rm.capacity).includes(term) : false)
       );
     });
   }, [data, buildings, searchTerm]);
@@ -100,7 +101,8 @@ export function RoomsPage() {
       header: 'Building', 
       render: (row) => {
         const b = buildings?.find((bldg) => bldg.id === row.building_id);
-        return <span className="font-semibold text-slate-900">{b ? b.building_name : `Building #${row.building_id}`}</span>;
+        const bName = b?.building_name || b?.name || row.building_name || (row.building_id ? `Building #${row.building_id}` : 'Unassigned');
+        return <span className="font-semibold text-slate-900">{bName}</span>;
       },
     },
     {
@@ -116,25 +118,28 @@ export function RoomsPage() {
     {
       header: 'Facility Type',
       accessor: 'room_type',
-      render: (row) => <StatusBadge status={row.room_type} />,
+      render: (row) => <StatusBadge status={row.room_type || 'CLASSROOM'} />,
     },
     {
       header: 'Seating Capacity',
       accessor: 'capacity',
       render: (row) => (
         <span className="font-tabular font-semibold text-slate-800">
-          {row.capacity} Seats
+          {row.capacity ? `${row.capacity} Seats` : <span className="text-slate-400 font-normal italic">Not specified</span>}
         </span>
       ),
     },
     { 
       header: 'Status', 
-      render: (row) => (
-        <StatusBadge
-          status={row.is_active ? 'ACTIVE' : 'INACTIVE'}
-          label={row.is_active ? 'Available' : 'Maintenance'}
-        />
-      ),
+      render: (row) => {
+        const isActive = row.is_active || row.status === 'ACTIVE';
+        return (
+          <StatusBadge
+            status={isActive ? 'ACTIVE' : 'INACTIVE'}
+            label={isActive ? 'Available' : 'Maintenance'}
+          />
+        );
+      },
     },
   ];
 
@@ -143,7 +148,7 @@ export function RoomsPage() {
     setBuildingId(rm.building_id);
     setRoomNumber(rm.room_number);
     setRoomType(rm.room_type);
-    setCapacity(rm.capacity);
+    setCapacity(rm.capacity ?? '');
     setIsActive(rm.is_active);
     setFormError(null);
     setIsFormOpen(true);

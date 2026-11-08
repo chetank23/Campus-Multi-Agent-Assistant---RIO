@@ -9,7 +9,7 @@ import {
   Search,
   Calendar,
 } from 'lucide-react';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 import { academicYearsApi } from '@/api/academicYears';
 import { SignOutConfirmDialog } from '@/components/common';
 import { NotificationBellDropdown } from '@/components/notifications/NotificationBellDropdown';

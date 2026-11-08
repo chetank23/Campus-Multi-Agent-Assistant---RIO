@@ -14,13 +14,11 @@
  *    the router redirects to /login.
  */
 
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { apiGetMe, apiLogin, apiLogout, apiRefreshToken } from '@/api/auth';
 import { setAccessToken } from '@/api/client';
+import { AuthContext } from './AuthContext';
 import type { AuthContextValue, LoginRequest, UserResponse } from './auth.types';
-import type { AxiosError } from 'axios';
-
-const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserResponse | null>(null);
@@ -87,20 +85,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-/** Hook — throws if used outside AuthProvider. */
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
-  return ctx;
-}
-
-/** Helper to extract a readable error message from an Axios error. */
-export function extractApiError(err: unknown): string {
-  const axiosErr = err as AxiosError<{ detail: unknown }>;
-  const detail = axiosErr?.response?.data?.detail;
-  if (typeof detail === 'string') return detail;
-  if (Array.isArray(detail)) return detail.map((d) => (d as { msg: string }).msg).join(', ');
-  return 'An unexpected error occurred. Please try again.';
 }

@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 
 import { apiGetMe } from '@/api/auth';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 import { studentsApi } from '@/api/students';
 import { facultyApi } from '@/api/faculty';
 import { coursesApi } from '@/api/courses';
@@ -626,7 +626,7 @@ export function AdminDashboard() {
           <div className="grid grid-cols-2 gap-2.5 py-1">
             {/* Tile 1: Generate Timetable */}
             <Link
-              to="/admin/timetable/generate"
+              to="/admin/timetable"
               className="bg-[#EAF8F1] border border-[#C8F1DF] hover:border-[#059669]/40 rounded-xl p-2.5 flex items-start gap-2.5 transition-all group hover:shadow-2xs"
             >
               <div className="w-8 h-8 rounded-lg bg-white/90 text-[#059669] flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
@@ -696,9 +696,9 @@ export function AdminDashboard() {
               </div>
             </Link>
 
-            {/* Tile 5: View Conflicts */}
+            {/* Tile 5: Timetable Manager */}
             <Link
-              to="/admin/timetable/versions"
+              to="/admin/timetable"
               className="bg-[#FDECEC] border border-[#FCD7D7] hover:border-[#DC2626]/40 rounded-xl p-2.5 flex items-start gap-2.5 transition-all group hover:shadow-2xs"
             >
               <div className="w-8 h-8 rounded-lg bg-white/90 text-[#DC2626] flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
@@ -706,17 +706,17 @@ export function AdminDashboard() {
               </div>
               <div className="min-w-0">
                 <span className="text-xs font-bold text-[#111D35] block truncate leading-tight">
-                  View Conflicts
+                  Timetable Manager
                 </span>
                 <span className="text-[10px] text-[#536783] block truncate leading-tight mt-0.5">
-                  Check and resolve issues
+                  Scope, validate & publish
                 </span>
               </div>
             </Link>
 
             {/* Tile 6: Publish Timetable */}
             <Link
-              to="/admin/timetable/versions"
+              to="/admin/timetable"
               className="bg-[#E6F7EF] border border-[#C8F1DF] hover:border-[#087F5B]/40 rounded-xl p-2.5 flex items-start gap-2.5 transition-all group hover:shadow-2xs"
             >
               <div className="w-8 h-8 rounded-lg bg-white/90 text-[#087F5B] flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
@@ -744,7 +744,7 @@ export function AdminDashboard() {
             <div className="p-4 border-b border-[#E4EAF2] flex items-center justify-between">
               <h2 className="text-sm font-bold text-[#111D35]">Recent Timetable Generations</h2>
               <Link
-                to="/admin/timetable/versions"
+                to="/admin/timetable"
                 className="text-xs font-semibold text-[#2563EB] hover:underline"
               >
                 View All
@@ -813,9 +813,9 @@ export function AdminDashboard() {
                           <td className="py-3 px-3 text-[#536783]">{createdDate}</td>
                           <td className="py-3 px-3 text-center">
                             <Link
-                              to="/admin/timetable/versions"
+                              to="/admin/timetable"
                               className="text-[#8190A5] hover:text-[#111D35] p-1 inline-block"
-                              title="View details in versions workspace"
+                              title="Open Timetable Management"
                             >
                               <MoreHorizontal size={14} />
                             </Link>

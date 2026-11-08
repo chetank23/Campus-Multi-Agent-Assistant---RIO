@@ -21,7 +21,7 @@ import {
   AlertCircle,
   ExternalLink,
 } from 'lucide-react';
-import { useNotifications } from '@/context/NotificationContext';
+import { useNotifications } from '@/context/useNotifications';
 import { broadcastAnnouncement, type NotificationItem } from '@/api/notifications';
 import { departmentsApi, type DepartmentResponse } from '@/api/departments';
 

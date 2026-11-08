@@ -23,8 +23,8 @@ import {
   ExternalLink,
   RotateCw,
 } from 'lucide-react';
-import { useNotifications } from '@/context/NotificationContext';
-import { useAuth } from '@/auth/AuthProvider';
+import { useNotifications } from '@/context/useNotifications';
+import { useAuth } from '@/auth/useAuth';
 import type { NotificationItem } from '@/api/notifications';
 
 function formatRelativeTime(dateString: string): string {

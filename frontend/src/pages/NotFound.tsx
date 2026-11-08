@@ -7,7 +7,7 @@
 
 import { Link } from 'react-router-dom';
 import { FileQuestion, ArrowLeft } from 'lucide-react';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 import type { UserRole } from '@/auth/auth.types';
 
 const roleHome: Record<UserRole, string> = {

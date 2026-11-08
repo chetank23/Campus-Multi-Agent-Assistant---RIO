@@ -15,7 +15,7 @@ import {
 } from '@/api/facultyAvailability';
 import { timeSlotsApi } from '@/api/academicCalendar';
 import { formatTime12h } from '@/utils/timeFormatter';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 
 export function FacultyAvailabilityPage() {
   const queryClient = useQueryClient();

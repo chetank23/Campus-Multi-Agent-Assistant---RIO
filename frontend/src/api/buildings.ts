@@ -4,6 +4,9 @@ export interface BuildingResponse {
   id: number;
   building_name: string;
   floors: number;
+  name?: string;
+  code?: string;
+  number_of_floors?: number;
 }
 
 export interface BuildingCreate {

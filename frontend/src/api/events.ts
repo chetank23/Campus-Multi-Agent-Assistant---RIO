@@ -150,8 +150,9 @@ export const eventsApi = {
   },
 
   getLiveEvents: async (): Promise<CampusEventItem[]> => {
-    const res = await apiClient.get<CampusEventItem[]>('/events/live');
-    return res.data;
+    const res = await apiClient.get<any>('/events/live');
+    if (Array.isArray(res.data)) return res.data;
+    return res.data?.ongoing_events || [];
   },
 
   getEvent: async (id: number): Promise<CampusEventItem> => {

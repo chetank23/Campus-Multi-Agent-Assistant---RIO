@@ -17,7 +17,7 @@ import {
   createAdminCurriculumRequest,
   addAdminRequestMessage,
 } from '@/api/curriculum';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 
 export const AdminCurriculumRequestsPage: React.FC = () => {
   const { user } = useAuth();

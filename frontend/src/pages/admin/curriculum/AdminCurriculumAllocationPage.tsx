@@ -45,13 +45,17 @@ export const AdminCurriculumAllocationPage: React.FC = () => {
     },
   });
 
+  const effectiveAcademicYearId = academicYearId !== '' ? academicYearId : (academicYears?.[0]?.id ?? '');
+
   const { data: semesters } = useQuery({
-    queryKey: ['semesters', academicYearId],
+    queryKey: ['semesters', effectiveAcademicYearId],
     queryFn: async () => {
       const { data } = await apiClient.get<any[]>('/semesters/');
-      return academicYearId ? data.filter((s) => s.academic_year_id === academicYearId) : data;
+      return effectiveAcademicYearId ? data.filter((s) => s.academic_year_id === effectiveAcademicYearId) : data;
     },
   });
+
+  const effectiveSemesterId = semesterId !== '' ? semesterId : (semesters?.[0]?.id ?? '');
 
   const { data: sections } = useQuery({
     queryKey: ['sections'],
@@ -61,6 +65,8 @@ export const AdminCurriculumAllocationPage: React.FC = () => {
     },
   });
 
+  const effectiveSectionId = sectionId !== '' ? sectionId : (sections?.[0]?.id ?? '');
+
   const { data: facultyList } = useQuery({
     queryKey: ['faculty'],
     queryFn: async () => {
@@ -69,22 +75,15 @@ export const AdminCurriculumAllocationPage: React.FC = () => {
     },
   });
 
-  // Auto-select first options if not selected
-  React.useEffect(() => {
-    if (!academicYearId && academicYears?.length) setAcademicYearId(academicYears[0].id);
-    if (!semesterId && semesters?.length) setSemesterId(semesters[0].id);
-    if (!sectionId && sections?.length) setSectionId(sections[0].id);
-  }, [academicYears, semesters, sections, academicYearId, semesterId, sectionId]);
-
   const { data: offerings, isLoading } = useQuery({
-    queryKey: ['admin', 'offerings', academicYearId, semesterId, sectionId],
+    queryKey: ['admin', 'offerings', effectiveAcademicYearId, effectiveSemesterId, effectiveSectionId],
     queryFn: () =>
       getSectionOfferings({
-        academic_year_id: Number(academicYearId),
-        semester_id: Number(semesterId),
-        section_id: sectionId ? Number(sectionId) : undefined,
+        academic_year_id: Number(effectiveAcademicYearId),
+        semester_id: Number(effectiveSemesterId),
+        section_id: effectiveSectionId ? Number(effectiveSectionId) : undefined,
       }),
-    enabled: Boolean(academicYearId && semesterId),
+    enabled: Boolean(effectiveAcademicYearId && effectiveSemesterId),
   });
 
   const allocateMutation = useMutation({
@@ -134,7 +133,7 @@ export const AdminCurriculumAllocationPage: React.FC = () => {
         <div>
           <label className="text-xs font-semibold text-slate-700 block mb-1">Academic Year</label>
           <select
-            value={academicYearId}
+            value={effectiveAcademicYearId}
             onChange={(e) => setAcademicYearId(Number(e.target.value))}
             className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
           >
@@ -147,7 +146,7 @@ export const AdminCurriculumAllocationPage: React.FC = () => {
         <div>
           <label className="text-xs font-semibold text-slate-700 block mb-1">Semester</label>
           <select
-            value={semesterId}
+            value={effectiveSemesterId}
             onChange={(e) => setSemesterId(Number(e.target.value))}
             className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
           >
@@ -160,7 +159,7 @@ export const AdminCurriculumAllocationPage: React.FC = () => {
         <div>
           <label className="text-xs font-semibold text-slate-700 block mb-1">Class Section</label>
           <select
-            value={sectionId}
+            value={effectiveSectionId}
             onChange={(e) => setSectionId(Number(e.target.value))}
             className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
           >

@@ -28,10 +28,17 @@ export function BuildingsPage() {
     if (!searchTerm.trim()) return data;
     const term = searchTerm.toLowerCase();
     return data.filter(
-      (bldg) =>
-        bldg.building_name.toLowerCase().includes(term) ||
-        String(bldg.id).includes(term) ||
-        String(bldg.floors).includes(term)
+      (bldg) => {
+        const name = (bldg.building_name || bldg.name || '').toLowerCase();
+        const code = (bldg.code || '').toLowerCase();
+        const floors = bldg.floors ?? bldg.number_of_floors ?? 0;
+        return (
+          name.includes(term) ||
+          code.includes(term) ||
+          String(bldg.id).includes(term) ||
+          String(floors).includes(term)
+        );
+      }
     );
   }, [data, searchTerm]);
 
@@ -88,22 +95,25 @@ export function BuildingsPage() {
     },
     {
       header: 'Building Name',
-      accessor: 'building_name',
       render: (row) => (
         <div className="flex items-center gap-2">
           <Building2 size={16} className="text-slate-400" />
-          <span className="font-semibold text-slate-900">{row.building_name}</span>
+          <span className="font-semibold text-slate-900">{row.building_name || row.name}</span>
+          {row.code && <span className="text-xs font-mono text-slate-400">({row.code})</span>}
         </div>
       ),
     },
     {
       header: 'Total Floors',
       accessor: 'floors',
-      render: (row) => (
-        <span className="font-tabular text-slate-700">
-          {row.floors} {row.floors === 1 ? 'Floor' : 'Floors'}
-        </span>
-      ),
+      render: (row) => {
+        const f = row.floors ?? row.number_of_floors ?? 0;
+        return (
+          <span className="font-tabular text-slate-700">
+            {f} {f === 1 ? 'Floor' : 'Floors'}
+          </span>
+        );
+      },
     },
   ];
 

@@ -32,7 +32,7 @@ import {
   GraduationCap,
   ChevronRight,
 } from 'lucide-react';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 import { apiGetMe } from '@/api/auth';
 import { getFacultyMyTimetable } from '@/api/timetable';
 import { SignOutConfirmDialog } from '@/components/common';

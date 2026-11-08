@@ -53,12 +53,7 @@ export const SuperAdminPDFExtractionPage: React.FC = () => {
     },
   });
 
-  // When job data loads with extracted subjects, initialize editedSubjects
-  React.useEffect(() => {
-    if (job?.extracted_data && editedSubjects.length === 0) {
-      setEditedSubjects(job.extracted_data);
-    }
-  }, [job, editedSubjects.length]);
+  const currentSubjects = editedSubjects.length > 0 ? editedSubjects : (job?.extracted_data ?? []);
 
   const uploadAndExtractMutation = useMutation({
     mutationFn: async () => {
@@ -93,7 +88,7 @@ export const SuperAdminPDFExtractionPage: React.FC = () => {
         action,
         feedback: reviewFeedback,
         target_version_id: targetVersionId ? Number(targetVersionId) : undefined,
-        edited_data: action === 'APPROVE' ? editedSubjects : undefined,
+        edited_data: action === 'APPROVE' ? currentSubjects : undefined,
       });
     },
     onSuccess: () => {
@@ -107,9 +102,9 @@ export const SuperAdminPDFExtractionPage: React.FC = () => {
 
   const handleSubjectChange = (index: number, field: keyof ExtractedSubjectItem, value: any) => {
     setEditedSubjects((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      return updated;
+      const base = prev.length > 0 ? [...prev] : [...(job?.extracted_data ?? [])];
+      base[index] = { ...base[index], [field]: value };
+      return base;
     });
   };
 
@@ -255,7 +250,7 @@ export const SuperAdminPDFExtractionPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {editedSubjects.map((sub, idx) => (
+                {currentSubjects.map((sub, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/50">
                     <td className="px-3 py-2">
                       <input

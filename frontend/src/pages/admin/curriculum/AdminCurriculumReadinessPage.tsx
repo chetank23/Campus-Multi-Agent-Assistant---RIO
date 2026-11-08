@@ -46,31 +46,29 @@ export const AdminCurriculumReadinessPage: React.FC = () => {
     },
   });
 
+  const effectiveVersionId = versionId !== '' ? versionId : (publishedVersions?.[0]?.id ?? '');
+  const effectiveAcademicYearId = academicYearId !== '' ? academicYearId : (academicYears?.[0]?.id ?? '');
+
   const { data: semesters } = useQuery({
-    queryKey: ['semesters', academicYearId],
+    queryKey: ['semesters', effectiveAcademicYearId],
     queryFn: async () => {
       const { data } = await apiClient.get<any[]>('/semesters/');
-      return academicYearId ? data.filter((s) => s.academic_year_id === academicYearId) : data;
+      return effectiveAcademicYearId ? data.filter((s) => s.academic_year_id === effectiveAcademicYearId) : data;
     },
   });
 
-  // Auto-select defaults
-  React.useEffect(() => {
-    if (!versionId && publishedVersions?.length) setVersionId(publishedVersions[0].id);
-    if (!academicYearId && academicYears?.length) setAcademicYearId(academicYears[0].id);
-    if (!semesterId && semesters?.length) setSemesterId(semesters[0].id);
-  }, [publishedVersions, academicYears, semesters, versionId, academicYearId, semesterId]);
+  const effectiveSemesterId = semesterId !== '' ? semesterId : (semesters?.[0]?.id ?? '');
 
   const { data: readiness, isLoading } = useQuery({
-    queryKey: ['admin', 'curriculum-readiness', versionId, semesterNumber, academicYearId, semesterId],
+    queryKey: ['admin', 'curriculum-readiness', effectiveVersionId, semesterNumber, effectiveAcademicYearId, effectiveSemesterId],
     queryFn: () =>
       getCurriculumReadiness({
-        curriculum_version_id: Number(versionId),
+        curriculum_version_id: Number(effectiveVersionId),
         semester_number: Number(semesterNumber),
-        academic_year_id: Number(academicYearId),
-        semester_id: Number(semesterId),
+        academic_year_id: Number(effectiveAcademicYearId),
+        semester_id: Number(effectiveSemesterId),
       }),
-    enabled: Boolean(versionId && academicYearId && semesterId),
+    enabled: Boolean(effectiveVersionId && effectiveAcademicYearId && effectiveSemesterId),
   });
 
   return (
@@ -103,7 +101,7 @@ export const AdminCurriculumReadinessPage: React.FC = () => {
         <div>
           <label className="text-xs font-semibold text-slate-700 block mb-1">Published Curriculum *</label>
           <select
-            value={versionId}
+            value={effectiveVersionId}
             onChange={(e) => setVersionId(Number(e.target.value))}
             className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white font-mono"
           >
@@ -128,7 +126,7 @@ export const AdminCurriculumReadinessPage: React.FC = () => {
         <div>
           <label className="text-xs font-semibold text-slate-700 block mb-1">Academic Year</label>
           <select
-            value={academicYearId}
+            value={effectiveAcademicYearId}
             onChange={(e) => setAcademicYearId(Number(e.target.value))}
             className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white"
           >
@@ -141,7 +139,7 @@ export const AdminCurriculumReadinessPage: React.FC = () => {
         <div>
           <label className="text-xs font-semibold text-slate-700 block mb-1">Academic Term / Semester</label>
           <select
-            value={semesterId}
+            value={effectiveSemesterId}
             onChange={(e) => setSemesterId(Number(e.target.value))}
             className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white"
           >

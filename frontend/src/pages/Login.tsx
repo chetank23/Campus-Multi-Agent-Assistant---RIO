@@ -8,7 +8,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { useAuth, extractApiError } from '@/auth/AuthProvider';
+import { useAuth, extractApiError } from '@/auth/useAuth';
 import type { UserRole } from '@/auth/auth.types';
 
 const roleHome: Record<UserRole, string> = {

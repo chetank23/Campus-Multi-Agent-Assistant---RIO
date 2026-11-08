@@ -37,7 +37,7 @@ import {
   type TargetAudience,
 } from '@/api/events';
 import { roomsApi, type RoomResponse } from '@/api/rooms';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 
 const STATUS_VARIANT_MAP: Record<string, StatusVariant> = {
   DRAFT: 'neutral',

@@ -18,7 +18,7 @@
 
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Clock } from 'lucide-react';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 import { ProtectedRoute } from '@/auth/ProtectedRoute';
 import { RoleRoute } from '@/auth/RoleRoute';
 import { AppShell } from '@/components/layout/AppShell';
@@ -48,9 +48,7 @@ import { CalendarTimeSlotsPage } from '@/pages/admin/campus/CalendarTimeSlotsPag
 import { ImportValidationPage } from '@/pages/admin/data/ImportValidationPage';
 import { ReportsPage } from '@/pages/admin/reports/ReportsPage';
 import { UsersPage } from '@/pages/admin/system/UsersPage';
-import { TimetableGenerationPage } from '@/pages/admin/timetable/TimetableGenerationPage';
-import { AdminTimetableVersionsPage } from '@/pages/admin/timetable/AdminTimetableVersionsPage';
-import { AdminTimetableReviewPage } from '@/pages/admin/timetable/AdminTimetableReviewPage';
+import { AdminTimetableManagementPage } from '@/pages/admin/timetable/AdminTimetableManagementPage';
 import { ResourcesPage } from '@/pages/admin/resources/ResourcesPage';
 import { AdminEventsPage } from '@/pages/admin/AdminEventsPage';
 import { AdminPlacementsPage } from '@/pages/admin/AdminPlacementsPage';
@@ -189,11 +187,11 @@ export function AppRoutes() {
           <Route path="/admin/curriculum/readiness" element={<AdminCurriculumReadinessPage />} />
           <Route path="/admin/curriculum/requests" element={<AdminCurriculumRequestsPage />} />
 
-          {/* Timetable Engine */}
-          <Route path="/admin/timetable" element={<Navigate to="/admin/timetable/versions" replace />} />
-          <Route path="/admin/timetable/versions" element={<AdminTimetableVersionsPage />} />
-          <Route path="/admin/timetable/versions/:id" element={<AdminTimetableReviewPage />} />
-          <Route path="/admin/timetable/generate" element={<TimetableGenerationPage />} />
+          {/* Timetable Management (Simplified Canonical) */}
+          <Route path="/admin/timetable" element={<AdminTimetableManagementPage />} />
+          <Route path="/admin/timetable/versions" element={<Navigate to="/admin/timetable" replace />} />
+          <Route path="/admin/timetable/versions/:id" element={<Navigate to="/admin/timetable" replace />} />
+          <Route path="/admin/timetable/generate" element={<Navigate to="/admin/timetable" replace />} />
           {/* Resource & Operational Administration */}
           <Route path="/admin/resources" element={<ResourcesPage />} />
           <Route path="/admin/events" element={<AdminEventsPage />} />

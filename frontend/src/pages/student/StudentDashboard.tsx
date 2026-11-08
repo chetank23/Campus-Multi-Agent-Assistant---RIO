@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { apiGetMe } from '@/api/auth';
 import { getStudentMyTimetable, getStudentLiveStatus } from '@/api/timetable';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 import { LoadingState } from '@/components/common';
 import { formatTime12h } from '@/utils/timeFormatter';
 

@@ -21,7 +21,7 @@ import {
   X,
   School,
 } from 'lucide-react';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 import { apiGetMe } from '@/api/auth';
 import { SignOutConfirmDialog } from '@/components/common';
 import { NotificationBellDropdown } from '@/components/notifications/NotificationBellDropdown';

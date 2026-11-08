@@ -27,7 +27,7 @@ import {
   LogOut,
   GraduationCap,
 } from 'lucide-react';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 import { apiGetMe } from '@/api/auth';
 import { getStudentMyTimetable } from '@/api/timetable';
 import { SignOutConfirmDialog } from '@/components/common';

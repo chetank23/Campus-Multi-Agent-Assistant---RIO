@@ -6,14 +6,12 @@
  */
 
 import React, {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useRef,
   useState,
 } from 'react';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 import { getAccessToken, getApiBaseUrl } from '@/api/client';
 import {
   getNotifications,
@@ -23,17 +21,10 @@ import {
   type NotificationItem,
 } from '@/api/notifications';
 
-interface NotificationContextValue {
-  notifications: NotificationItem[];
-  unreadCount: number;
-  isLoading: boolean;
-  error: string | null;
-  refresh: () => Promise<void>;
-  markAsRead: (id: number) => Promise<void>;
-  markAllAsRead: () => Promise<void>;
-}
-
-const NotificationContext = createContext<NotificationContextValue | null>(null);
+import {
+  NotificationContext,
+  type NotificationContextValue,
+} from './NotificationContextDefinition';
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, user } = useAuth();
@@ -48,13 +39,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const fetchState = useCallback(async () => {
     if (!isAuthenticated || !user) return;
     try {
-      setError(null);
       const [notifs, count] = await Promise.all([
         getNotifications(false, 0, 50),
         getUnreadCount(),
       ]);
       setNotifications(notifs);
       setUnreadCount(count);
+      setError(null);
     } catch (err: unknown) {
       console.warn('Failed to fetch notifications:', err);
       setError('Unable to load notifications.');
@@ -69,13 +60,30 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Initial load on authentication
   useEffect(() => {
+    let ignore = false;
     if (isAuthenticated && user) {
-      fetchState();
-    } else {
-      setNotifications([]);
-      setUnreadCount(0);
+      Promise.all([
+        getNotifications(false, 0, 50),
+        getUnreadCount(),
+      ])
+        .then(([notifs, count]) => {
+          if (!ignore) {
+            setNotifications(notifs);
+            setUnreadCount(count);
+            setError(null);
+          }
+        })
+        .catch((err: unknown) => {
+          if (!ignore) {
+            console.warn('Failed to fetch notifications:', err);
+            setError('Unable to load notifications.');
+          }
+        });
     }
-  }, [isAuthenticated, user, fetchState]);
+    return () => {
+      ignore = true;
+    };
+  }, [isAuthenticated, user]);
 
   // ── Real-Time Delivery (SSE + Polling Fallback) ──────────────────────────────
   useEffect(() => {
@@ -186,9 +194,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, [fetchState]);
 
+  const activeNotifications = (isAuthenticated && user) ? notifications : [];
+  const activeUnreadCount = (isAuthenticated && user) ? unreadCount : 0;
+
   const value: NotificationContextValue = {
-    notifications,
-    unreadCount,
+    notifications: activeNotifications,
+    unreadCount: activeUnreadCount,
     isLoading,
     error,
     refresh,
@@ -202,11 +213,3 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     </NotificationContext.Provider>
   );
 };
-
-export function useNotifications(): NotificationContextValue {
-  const context = useContext(NotificationContext);
-  if (!context) {
-    throw new Error('useNotifications must be used within a NotificationProvider');
-  }
-  return context;
-}

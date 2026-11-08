@@ -5,15 +5,18 @@ export interface RoomResponse {
   building_id: number;
   room_number: string;
   room_type: string;
-  capacity: number;
+  capacity?: number | null;
   is_active: boolean;
+  status?: string;
+  building_name?: string;
+  building_code?: string;
 }
 
 export interface RoomCreate {
   building_id: number;
   room_number: string;
   room_type: string;
-  capacity: number;
+  capacity?: number | null;
   is_active: boolean;
 }
 
@@ -21,7 +24,7 @@ export interface RoomUpdate {
   building_id?: number;
   room_number?: string;
   room_type?: string;
-  capacity?: number;
+  capacity?: number | null;
   is_active?: boolean;
 }
 

@@ -29,7 +29,6 @@ import {
   Sparkles,
   Briefcase,
   UserCheck,
-  History,
   Building2,
   Box,
   CalendarClock,
@@ -141,26 +140,14 @@ const adminSections: NavSection[] = [
   },
   {
     id: 'timetable',
-    title: 'TIMETABLE ENGINE',
+    title: 'TIMETABLE MANAGEMENT',
     icon: <CalendarDays size={15} className="text-[#2563EB] shrink-0" />,
     items: [
       {
-        id: 'workspace',
-        label: 'Timetable Workspace',
+        id: 'timetable-management',
+        label: 'Timetable Management',
         icon: <CalendarDays size={17} className="shrink-0" />,
-        to: '/admin/timetable/versions',
-      },
-      {
-        id: 'generation',
-        label: 'Generation & Conflicts',
-        icon: <Sparkles size={17} className="shrink-0" />,
-        to: '/admin/timetable/generate',
-      },
-      {
-        id: 'versions',
-        label: 'Versions & Publishing',
-        icon: <History size={17} className="shrink-0" />,
-        to: '/admin/timetable/versions',
+        to: '/admin/timetable',
       },
     ],
   },

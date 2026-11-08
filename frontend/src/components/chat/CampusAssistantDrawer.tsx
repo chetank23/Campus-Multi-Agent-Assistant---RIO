@@ -40,7 +40,7 @@ import {
   BookOpen,
   Briefcase,
 } from 'lucide-react';
-import { useAuth } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/useAuth';
 import {
   sendChatMessage,
   getConversations,
@@ -94,10 +94,22 @@ export const CampusAssistantDrawer: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
+    let ignore = false;
     if (isOpen && user) {
-      loadConversations();
+      getConversations(25)
+        .then((items) => {
+          if (!ignore) {
+            setConversations(items);
+          }
+        })
+        .catch(() => {
+          // Non-blocking fallback
+        });
     }
-  }, [isOpen, user, loadConversations]);
+    return () => {
+      ignore = true;
+    };
+  }, [isOpen, user]);
 
   // Sync conversation initial greeting when user session changes
   const [trackedUserId, setTrackedUserId] = useState<number | undefined>(user?.id);

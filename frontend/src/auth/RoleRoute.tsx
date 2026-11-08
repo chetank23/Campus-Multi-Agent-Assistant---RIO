@@ -11,7 +11,7 @@
  */
 
 import { Navigate } from 'react-router-dom';
-import { useAuth } from './AuthProvider';
+import { useAuth } from './useAuth';
 import type { UserRole } from './auth.types';
 
 interface RoleRouteProps {
