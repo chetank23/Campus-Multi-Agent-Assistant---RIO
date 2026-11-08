@@ -29,7 +29,7 @@ os.environ["TEST_DATABASE_URL"] = target_url
 
 from fastapi.testclient import TestClient
 from backend.main import app
-from scripts.import_aids_a_dataset import DEFAULT_TEST_PASSWORD
+from scripts.import_aids_a_dataset import DEFAULT_TEST_PASSWORD, get_unique_account_password
 
 client = TestClient(app)
 
@@ -53,9 +53,12 @@ def verify_all_60_students() -> Dict[str, Any]:
     for idx in range(1, 61):
         srn = f"R23EH{idx:03d}"
         email = f"{srn.lower()}@rio-mjp.test"
+        stu_pwd = get_unique_account_password("STUDENT", srn)
 
-        # 1. Login
-        login_res = client.post("/auth/login", json={"email": email, "password": DEFAULT_TEST_PASSWORD})
+        # 1. Login (using unique account password with fallback)
+        login_res = client.post("/auth/login", json={"email": email, "password": stu_pwd})
+        if login_res.status_code != 200:
+            login_res = client.post("/auth/login", json={"email": email, "password": DEFAULT_TEST_PASSWORD})
         if login_res.status_code != 200:
             print(f"{srn:<10} | {email:<25} | LOGIN FAILED ({login_res.status_code})")
             failed_count += 1

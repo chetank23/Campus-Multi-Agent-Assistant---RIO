@@ -26,6 +26,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.import_aids_a_dataset import (
     DEFAULT_TEST_PASSWORD,
+    get_unique_account_password,
     resolve_excel_path,
     import_aids_a_dataset,
 )
@@ -44,6 +45,7 @@ ORDERED_TABLES_TO_CLEAN = [
     "notifications",
     "timetable_entries",
     "timetable_versions",
+    "timetables",
     "faculty_substitutions",
     "course_assignments",
     "faculty_availability",
@@ -64,9 +66,6 @@ ORDERED_TABLES_TO_CLEAN = [
     "batches",
     "sections",
     "faculty",
-    "semesters",
-    "courses",
-    "programs",
     "curriculum_request_messages",
     "curriculum_requests",
     "curriculum_extraction_jobs",
@@ -75,8 +74,11 @@ ORDERED_TABLES_TO_CLEAN = [
     "curriculum_releases",
     "curriculum_semesters",
     "curriculum_versions",
-    "regulations",
     "admission_cohorts",
+    "regulations",
+    "semesters",
+    "courses",
+    "programs",
     "departments",
     "academic_calendar",
     "time_slots",
@@ -228,6 +230,7 @@ def run_full_replacement(
     db_url: str,
     excel_path: Optional[str | Path] = None,
     dry_run: bool = False,
+    generate_draft: bool = False,
 ) -> Dict[str, Any]:
     print(f"[*] Initializing Database Clean & Replacement Workflow...")
     schema = "test_schema"
@@ -273,20 +276,59 @@ def run_full_replacement(
     deleted_counts = execute_database_cleanup(engine, schema=schema, dry_run=False)
     print("[+] Database cleanup completed.")
 
+    SessionClass = sessionmaker(bind=engine)
+    # Ensure Admin and SuperAdmin users are seeded and preserved
+    with SessionClass() as init_sess:
+        from backend.core.security import get_password_hash
+        admin_pwd = get_unique_account_password("ADMIN", "Admin")
+        super_pwd = get_unique_account_password("SUPER_ADMIN", "SuperAdmin")
+
+        admin_u = init_sess.query(User).filter(User.email == "admin@campus.edu").first()
+        if not admin_u:
+            admin_u = User(
+                email="admin@campus.edu",
+                name="System Admin",
+                role="ADMIN",
+                password_hash=get_password_hash(admin_pwd),
+                is_active=True,
+            )
+            init_sess.add(admin_u)
+        else:
+            admin_u.name = "System Admin"
+            admin_u.role = "ADMIN"
+            admin_u.password_hash = get_password_hash(admin_pwd)
+            admin_u.is_active = True
+
+        super_u = init_sess.query(User).filter(User.email == "superadmin@campus.edu").first()
+        if not super_u:
+            super_u = User(
+                email="superadmin@campus.edu",
+                name="Super Admin",
+                role="SUPER_ADMIN",
+                password_hash=get_password_hash(super_pwd),
+                is_active=True,
+            )
+            init_sess.add(super_u)
+        else:
+            super_u.name = "Super Admin"
+            super_u.role = "SUPER_ADMIN"
+            super_u.password_hash = get_password_hash(super_pwd)
+            super_u.is_active = True
+        init_sess.commit()
+
     # Verify only Admin/SuperAdmin accounts remain
     post_clean_counts = get_current_record_counts(engine, schema)
     print(f"[+] Remaining users after cleanup: {post_clean_counts.get('preserved_users', 0)} (Preserved Admins)")
 
     # 5. First Import Pass
     print("\n[*] Importing authoritative workbook...")
-    SessionClass = sessionmaker(bind=engine)
     db_session = SessionClass()
     try:
         report_pass_1 = import_aids_a_dataset(
             db=db_session,
             excel_path=excel_path,
             test_password=DEFAULT_TEST_PASSWORD,
-            configure_candidate_rooms=True,
+            configure_candidate_rooms=False,
         )
     finally:
         db_session.close()
@@ -301,7 +343,7 @@ def run_full_replacement(
             db=db_session_2,
             excel_path=excel_path,
             test_password=DEFAULT_TEST_PASSWORD,
-            configure_candidate_rooms=True,
+            configure_candidate_rooms=False,
         )
     finally:
         db_session_2.close()
@@ -322,79 +364,82 @@ def run_full_replacement(
     else:
         print(f"[-] WARNING: Idempotency check showed count differences: {idempotency_diffs}")
 
-    # 7. Generate Fresh Draft Timetable (Section 6)
-    print("\n[*] Generating fresh AIDS-A draft timetable using CP-SAT solver...")
-    from backend.services.timetable_service import execute_timetable_generation
-    from backend.schemas.timetable_generation import GenerationScope
-
-    db_session_3 = SessionClass()
+    # 7. Generate Fresh Draft Timetable (Optional, disabled by default to preserve exact workbook reference 42 entries)
     draft_version_info = None
-    try:
-        dept = db_session_3.query(Department).filter(Department.department_code == "AIDS").first()
-        prog = db_session_3.query(Program).filter(Program.department_id == dept.id).first() if dept else None
-        ay = db_session_3.query(AcademicYear).filter(AcademicYear.name == "2026-2027").first()
-        sem = db_session_3.query(Semester).filter(
-            Semester.academic_year_id == ay.id,
-            Semester.semester_number == 7,
-        ).first() if ay else None
-        sec = db_session_3.query(Section).filter(Section.section_name == "AIDS-A").first()
-        bldg = db_session_3.query(Building).filter(Building.code == "SMV-BLK-01").first()
-        admin_u = db_session_3.query(User).filter(User.role == "ADMIN").first()
+    if generate_draft:
+        print("\n[*] Generating fresh AIDS-A draft timetable using CP-SAT solver...")
+        from backend.services.timetable_service import execute_timetable_generation
+        from backend.schemas.timetable_generation import GenerationScope
 
-        print(f"[*] Scope objects: dept={dept}, prog={prog}, ay={ay}, sem={sem}, sec={sec}, bldg={bldg}, admin_u={admin_u}")
-        if dept and prog and ay and sem and sec and bldg and admin_u:
-            candidate_rooms = (
-                db_session_3.query(Room)
-                .filter(
-                    Room.building_id == bldg.id,
-                    Room.status == "ACTIVE",
-                    ((Room.room_type == "CLASSROOM") & (Room.capacity >= 60))
-                    | ((Room.room_type == "LAB") & (Room.capacity >= 40)),
+        db_session_3 = SessionClass()
+        try:
+            dept = db_session_3.query(Department).filter(Department.department_code == "AIDS").first()
+            prog = db_session_3.query(Program).filter(Program.department_id == dept.id).first() if dept else None
+            ay = db_session_3.query(AcademicYear).filter(AcademicYear.name == "2026-2027").first()
+            sem = db_session_3.query(Semester).filter(
+                Semester.academic_year_id == ay.id,
+                Semester.semester_number == 7,
+            ).first() if ay else None
+            sec = db_session_3.query(Section).filter(Section.section_name == "AIDS-A").first()
+            bldg = db_session_3.query(Building).filter(Building.code == "SMV-BLK-01").first()
+            admin_u = db_session_3.query(User).filter(User.role == "ADMIN").first()
+
+            print(f"[*] Scope objects: dept={dept}, prog={prog}, ay={ay}, sem={sem}, sec={sec}, bldg={bldg}, admin_u={admin_u}")
+            if dept and prog and ay and sem and sec and bldg and admin_u:
+                candidate_rooms = (
+                    db_session_3.query(Room)
+                    .filter(
+                        Room.building_id == bldg.id,
+                        Room.status == "ACTIVE",
+                        ((Room.room_type == "CLASSROOM") & ((Room.capacity >= 60) | (Room.capacity == None)))
+                        | ((Room.room_type == "LAB") & ((Room.capacity >= 40) | (Room.capacity == None))),
+                    )
+                    .all()
                 )
-                .limit(10)
-                .all()
-            )
-            cand_room_ids = [r.id for r in candidate_rooms]
-            print(f"[*] Found {len(cand_room_ids)} candidate rooms for scheduling.")
+                cand_room_ids = [r.id for r in candidate_rooms]
+                print(f"[*] Found {len(cand_room_ids)} candidate rooms for scheduling.")
 
-            scope_obj = GenerationScope(
-                academic_year_id=ay.id,
-                semester_id=sem.id,
-                department_id=dept.id,
-                program_id=prog.id,
-                section_ids=[sec.id],
-                building_ids=[bldg.id],
-                room_ids=cand_room_ids,
-            )
+                scope_obj = GenerationScope(
+                    academic_year_id=ay.id,
+                    semester_id=sem.id,
+                    department_id=dept.id,
+                    program_id=prog.id,
+                    working_days="MON_SAT",
+                    section_ids=[sec.id],
+                    building_ids=[bldg.id],
+                    room_ids=cand_room_ids,
+                )
 
-            print("[*] Calling execute_timetable_generation...")
-            gen_res = execute_timetable_generation(
-                db=db_session_3,
-                scope=scope_obj,
-                current_user=admin_u,
-            )
-            print(f"[*] Generation result: status={gen_res.status}, version_id={gen_res.version_id}, msg={gen_res.message}")
+                print("[*] Calling execute_timetable_generation...")
+                gen_res = execute_timetable_generation(
+                    db=db_session_3,
+                    scope=scope_obj,
+                    current_user=admin_u,
+                )
+                print(f"[*] Generation result: status={gen_res.status}, version_id={gen_res.version_id}, msg={gen_res.message}")
 
-            if gen_res.version_id:
-                draft_vid = gen_res.version_id
-                draft_ver = db_session_3.query(TimetableVersion).filter(TimetableVersion.id == draft_vid).first()
-                if draft_ver:
-                    # Enforce DRAFT status
-                    draft_ver.status = "DRAFT"
-                    db_session_3.commit()
-                    db_session_3.refresh(draft_ver)
-                    entry_cnt = db_session_3.query(TimetableEntry).filter(TimetableEntry.version_id == draft_ver.id).count()
-                    draft_version_info = {
-                        "version_id": draft_ver.id,
-                        "version_number": draft_ver.version_number,
-                        "status": draft_ver.status,
-                        "entries_count": entry_cnt,
-                        "solver_status": gen_res.status,
-                        "break_exclusion_verified": True,
-                    }
-                    print(f"[+] Fresh AIDS-A timetable generated: Version #{draft_ver.id} ({draft_ver.version_number}), status='{draft_ver.status}', entries={entry_cnt}, solver={gen_res.status}")
-    finally:
-        db_session_3.close()
+                if gen_res.version_id:
+                    draft_vid = gen_res.version_id
+                    draft_ver = db_session_3.query(TimetableVersion).filter(TimetableVersion.id == draft_vid).first()
+                    if draft_ver:
+                        # Enforce DRAFT status
+                        draft_ver.status = "DRAFT"
+                        db_session_3.commit()
+                        db_session_3.refresh(draft_ver)
+                        entry_cnt = db_session_3.query(TimetableEntry).filter(TimetableEntry.version_id == draft_ver.id).count()
+                        draft_version_info = {
+                            "version_id": draft_ver.id,
+                            "version_number": draft_ver.version_number,
+                            "status": draft_ver.status,
+                            "entries_count": entry_cnt,
+                            "solver_status": gen_res.status,
+                            "break_exclusion_verified": True,
+                        }
+                        print(f"[+] Fresh AIDS-A timetable generated: Version #{draft_ver.id} ({draft_ver.version_number}), status='{draft_ver.status}', entries={entry_cnt}, solver={gen_res.status}")
+        finally:
+            db_session_3.close()
+    else:
+        print("\n[*] Skipping draft timetable generation to preserve published reference timetable (42 instructional entries).")
 
     final_counts = get_current_record_counts(engine, schema)
 
@@ -424,6 +469,7 @@ if __name__ == "__main__":
     parser.add_argument("--db-url", default=None, help="Database connection URL")
     parser.add_argument("--excel", default=None, help="Path to Excel dataset")
     parser.add_argument("--dry-run", action="store_true", help="Perform dry-run count only")
+    parser.add_argument("--generate-draft", action="store_true", default=False, help="Generate a fresh draft timetable")
     args = parser.parse_args()
 
     target_url = (
@@ -432,4 +478,4 @@ if __name__ == "__main__":
         or "postgresql+psycopg://campus_user:@127.0.0.1:5433/campus_ai_test?options=-csearch_path%3Dtest_schema"
     )
 
-    run_full_replacement(target_url, excel_path=args.excel, dry_run=args.dry_run)
+    run_full_replacement(target_url, excel_path=args.excel, dry_run=args.dry_run, generate_draft=args.generate_draft)

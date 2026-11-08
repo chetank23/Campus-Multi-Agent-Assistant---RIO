@@ -1,6 +1,7 @@
 import os
 import csv
 import random
+import re
 import argparse
 from pathlib import Path
 from faker import Faker
@@ -56,7 +57,7 @@ def generate_data(dataset_name):
     used_course_codes = set()
 
     def unique_email(name):
-        base = name.lower().replace(" ", ".")
+        base = re.sub(r'[^a-z0-9.]', '', name.lower().replace(" ", ".")).strip('.')
         email = f"{base}@campus.edu"
         counter = 1
         while email in used_emails:
@@ -300,11 +301,17 @@ def generate_data(dataset_name):
 
     # --- 9. Time Slots ---
     time_slots = []
-    days = ["MON", "TUE", "WED", "THU", "FRI"]
+    days = ["MON", "TUE", "WED", "THU", "FRI", "SAT"]
     periods = [
-        ("09:00", "10:00", "CLASS"), ("10:00", "11:00", "CLASS"), ("11:00", "11:15", "BREAK"),
-        ("11:15", "12:15", "CLASS"), ("12:15", "13:15", "CLASS"), ("13:15", "14:00", "LUNCH"),
-        ("14:00", "15:00", "CLASS"), ("15:00", "16:00", "CLASS"), ("16:00", "17:00", "CLASS")
+        ("08:30", "09:25", "CLASS"),
+        ("09:25", "10:20", "CLASS"),
+        ("10:20", "10:40", "BREAK"),
+        ("10:40", "11:35", "CLASS"),
+        ("11:35", "12:30", "CLASS"),
+        ("12:30", "13:30", "LUNCH"),
+        ("13:30", "14:25", "CLASS"),
+        ("14:25", "15:20", "CLASS"),
+        ("15:20", "16:15", "CLASS"),
     ]
     for day in days:
         for st, et, typ in periods:

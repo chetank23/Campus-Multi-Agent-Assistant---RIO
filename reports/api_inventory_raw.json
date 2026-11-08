@@ -1,0 +1,5128 @@
+[
+  {
+    "path": "/academic-calendar",
+    "method": "GET",
+    "operation_id": "get_academic_calendars_academic_calendar_get",
+    "tags": [
+      "Academic Calendar"
+    ],
+    "summary": "Get Academic Calendars",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "academicCalendar.ts"
+    ]
+  },
+  {
+    "path": "/academic-calendar",
+    "method": "POST",
+    "operation_id": "create_academic_calendar_academic_calendar_post",
+    "tags": [
+      "Academic Calendar"
+    ],
+    "summary": "Create Academic Calendar",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "academicCalendar.ts"
+    ]
+  },
+  {
+    "path": "/academic-calendar/{ac_id}",
+    "method": "DELETE",
+    "operation_id": "delete_academic_calendar_academic_calendar__ac_id__delete",
+    "tags": [
+      "Academic Calendar"
+    ],
+    "summary": "Delete Academic Calendar",
+    "is_authenticated": true,
+    "parameters": [
+      "ac_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "academicCalendar.ts"
+    ]
+  },
+  {
+    "path": "/academic-calendar/{ac_id}",
+    "method": "GET",
+    "operation_id": "get_academic_calendar_academic_calendar__ac_id__get",
+    "tags": [
+      "Academic Calendar"
+    ],
+    "summary": "Get Academic Calendar",
+    "is_authenticated": true,
+    "parameters": [
+      "ac_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "academicCalendar.ts"
+    ]
+  },
+  {
+    "path": "/academic-calendar/{ac_id}",
+    "method": "PUT",
+    "operation_id": "update_academic_calendar_academic_calendar__ac_id__put",
+    "tags": [
+      "Academic Calendar"
+    ],
+    "summary": "Update Academic Calendar",
+    "is_authenticated": true,
+    "parameters": [
+      "ac_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "academicCalendar.ts"
+    ]
+  },
+  {
+    "path": "/academic-years/",
+    "method": "GET",
+    "operation_id": "get_academic_years_academic_years__get",
+    "tags": [
+      "Academic Years"
+    ],
+    "summary": "Get Academic Years",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "academicYears.ts"
+    ]
+  },
+  {
+    "path": "/academic-years/",
+    "method": "POST",
+    "operation_id": "create_academic_year_academic_years__post",
+    "tags": [
+      "Academic Years"
+    ],
+    "summary": "Create Academic Year",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "academicYears.ts"
+    ]
+  },
+  {
+    "path": "/academic-years/{year_id}",
+    "method": "DELETE",
+    "operation_id": "delete_academic_year_academic_years__year_id__delete",
+    "tags": [
+      "Academic Years"
+    ],
+    "summary": "Delete Academic Year",
+    "is_authenticated": true,
+    "parameters": [
+      "year_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "academicYears.ts"
+    ]
+  },
+  {
+    "path": "/academic-years/{year_id}",
+    "method": "GET",
+    "operation_id": "get_academic_year_academic_years__year_id__get",
+    "tags": [
+      "Academic Years"
+    ],
+    "summary": "Get Academic Year",
+    "is_authenticated": true,
+    "parameters": [
+      "year_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "academicYears.ts"
+    ]
+  },
+  {
+    "path": "/academic-years/{year_id}",
+    "method": "PUT",
+    "operation_id": "update_academic_year_academic_years__year_id__put",
+    "tags": [
+      "Academic Years"
+    ],
+    "summary": "Update Academic Year",
+    "is_authenticated": true,
+    "parameters": [
+      "year_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "academicYears.ts"
+    ]
+  },
+  {
+    "path": "/admin/analytics/department-progress",
+    "method": "GET",
+    "operation_id": "get_department_progress_admin_analytics_department_progress_get",
+    "tags": [
+      "Reports & Analytics"
+    ],
+    "summary": "Get Department Progress",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "analytics.ts"
+    ]
+  },
+  {
+    "path": "/admin/analytics/overview",
+    "method": "GET",
+    "operation_id": "get_analytics_overview_admin_analytics_overview_get",
+    "tags": [
+      "Reports & Analytics"
+    ],
+    "summary": "Get Analytics Overview",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "analytics.ts"
+    ]
+  },
+  {
+    "path": "/admin/audit-logs",
+    "method": "GET",
+    "operation_id": "list_audit_logs_admin_audit_logs_get",
+    "tags": [
+      "Audit Logs"
+    ],
+    "summary": "List Audit Logs",
+    "is_authenticated": true,
+    "parameters": [
+      "user_id",
+      "action",
+      "entity_type",
+      "since",
+      "until",
+      "skip",
+      "limit"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "workflows.ts"
+    ]
+  },
+  {
+    "path": "/admin/capabilities",
+    "method": "GET",
+    "operation_id": "get_all_capabilities_admin_capabilities_get",
+    "tags": [
+      "clubs"
+    ],
+    "summary": "List coordinator capabilities (Admin only)",
+    "is_authenticated": true,
+    "parameters": [
+      "user_id",
+      "capability",
+      "is_active"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/admin/capabilities/assign",
+    "method": "POST",
+    "operation_id": "assign_user_capability_admin_capabilities_assign_post",
+    "tags": [
+      "clubs"
+    ],
+    "summary": "Assign coordinator capability to a user (Admin only)",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/admin/capabilities/{capability_id}/revoke",
+    "method": "POST",
+    "operation_id": "revoke_user_capability_admin_capabilities__capability_id__revoke_post",
+    "tags": [
+      "clubs"
+    ],
+    "summary": "Revoke an active coordinator capability (Admin only)",
+    "is_authenticated": true,
+    "parameters": [
+      "capability_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/admin/curriculum/faculty-allocations",
+    "method": "POST",
+    "operation_id": "allocate_faculty_endpoint_admin_curriculum_faculty_allocations_post",
+    "tags": [
+      "Admin Curriculum Allocation"
+    ],
+    "summary": "Allocate Faculty Endpoint",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/admin/curriculum/inbox",
+    "method": "GET",
+    "operation_id": "get_department_inbox_endpoint_admin_curriculum_inbox_get",
+    "tags": [
+      "Admin Curriculum Allocation"
+    ],
+    "summary": "Get Department Inbox Endpoint",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/admin/curriculum/inbox/{release_id}/acknowledge",
+    "method": "POST",
+    "operation_id": "acknowledge_release_endpoint_admin_curriculum_inbox__release_id__acknowledge_post",
+    "tags": [
+      "Admin Curriculum Allocation"
+    ],
+    "summary": "Acknowledge Release Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "release_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/admin/curriculum/offerings",
+    "method": "GET",
+    "operation_id": "list_offerings_endpoint_admin_curriculum_offerings_get",
+    "tags": [
+      "Admin Curriculum Allocation"
+    ],
+    "summary": "List Offerings Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "academic_year_id",
+      "semester_id",
+      "section_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/admin/curriculum/offerings",
+    "method": "POST",
+    "operation_id": "create_offering_endpoint_admin_curriculum_offerings_post",
+    "tags": [
+      "Admin Curriculum Allocation"
+    ],
+    "summary": "Create Offering Endpoint",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/admin/curriculum/readiness",
+    "method": "GET",
+    "operation_id": "check_readiness_endpoint_admin_curriculum_readiness_get",
+    "tags": [
+      "Admin Curriculum Allocation"
+    ],
+    "summary": "Check Readiness Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "curriculum_version_id",
+      "semester_number",
+      "academic_year_id",
+      "semester_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/admin/curriculum/requests",
+    "method": "GET",
+    "operation_id": "list_admin_requests_endpoint_admin_curriculum_requests_get",
+    "tags": [
+      "Admin Curriculum Allocation"
+    ],
+    "summary": "List Admin Requests Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "status"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/admin/curriculum/requests",
+    "method": "POST",
+    "operation_id": "create_admin_request_endpoint_admin_curriculum_requests_post",
+    "tags": [
+      "Admin Curriculum Allocation"
+    ],
+    "summary": "Create Admin Request Endpoint",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/admin/curriculum/requests/{request_id}",
+    "method": "GET",
+    "operation_id": "get_admin_request_endpoint_admin_curriculum_requests__request_id__get",
+    "tags": [
+      "Admin Curriculum Allocation"
+    ],
+    "summary": "Get Admin Request Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "request_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/admin/curriculum/requests/{request_id}/messages",
+    "method": "POST",
+    "operation_id": "add_admin_request_message_endpoint_admin_curriculum_requests__request_id__messages_post",
+    "tags": [
+      "Admin Curriculum Allocation"
+    ],
+    "summary": "Add Admin Request Message Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "request_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/admin/import/commit",
+    "method": "POST",
+    "operation_id": "commit_import_admin_import_commit_post",
+    "tags": [
+      "Data Import & Validation"
+    ],
+    "summary": "Commit Import",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "dataImport.ts"
+    ]
+  },
+  {
+    "path": "/admin/import/preview",
+    "method": "POST",
+    "operation_id": "preview_import_admin_import_preview_post",
+    "tags": [
+      "Data Import & Validation"
+    ],
+    "summary": "Preview Import",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "dataImport.ts"
+    ]
+  },
+  {
+    "path": "/agents/chat",
+    "method": "POST",
+    "operation_id": "chat_with_campus_assistant_agents_chat_post",
+    "tags": [
+      "AI Agents"
+    ],
+    "summary": "Submit query to RIO Campus Assistant",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "chat.ts"
+    ]
+  },
+  {
+    "path": "/agents/conversations",
+    "method": "GET",
+    "operation_id": "list_conversations_agents_conversations_get",
+    "tags": [
+      "AI Agents"
+    ],
+    "summary": "List authenticated user's chat conversations",
+    "is_authenticated": true,
+    "parameters": [
+      "limit"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "chat.ts"
+    ]
+  },
+  {
+    "path": "/agents/conversations",
+    "method": "POST",
+    "operation_id": "create_conversation_agents_conversations_post",
+    "tags": [
+      "AI Agents"
+    ],
+    "summary": "Create a new conversation session",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "chat.ts"
+    ]
+  },
+  {
+    "path": "/agents/conversations/{conversation_id}",
+    "method": "DELETE",
+    "operation_id": "delete_conversation_agents_conversations__conversation_id__delete",
+    "tags": [
+      "AI Agents"
+    ],
+    "summary": "Delete a conversation session",
+    "is_authenticated": true,
+    "parameters": [
+      "conversation_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "chat.ts"
+    ]
+  },
+  {
+    "path": "/agents/conversations/{conversation_id}",
+    "method": "GET",
+    "operation_id": "get_conversation_detail_agents_conversations__conversation_id__get",
+    "tags": [
+      "AI Agents"
+    ],
+    "summary": "Get conversation details and message history",
+    "is_authenticated": true,
+    "parameters": [
+      "conversation_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "chat.ts"
+    ]
+  },
+  {
+    "path": "/auth/login",
+    "method": "POST",
+    "operation_id": "login_auth_login_post",
+    "tags": [
+      "auth"
+    ],
+    "summary": "Login",
+    "is_authenticated": false,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "client.ts",
+      "auth.ts"
+    ]
+  },
+  {
+    "path": "/auth/logout",
+    "method": "POST",
+    "operation_id": "logout_auth_logout_post",
+    "tags": [
+      "auth"
+    ],
+    "summary": "Logout",
+    "is_authenticated": false,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "auth.ts"
+    ]
+  },
+  {
+    "path": "/auth/me",
+    "method": "GET",
+    "operation_id": "get_me_auth_me_get",
+    "tags": [
+      "auth"
+    ],
+    "summary": "Get Me",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "auth.ts"
+    ]
+  },
+  {
+    "path": "/auth/refresh",
+    "method": "POST",
+    "operation_id": "refresh_token_auth_refresh_post",
+    "tags": [
+      "auth"
+    ],
+    "summary": "Refresh Token",
+    "is_authenticated": false,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "client.ts",
+      "auth.ts"
+    ]
+  },
+  {
+    "path": "/batches/",
+    "method": "GET",
+    "operation_id": "get_batches_batches__get",
+    "tags": [
+      "Batches"
+    ],
+    "summary": "Get Batches",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "batches.ts"
+    ]
+  },
+  {
+    "path": "/batches/",
+    "method": "POST",
+    "operation_id": "create_batch_batches__post",
+    "tags": [
+      "Batches"
+    ],
+    "summary": "Create Batch",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "batches.ts"
+    ]
+  },
+  {
+    "path": "/batches/{batch_id}",
+    "method": "DELETE",
+    "operation_id": "delete_batch_batches__batch_id__delete",
+    "tags": [
+      "Batches"
+    ],
+    "summary": "Delete Batch",
+    "is_authenticated": true,
+    "parameters": [
+      "batch_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "batches.ts"
+    ]
+  },
+  {
+    "path": "/batches/{batch_id}",
+    "method": "GET",
+    "operation_id": "get_batch_batches__batch_id__get",
+    "tags": [
+      "Batches"
+    ],
+    "summary": "Get Batch",
+    "is_authenticated": true,
+    "parameters": [
+      "batch_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "batches.ts"
+    ]
+  },
+  {
+    "path": "/batches/{batch_id}",
+    "method": "PUT",
+    "operation_id": "update_batch_batches__batch_id__put",
+    "tags": [
+      "Batches"
+    ],
+    "summary": "Update Batch",
+    "is_authenticated": true,
+    "parameters": [
+      "batch_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "batches.ts"
+    ]
+  },
+  {
+    "path": "/buildings/",
+    "method": "GET",
+    "operation_id": "get_buildings_buildings__get",
+    "tags": [
+      "Buildings"
+    ],
+    "summary": "Get Buildings",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "buildings.ts"
+    ]
+  },
+  {
+    "path": "/buildings/",
+    "method": "POST",
+    "operation_id": "create_building_buildings__post",
+    "tags": [
+      "Buildings"
+    ],
+    "summary": "Create Building",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "buildings.ts"
+    ]
+  },
+  {
+    "path": "/buildings/import",
+    "method": "POST",
+    "operation_id": "import_buildings_preview_buildings_import_post",
+    "tags": [
+      "Buildings"
+    ],
+    "summary": "Import Buildings Preview",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "buildings.ts"
+    ]
+  },
+  {
+    "path": "/buildings/import/confirm",
+    "method": "POST",
+    "operation_id": "import_buildings_confirm_buildings_import_confirm_post",
+    "tags": [
+      "Buildings"
+    ],
+    "summary": "Import Buildings Confirm",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "buildings.ts"
+    ]
+  },
+  {
+    "path": "/buildings/{building_id}",
+    "method": "DELETE",
+    "operation_id": "delete_building_buildings__building_id__delete",
+    "tags": [
+      "Buildings"
+    ],
+    "summary": "Delete Building",
+    "is_authenticated": true,
+    "parameters": [
+      "building_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "buildings.ts"
+    ]
+  },
+  {
+    "path": "/buildings/{building_id}",
+    "method": "GET",
+    "operation_id": "get_building_buildings__building_id__get",
+    "tags": [
+      "Buildings"
+    ],
+    "summary": "Get Building",
+    "is_authenticated": true,
+    "parameters": [
+      "building_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "buildings.ts"
+    ]
+  },
+  {
+    "path": "/buildings/{building_id}",
+    "method": "PUT",
+    "operation_id": "update_building_buildings__building_id__put",
+    "tags": [
+      "Buildings"
+    ],
+    "summary": "Update Building",
+    "is_authenticated": true,
+    "parameters": [
+      "building_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "buildings.ts"
+    ]
+  },
+  {
+    "path": "/change-requests",
+    "method": "GET",
+    "operation_id": "list_change_requests_change_requests_get",
+    "tags": [
+      "Change Requests"
+    ],
+    "summary": "List Change Requests",
+    "is_authenticated": true,
+    "parameters": [
+      "skip",
+      "limit"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "workflows.ts"
+    ]
+  },
+  {
+    "path": "/change-requests",
+    "method": "POST",
+    "operation_id": "create_change_request_change_requests_post",
+    "tags": [
+      "Change Requests"
+    ],
+    "summary": "Create Change Request",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "workflows.ts"
+    ]
+  },
+  {
+    "path": "/change-requests/pending",
+    "method": "GET",
+    "operation_id": "list_pending_change_requests_change_requests_pending_get",
+    "tags": [
+      "Change Requests"
+    ],
+    "summary": "List Pending Change Requests",
+    "is_authenticated": true,
+    "parameters": [
+      "skip",
+      "limit"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "workflows.ts"
+    ]
+  },
+  {
+    "path": "/change-requests/{request_id}/review",
+    "method": "PATCH",
+    "operation_id": "review_change_request_change_requests__request_id__review_patch",
+    "tags": [
+      "Change Requests"
+    ],
+    "summary": "Review Change Request",
+    "is_authenticated": true,
+    "parameters": [
+      "request_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "workflows.ts"
+    ]
+  },
+  {
+    "path": "/clubs",
+    "method": "GET",
+    "operation_id": "get_clubs_clubs_get",
+    "tags": [
+      "clubs"
+    ],
+    "summary": "List all campus clubs and organizations",
+    "is_authenticated": true,
+    "parameters": [
+      "category",
+      "status"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/clubs",
+    "method": "POST",
+    "operation_id": "create_new_club_clubs_post",
+    "tags": [
+      "clubs"
+    ],
+    "summary": "Register a new campus club (Admin only)",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/clubs/{club_id}",
+    "method": "GET",
+    "operation_id": "get_club_detail_clubs__club_id__get",
+    "tags": [
+      "clubs"
+    ],
+    "summary": "Get single club details",
+    "is_authenticated": true,
+    "parameters": [
+      "club_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/clubs/{club_id}",
+    "method": "PUT",
+    "operation_id": "update_existing_club_clubs__club_id__put",
+    "tags": [
+      "clubs"
+    ],
+    "summary": "Update club profile or status (Admin only)",
+    "is_authenticated": true,
+    "parameters": [
+      "club_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/clubs/{club_id}/activities",
+    "method": "GET",
+    "operation_id": "get_club_activities_clubs__club_id__activities_get",
+    "tags": [
+      "clubs"
+    ],
+    "summary": "List visible activities for a specific club",
+    "is_authenticated": true,
+    "parameters": [
+      "club_id",
+      "time_filter"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/course-assignments/",
+    "method": "GET",
+    "operation_id": "get_course_assignments_course_assignments__get",
+    "tags": [
+      "Course Assignments"
+    ],
+    "summary": "Get Course Assignments",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "courseAssignments.ts"
+    ]
+  },
+  {
+    "path": "/course-assignments/",
+    "method": "POST",
+    "operation_id": "create_course_assignment_course_assignments__post",
+    "tags": [
+      "Course Assignments"
+    ],
+    "summary": "Create Course Assignment",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "courseAssignments.ts"
+    ]
+  },
+  {
+    "path": "/course-assignments/{assignment_id}",
+    "method": "DELETE",
+    "operation_id": "delete_course_assignment_course_assignments__assignment_id__delete",
+    "tags": [
+      "Course Assignments"
+    ],
+    "summary": "Delete Course Assignment",
+    "is_authenticated": true,
+    "parameters": [
+      "assignment_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "courseAssignments.ts"
+    ]
+  },
+  {
+    "path": "/course-assignments/{assignment_id}",
+    "method": "GET",
+    "operation_id": "get_course_assignment_course_assignments__assignment_id__get",
+    "tags": [
+      "Course Assignments"
+    ],
+    "summary": "Get Course Assignment",
+    "is_authenticated": true,
+    "parameters": [
+      "assignment_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "courseAssignments.ts"
+    ]
+  },
+  {
+    "path": "/course-assignments/{assignment_id}",
+    "method": "PUT",
+    "operation_id": "update_course_assignment_course_assignments__assignment_id__put",
+    "tags": [
+      "Course Assignments"
+    ],
+    "summary": "Update Course Assignment",
+    "is_authenticated": true,
+    "parameters": [
+      "assignment_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "courseAssignments.ts"
+    ]
+  },
+  {
+    "path": "/courses/",
+    "method": "GET",
+    "operation_id": "get_courses_courses__get",
+    "tags": [
+      "Courses"
+    ],
+    "summary": "Get Courses",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "courses.ts"
+    ]
+  },
+  {
+    "path": "/courses/",
+    "method": "POST",
+    "operation_id": "create_course_courses__post",
+    "tags": [
+      "Courses"
+    ],
+    "summary": "Create Course",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "courses.ts"
+    ]
+  },
+  {
+    "path": "/courses/{course_id}",
+    "method": "DELETE",
+    "operation_id": "delete_course_courses__course_id__delete",
+    "tags": [
+      "Courses"
+    ],
+    "summary": "Delete Course",
+    "is_authenticated": true,
+    "parameters": [
+      "course_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "courses.ts"
+    ]
+  },
+  {
+    "path": "/courses/{course_id}",
+    "method": "GET",
+    "operation_id": "get_course_courses__course_id__get",
+    "tags": [
+      "Courses"
+    ],
+    "summary": "Get Course",
+    "is_authenticated": true,
+    "parameters": [
+      "course_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "courses.ts"
+    ]
+  },
+  {
+    "path": "/courses/{course_id}",
+    "method": "PUT",
+    "operation_id": "update_course_courses__course_id__put",
+    "tags": [
+      "Courses"
+    ],
+    "summary": "Update Course",
+    "is_authenticated": true,
+    "parameters": [
+      "course_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "courses.ts"
+    ]
+  },
+  {
+    "path": "/curriculum/faculty/assigned",
+    "method": "GET",
+    "operation_id": "get_faculty_curriculum_curriculum_faculty_assigned_get",
+    "tags": [
+      "Curriculum"
+    ],
+    "summary": "Get Faculty Curriculum",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/curriculum/student/current",
+    "method": "GET",
+    "operation_id": "get_student_curriculum_curriculum_student_current_get",
+    "tags": [
+      "Curriculum"
+    ],
+    "summary": "Get Student Curriculum",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/curriculum/versions",
+    "method": "GET",
+    "operation_id": "list_published_curricula_curriculum_versions_get",
+    "tags": [
+      "Curriculum"
+    ],
+    "summary": "List Published Curricula",
+    "is_authenticated": true,
+    "parameters": [
+      "department_id",
+      "program_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/curriculum/versions/{version_id}",
+    "method": "GET",
+    "operation_id": "get_public_curriculum_version_curriculum_versions__version_id__get",
+    "tags": [
+      "Curriculum"
+    ],
+    "summary": "Get Public Curriculum Version",
+    "is_authenticated": true,
+    "parameters": [
+      "version_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/departments/",
+    "method": "GET",
+    "operation_id": "get_departments_departments__get",
+    "tags": [
+      "Departments"
+    ],
+    "summary": "Get Departments",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "departments.ts"
+    ]
+  },
+  {
+    "path": "/departments/",
+    "method": "POST",
+    "operation_id": "create_department_departments__post",
+    "tags": [
+      "Departments"
+    ],
+    "summary": "Create Department",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "departments.ts"
+    ]
+  },
+  {
+    "path": "/departments/import",
+    "method": "POST",
+    "operation_id": "import_departments_preview_departments_import_post",
+    "tags": [
+      "Departments"
+    ],
+    "summary": "Import Departments Preview",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "departments.ts"
+    ]
+  },
+  {
+    "path": "/departments/import/confirm",
+    "method": "POST",
+    "operation_id": "import_departments_confirm_departments_import_confirm_post",
+    "tags": [
+      "Departments"
+    ],
+    "summary": "Import Departments Confirm",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "departments.ts"
+    ]
+  },
+  {
+    "path": "/departments/{department_id}",
+    "method": "DELETE",
+    "operation_id": "delete_department_departments__department_id__delete",
+    "tags": [
+      "Departments"
+    ],
+    "summary": "Delete Department",
+    "is_authenticated": true,
+    "parameters": [
+      "department_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "departments.ts"
+    ]
+  },
+  {
+    "path": "/departments/{department_id}",
+    "method": "GET",
+    "operation_id": "get_department_departments__department_id__get",
+    "tags": [
+      "Departments"
+    ],
+    "summary": "Get Department",
+    "is_authenticated": true,
+    "parameters": [
+      "department_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "departments.ts"
+    ]
+  },
+  {
+    "path": "/departments/{department_id}",
+    "method": "PUT",
+    "operation_id": "update_department_departments__department_id__put",
+    "tags": [
+      "Departments"
+    ],
+    "summary": "Update Department",
+    "is_authenticated": true,
+    "parameters": [
+      "department_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "departments.ts"
+    ]
+  },
+  {
+    "path": "/elective-group-courses/",
+    "method": "GET",
+    "operation_id": "get_elective_group_courses_elective_group_courses__get",
+    "tags": [
+      "Elective Group Courses"
+    ],
+    "summary": "Get Elective Group Courses",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/elective-group-courses/",
+    "method": "POST",
+    "operation_id": "create_elective_group_course_elective_group_courses__post",
+    "tags": [
+      "Elective Group Courses"
+    ],
+    "summary": "Create Elective Group Course",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/elective-group-courses/{egc_id}",
+    "method": "DELETE",
+    "operation_id": "delete_elective_group_course_elective_group_courses__egc_id__delete",
+    "tags": [
+      "Elective Group Courses"
+    ],
+    "summary": "Delete Elective Group Course",
+    "is_authenticated": true,
+    "parameters": [
+      "egc_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/elective-group-courses/{egc_id}",
+    "method": "GET",
+    "operation_id": "get_elective_group_course_elective_group_courses__egc_id__get",
+    "tags": [
+      "Elective Group Courses"
+    ],
+    "summary": "Get Elective Group Course",
+    "is_authenticated": true,
+    "parameters": [
+      "egc_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/elective-group-courses/{egc_id}",
+    "method": "PUT",
+    "operation_id": "update_elective_group_course_elective_group_courses__egc_id__put",
+    "tags": [
+      "Elective Group Courses"
+    ],
+    "summary": "Update Elective Group Course",
+    "is_authenticated": true,
+    "parameters": [
+      "egc_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/elective-groups/",
+    "method": "GET",
+    "operation_id": "get_elective_groups_elective_groups__get",
+    "tags": [
+      "Elective Groups"
+    ],
+    "summary": "Get Elective Groups",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/elective-groups/",
+    "method": "POST",
+    "operation_id": "create_elective_group_elective_groups__post",
+    "tags": [
+      "Elective Groups"
+    ],
+    "summary": "Create Elective Group",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/elective-groups/{group_id}",
+    "method": "DELETE",
+    "operation_id": "delete_elective_group_elective_groups__group_id__delete",
+    "tags": [
+      "Elective Groups"
+    ],
+    "summary": "Delete Elective Group",
+    "is_authenticated": true,
+    "parameters": [
+      "group_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/elective-groups/{group_id}",
+    "method": "GET",
+    "operation_id": "get_elective_group_elective_groups__group_id__get",
+    "tags": [
+      "Elective Groups"
+    ],
+    "summary": "Get Elective Group",
+    "is_authenticated": true,
+    "parameters": [
+      "group_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/elective-groups/{group_id}",
+    "method": "PUT",
+    "operation_id": "update_elective_group_elective_groups__group_id__put",
+    "tags": [
+      "Elective Groups"
+    ],
+    "summary": "Update Elective Group",
+    "is_authenticated": true,
+    "parameters": [
+      "group_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/events",
+    "method": "GET",
+    "operation_id": "get_events_events_get",
+    "tags": [
+      "events"
+    ],
+    "summary": "List visible campus events and club activities",
+    "is_authenticated": true,
+    "parameters": [
+      "category",
+      "club_id",
+      "time_filter",
+      "status",
+      "search"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/events",
+    "method": "POST",
+    "operation_id": "create_new_event_events_post",
+    "tags": [
+      "events"
+    ],
+    "summary": "Create a new campus event or club activity draft",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/events/live",
+    "method": "GET",
+    "operation_id": "get_live_events_dashboard_events_live_get",
+    "tags": [
+      "events"
+    ],
+    "summary": "Live & Ongoing Events Dashboard Feed",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/events/venue-check",
+    "method": "POST",
+    "operation_id": "check_venue_events_venue_check_post",
+    "tags": [
+      "events"
+    ],
+    "summary": "Verify room venue availability for a proposed time window",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/events/{event_id}",
+    "method": "GET",
+    "operation_id": "get_event_events__event_id__get",
+    "tags": [
+      "events"
+    ],
+    "summary": "Get single event detail",
+    "is_authenticated": true,
+    "parameters": [
+      "event_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/events/{event_id}",
+    "method": "PUT",
+    "operation_id": "update_existing_event_events__event_id__put",
+    "tags": [
+      "events"
+    ],
+    "summary": "Update an existing event with optimistic locking",
+    "is_authenticated": true,
+    "parameters": [
+      "event_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/events/{event_id}/cancel",
+    "method": "POST",
+    "operation_id": "cancel_existing_event_events__event_id__cancel_post",
+    "tags": [
+      "events"
+    ],
+    "summary": "Cancel a scheduled or published event",
+    "is_authenticated": true,
+    "parameters": [
+      "event_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/events/{event_id}/review",
+    "method": "POST",
+    "operation_id": "review_pending_event_events__event_id__review_post",
+    "tags": [
+      "events"
+    ],
+    "summary": "Approve or reject a pending event (Admin only)",
+    "is_authenticated": true,
+    "parameters": [
+      "event_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/events/{event_id}/submit",
+    "method": "POST",
+    "operation_id": "submit_for_approval_events__event_id__submit_post",
+    "tags": [
+      "events"
+    ],
+    "summary": "Submit event draft for administrative approval",
+    "is_authenticated": true,
+    "parameters": [
+      "event_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts"
+    ]
+  },
+  {
+    "path": "/faculty-availability/",
+    "method": "GET",
+    "operation_id": "get_all_faculty_availability_faculty_availability__get",
+    "tags": [
+      "Faculty Availability"
+    ],
+    "summary": "Get All Faculty Availability",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "facultyAvailability.ts"
+    ]
+  },
+  {
+    "path": "/faculty-availability/",
+    "method": "POST",
+    "operation_id": "create_faculty_availability_faculty_availability__post",
+    "tags": [
+      "Faculty Availability"
+    ],
+    "summary": "Create Faculty Availability",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "facultyAvailability.ts"
+    ]
+  },
+  {
+    "path": "/faculty-availability/{fa_id}",
+    "method": "DELETE",
+    "operation_id": "delete_faculty_availability_faculty_availability__fa_id__delete",
+    "tags": [
+      "Faculty Availability"
+    ],
+    "summary": "Delete Faculty Availability",
+    "is_authenticated": true,
+    "parameters": [
+      "fa_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "facultyAvailability.ts"
+    ]
+  },
+  {
+    "path": "/faculty-availability/{fa_id}",
+    "method": "GET",
+    "operation_id": "get_faculty_availability_faculty_availability__fa_id__get",
+    "tags": [
+      "Faculty Availability"
+    ],
+    "summary": "Get Faculty Availability",
+    "is_authenticated": true,
+    "parameters": [
+      "fa_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "facultyAvailability.ts"
+    ]
+  },
+  {
+    "path": "/faculty-availability/{fa_id}",
+    "method": "PUT",
+    "operation_id": "update_faculty_availability_faculty_availability__fa_id__put",
+    "tags": [
+      "Faculty Availability"
+    ],
+    "summary": "Update Faculty Availability",
+    "is_authenticated": true,
+    "parameters": [
+      "fa_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "facultyAvailability.ts"
+    ]
+  },
+  {
+    "path": "/faculty/",
+    "method": "GET",
+    "operation_id": "get_faculty_members_faculty__get",
+    "tags": [
+      "Faculty"
+    ],
+    "summary": "Get Faculty Members",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "events.ts",
+      "timetable.ts",
+      "faculty.ts"
+    ]
+  },
+  {
+    "path": "/faculty/",
+    "method": "POST",
+    "operation_id": "create_faculty_faculty__post",
+    "tags": [
+      "Faculty"
+    ],
+    "summary": "Create Faculty",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts",
+      "timetable.ts",
+      "faculty.ts"
+    ]
+  },
+  {
+    "path": "/faculty/department-timetable",
+    "method": "GET",
+    "operation_id": "get_faculty_department_timetable_faculty_department_timetable_get",
+    "tags": [
+      "Faculty"
+    ],
+    "summary": "Get Faculty Department Timetable",
+    "is_authenticated": true,
+    "parameters": [
+      "academic_year_id",
+      "section_id",
+      "semester_id",
+      "day"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts",
+      "faculty.ts"
+    ]
+  },
+  {
+    "path": "/faculty/live-status",
+    "method": "GET",
+    "operation_id": "get_faculty_live_status_faculty_live_status_get",
+    "tags": [
+      "Faculty"
+    ],
+    "summary": "Get Faculty Live Status",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "timetable.ts",
+      "faculty.ts"
+    ]
+  },
+  {
+    "path": "/faculty/my-clubs",
+    "method": "GET",
+    "operation_id": "get_my_clubs_faculty_my_clubs_get",
+    "tags": [
+      "clubs"
+    ],
+    "summary": "List clubs assigned to authenticated faculty member",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "events.ts",
+      "faculty.ts"
+    ]
+  },
+  {
+    "path": "/faculty/my-timetable",
+    "method": "GET",
+    "operation_id": "get_faculty_my_timetable_faculty_my_timetable_get",
+    "tags": [
+      "Faculty"
+    ],
+    "summary": "Get Faculty My Timetable",
+    "is_authenticated": true,
+    "parameters": [
+      "academic_year_id",
+      "date"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts",
+      "faculty.ts"
+    ]
+  },
+  {
+    "path": "/faculty/{faculty_id}",
+    "method": "DELETE",
+    "operation_id": "delete_faculty_faculty__faculty_id__delete",
+    "tags": [
+      "Faculty"
+    ],
+    "summary": "Delete Faculty",
+    "is_authenticated": true,
+    "parameters": [
+      "faculty_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts",
+      "timetable.ts",
+      "faculty.ts"
+    ]
+  },
+  {
+    "path": "/faculty/{faculty_id}",
+    "method": "GET",
+    "operation_id": "get_faculty_faculty__faculty_id__get",
+    "tags": [
+      "Faculty"
+    ],
+    "summary": "Get Faculty",
+    "is_authenticated": true,
+    "parameters": [
+      "faculty_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts",
+      "timetable.ts",
+      "faculty.ts"
+    ]
+  },
+  {
+    "path": "/faculty/{faculty_id}",
+    "method": "PUT",
+    "operation_id": "update_faculty_faculty__faculty_id__put",
+    "tags": [
+      "Faculty"
+    ],
+    "summary": "Update Faculty",
+    "is_authenticated": true,
+    "parameters": [
+      "faculty_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "events.ts",
+      "timetable.ts",
+      "faculty.ts"
+    ]
+  },
+  {
+    "path": "/health",
+    "method": "GET",
+    "operation_id": "health_check_health_get",
+    "tags": [
+      "system"
+    ],
+    "summary": "Health Check",
+    "is_authenticated": false,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/labs/",
+    "method": "GET",
+    "operation_id": "get_labs_labs__get",
+    "tags": [
+      "Labs"
+    ],
+    "summary": "Get Labs",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/labs/",
+    "method": "POST",
+    "operation_id": "create_lab_labs__post",
+    "tags": [
+      "Labs"
+    ],
+    "summary": "Create Lab",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/labs/{lab_id}",
+    "method": "DELETE",
+    "operation_id": "delete_lab_labs__lab_id__delete",
+    "tags": [
+      "Labs"
+    ],
+    "summary": "Delete Lab",
+    "is_authenticated": true,
+    "parameters": [
+      "lab_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/labs/{lab_id}",
+    "method": "GET",
+    "operation_id": "get_lab_labs__lab_id__get",
+    "tags": [
+      "Labs"
+    ],
+    "summary": "Get Lab",
+    "is_authenticated": true,
+    "parameters": [
+      "lab_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/labs/{lab_id}",
+    "method": "PUT",
+    "operation_id": "update_lab_labs__lab_id__put",
+    "tags": [
+      "Labs"
+    ],
+    "summary": "Update Lab",
+    "is_authenticated": true,
+    "parameters": [
+      "lab_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/notifications",
+    "method": "GET",
+    "operation_id": "get_user_notifications_notifications_get",
+    "tags": [
+      "Notifications"
+    ],
+    "summary": "Get User Notifications",
+    "is_authenticated": true,
+    "parameters": [
+      "unread_only",
+      "skip",
+      "limit"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "notifications.ts"
+    ]
+  },
+  {
+    "path": "/notifications/admin/broadcast",
+    "method": "POST",
+    "operation_id": "admin_broadcast_notifications_admin_broadcast_post",
+    "tags": [
+      "Notifications"
+    ],
+    "summary": "Admin Broadcast",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "notifications.ts"
+    ]
+  },
+  {
+    "path": "/notifications/faculty/class-update",
+    "method": "POST",
+    "operation_id": "faculty_class_update_notifications_faculty_class_update_post",
+    "tags": [
+      "Notifications"
+    ],
+    "summary": "Faculty Class Update",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "notifications.ts"
+    ]
+  },
+  {
+    "path": "/notifications/mark-all-read",
+    "method": "POST",
+    "operation_id": "mark_all_notifications_as_read_notifications_mark_all_read_post",
+    "tags": [
+      "Notifications"
+    ],
+    "summary": "Mark All Notifications As Read",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "notifications.ts"
+    ]
+  },
+  {
+    "path": "/notifications/outbox",
+    "method": "GET",
+    "operation_id": "get_notification_outbox_notifications_outbox_get",
+    "tags": [
+      "Notifications"
+    ],
+    "summary": "Get Notification Outbox",
+    "is_authenticated": true,
+    "parameters": [
+      "status",
+      "skip",
+      "limit"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "notifications.ts"
+    ]
+  },
+  {
+    "path": "/notifications/outbox/process",
+    "method": "POST",
+    "operation_id": "process_outbox_queue_notifications_outbox_process_post",
+    "tags": [
+      "Notifications"
+    ],
+    "summary": "Process Outbox Queue",
+    "is_authenticated": true,
+    "parameters": [
+      "limit"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "notifications.ts"
+    ]
+  },
+  {
+    "path": "/notifications/stream",
+    "method": "GET",
+    "operation_id": "notification_stream_notifications_stream_get",
+    "tags": [
+      "Notifications"
+    ],
+    "summary": "Notification Stream",
+    "is_authenticated": false,
+    "parameters": [
+      "token"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "notifications.ts"
+    ]
+  },
+  {
+    "path": "/notifications/unread-count",
+    "method": "GET",
+    "operation_id": "get_unread_count_notifications_unread_count_get",
+    "tags": [
+      "Notifications"
+    ],
+    "summary": "Get Unread Count",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "notifications.ts"
+    ]
+  },
+  {
+    "path": "/notifications/{notification_id}/read",
+    "method": "PATCH",
+    "operation_id": "mark_notification_as_read_notifications__notification_id__read_patch",
+    "tags": [
+      "Notifications"
+    ],
+    "summary": "Mark Notification As Read",
+    "is_authenticated": true,
+    "parameters": [
+      "notification_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "notifications.ts"
+    ]
+  },
+  {
+    "path": "/notifications/{notification_id}/read",
+    "method": "POST",
+    "operation_id": "mark_notification_as_read_notifications__notification_id__read_post",
+    "tags": [
+      "Notifications"
+    ],
+    "summary": "Mark Notification As Read",
+    "is_authenticated": true,
+    "parameters": [
+      "notification_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "notifications.ts"
+    ]
+  },
+  {
+    "path": "/placements/academic-records",
+    "method": "POST",
+    "operation_id": "upsert_academic_record_placements_academic_records_post",
+    "tags": [
+      "CDC Placements"
+    ],
+    "summary": "Upsert student academic record (CDC Coordinator / Admin)",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "placements.ts"
+    ]
+  },
+  {
+    "path": "/placements/academic-records/{student_id}",
+    "method": "GET",
+    "operation_id": "get_academic_record_placements_academic_records__student_id__get",
+    "tags": [
+      "CDC Placements"
+    ],
+    "summary": "Get student academic record by student ID",
+    "is_authenticated": true,
+    "parameters": [
+      "student_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "placements.ts"
+    ]
+  },
+  {
+    "path": "/placements/dashboard",
+    "method": "GET",
+    "operation_id": "get_dashboard_metrics_placements_dashboard_get",
+    "tags": [
+      "CDC Placements"
+    ],
+    "summary": "CDC Coordinator operational dashboard statistics",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "placements.ts"
+    ]
+  },
+  {
+    "path": "/placements/drives",
+    "method": "GET",
+    "operation_id": "get_placement_drives_placements_drives_get",
+    "tags": [
+      "CDC Placements"
+    ],
+    "summary": "List placement drives for authenticated user",
+    "is_authenticated": true,
+    "parameters": [
+      "status",
+      "job_type",
+      "tier",
+      "search",
+      "only_eligible"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "placements.ts"
+    ]
+  },
+  {
+    "path": "/placements/drives",
+    "method": "POST",
+    "operation_id": "create_drive_placements_drives_post",
+    "tags": [
+      "CDC Placements"
+    ],
+    "summary": "Create a new placement drive (CDC Coordinator / Admin)",
+    "is_authenticated": true,
+    "parameters": [
+      "direct_publish"
+    ],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "placements.ts"
+    ]
+  },
+  {
+    "path": "/placements/drives/validate",
+    "method": "POST",
+    "operation_id": "validate_drive_placements_drives_validate_post",
+    "tags": [
+      "CDC Placements"
+    ],
+    "summary": "Validate drive criteria, deadline, and duplicates before publishing",
+    "is_authenticated": true,
+    "parameters": [
+      "exclude_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "placements.ts"
+    ]
+  },
+  {
+    "path": "/placements/drives/{drive_id}",
+    "method": "GET",
+    "operation_id": "get_drive_by_id_placements_drives__drive_id__get",
+    "tags": [
+      "CDC Placements"
+    ],
+    "summary": "Get single placement drive details",
+    "is_authenticated": true,
+    "parameters": [
+      "drive_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "placements.ts"
+    ]
+  },
+  {
+    "path": "/placements/drives/{drive_id}",
+    "method": "PUT",
+    "operation_id": "update_drive_placements_drives__drive_id__put",
+    "tags": [
+      "CDC Placements"
+    ],
+    "summary": "Update placement drive details (CDC Coordinator / Admin)",
+    "is_authenticated": true,
+    "parameters": [
+      "drive_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "placements.ts"
+    ]
+  },
+  {
+    "path": "/placements/drives/{drive_id}/cancel",
+    "method": "POST",
+    "operation_id": "cancel_drive_placements_drives__drive_id__cancel_post",
+    "tags": [
+      "CDC Placements"
+    ],
+    "summary": "Cancel a scheduled placement drive",
+    "is_authenticated": true,
+    "parameters": [
+      "drive_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "placements.ts"
+    ]
+  },
+  {
+    "path": "/placements/drives/{drive_id}/close",
+    "method": "POST",
+    "operation_id": "close_drive_placements_drives__drive_id__close_post",
+    "tags": [
+      "CDC Placements"
+    ],
+    "summary": "Close applications for a placement drive",
+    "is_authenticated": true,
+    "parameters": [
+      "drive_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "placements.ts"
+    ]
+  },
+  {
+    "path": "/placements/drives/{drive_id}/eligibility",
+    "method": "GET",
+    "operation_id": "check_student_drive_eligibility_placements_drives__drive_id__eligibility_get",
+    "tags": [
+      "CDC Placements"
+    ],
+    "summary": "Check student deterministic eligibility for a drive",
+    "is_authenticated": true,
+    "parameters": [
+      "drive_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "placements.ts"
+    ]
+  },
+  {
+    "path": "/placements/drives/{drive_id}/postpone",
+    "method": "POST",
+    "operation_id": "postpone_drive_placements_drives__drive_id__postpone_post",
+    "tags": [
+      "CDC Placements"
+    ],
+    "summary": "Postpone a placement drive with explanation",
+    "is_authenticated": true,
+    "parameters": [
+      "drive_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "placements.ts"
+    ]
+  },
+  {
+    "path": "/placements/drives/{drive_id}/publish",
+    "method": "POST",
+    "operation_id": "publish_drive_placements_drives__drive_id__publish_post",
+    "tags": [
+      "CDC Placements"
+    ],
+    "summary": "Directly publish a validated placement drive",
+    "is_authenticated": true,
+    "parameters": [
+      "drive_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "placements.ts"
+    ]
+  },
+  {
+    "path": "/programs/",
+    "method": "GET",
+    "operation_id": "get_programs_programs__get",
+    "tags": [
+      "Programs"
+    ],
+    "summary": "Get Programs",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "programs.ts"
+    ]
+  },
+  {
+    "path": "/programs/",
+    "method": "POST",
+    "operation_id": "create_program_programs__post",
+    "tags": [
+      "Programs"
+    ],
+    "summary": "Create Program",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "programs.ts"
+    ]
+  },
+  {
+    "path": "/programs/import",
+    "method": "POST",
+    "operation_id": "import_programs_preview_programs_import_post",
+    "tags": [
+      "Programs"
+    ],
+    "summary": "Import Programs Preview",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "programs.ts"
+    ]
+  },
+  {
+    "path": "/programs/import/confirm",
+    "method": "POST",
+    "operation_id": "import_programs_confirm_programs_import_confirm_post",
+    "tags": [
+      "Programs"
+    ],
+    "summary": "Import Programs Confirm",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "programs.ts"
+    ]
+  },
+  {
+    "path": "/programs/{program_id}",
+    "method": "DELETE",
+    "operation_id": "delete_program_programs__program_id__delete",
+    "tags": [
+      "Programs"
+    ],
+    "summary": "Delete Program",
+    "is_authenticated": true,
+    "parameters": [
+      "program_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "programs.ts"
+    ]
+  },
+  {
+    "path": "/programs/{program_id}",
+    "method": "GET",
+    "operation_id": "get_program_programs__program_id__get",
+    "tags": [
+      "Programs"
+    ],
+    "summary": "Get Program",
+    "is_authenticated": true,
+    "parameters": [
+      "program_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "programs.ts"
+    ]
+  },
+  {
+    "path": "/programs/{program_id}",
+    "method": "PUT",
+    "operation_id": "update_program_programs__program_id__put",
+    "tags": [
+      "Programs"
+    ],
+    "summary": "Update Program",
+    "is_authenticated": true,
+    "parameters": [
+      "program_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "programs.ts"
+    ]
+  },
+  {
+    "path": "/resources",
+    "method": "GET",
+    "operation_id": "list_resources_resources_get",
+    "tags": [
+      "Resources"
+    ],
+    "summary": "List Resources",
+    "is_authenticated": true,
+    "parameters": [
+      "resource_type",
+      "status",
+      "search",
+      "skip",
+      "limit"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "resources.ts"
+    ]
+  },
+  {
+    "path": "/resources",
+    "method": "POST",
+    "operation_id": "create_new_resource_resources_post",
+    "tags": [
+      "Resources"
+    ],
+    "summary": "Create New Resource",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "resources.ts"
+    ]
+  },
+  {
+    "path": "/resources/availability",
+    "method": "GET",
+    "operation_id": "check_availability_resources_availability_get",
+    "tags": [
+      "Resources"
+    ],
+    "summary": "Check Availability",
+    "is_authenticated": true,
+    "parameters": [
+      "resource_id",
+      "date",
+      "start_time",
+      "end_time"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "resources.ts"
+    ]
+  },
+  {
+    "path": "/resources/bookings",
+    "method": "GET",
+    "operation_id": "list_bookings_resources_bookings_get",
+    "tags": [
+      "Resources"
+    ],
+    "summary": "List Bookings",
+    "is_authenticated": true,
+    "parameters": [
+      "status",
+      "resource_id",
+      "from_date",
+      "to_date",
+      "my_only"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "resources.ts"
+    ]
+  },
+  {
+    "path": "/resources/bookings",
+    "method": "POST",
+    "operation_id": "submit_booking_request_resources_bookings_post",
+    "tags": [
+      "Resources"
+    ],
+    "summary": "Submit Booking Request",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "resources.ts"
+    ]
+  },
+  {
+    "path": "/resources/bookings/{booking_id}",
+    "method": "GET",
+    "operation_id": "get_booking_details_resources_bookings__booking_id__get",
+    "tags": [
+      "Resources"
+    ],
+    "summary": "Get Booking Details",
+    "is_authenticated": true,
+    "parameters": [
+      "booking_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "resources.ts"
+    ]
+  },
+  {
+    "path": "/resources/bookings/{booking_id}/approve",
+    "method": "POST",
+    "operation_id": "approve_booking_resources_bookings__booking_id__approve_post",
+    "tags": [
+      "Resources"
+    ],
+    "summary": "Approve Booking",
+    "is_authenticated": true,
+    "parameters": [
+      "booking_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "resources.ts"
+    ]
+  },
+  {
+    "path": "/resources/bookings/{booking_id}/cancel",
+    "method": "POST",
+    "operation_id": "cancel_booking_resources_bookings__booking_id__cancel_post",
+    "tags": [
+      "Resources"
+    ],
+    "summary": "Cancel Booking",
+    "is_authenticated": true,
+    "parameters": [
+      "booking_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "resources.ts"
+    ]
+  },
+  {
+    "path": "/resources/bookings/{booking_id}/reject",
+    "method": "POST",
+    "operation_id": "reject_booking_resources_bookings__booking_id__reject_post",
+    "tags": [
+      "Resources"
+    ],
+    "summary": "Reject Booking",
+    "is_authenticated": true,
+    "parameters": [
+      "booking_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "resources.ts"
+    ]
+  },
+  {
+    "path": "/resources/{resource_id}",
+    "method": "DELETE",
+    "operation_id": "delete_resource_by_id_resources__resource_id__delete",
+    "tags": [
+      "Resources"
+    ],
+    "summary": "Delete Resource By Id",
+    "is_authenticated": true,
+    "parameters": [
+      "resource_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "resources.ts"
+    ]
+  },
+  {
+    "path": "/resources/{resource_id}",
+    "method": "GET",
+    "operation_id": "get_resource_by_id_resources__resource_id__get",
+    "tags": [
+      "Resources"
+    ],
+    "summary": "Get Resource By Id",
+    "is_authenticated": true,
+    "parameters": [
+      "resource_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "resources.ts"
+    ]
+  },
+  {
+    "path": "/resources/{resource_id}",
+    "method": "PUT",
+    "operation_id": "update_existing_resource_resources__resource_id__put",
+    "tags": [
+      "Resources"
+    ],
+    "summary": "Update Existing Resource",
+    "is_authenticated": true,
+    "parameters": [
+      "resource_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "resources.ts"
+    ]
+  },
+  {
+    "path": "/rooms/",
+    "method": "GET",
+    "operation_id": "get_rooms_rooms__get",
+    "tags": [
+      "Rooms"
+    ],
+    "summary": "Get Rooms",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "rooms.ts"
+    ]
+  },
+  {
+    "path": "/rooms/",
+    "method": "POST",
+    "operation_id": "create_room_rooms__post",
+    "tags": [
+      "Rooms"
+    ],
+    "summary": "Create Room",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "rooms.ts"
+    ]
+  },
+  {
+    "path": "/rooms/import",
+    "method": "POST",
+    "operation_id": "import_rooms_preview_rooms_import_post",
+    "tags": [
+      "Rooms"
+    ],
+    "summary": "Import Rooms Preview",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "rooms.ts"
+    ]
+  },
+  {
+    "path": "/rooms/import/confirm",
+    "method": "POST",
+    "operation_id": "import_rooms_confirm_rooms_import_confirm_post",
+    "tags": [
+      "Rooms"
+    ],
+    "summary": "Import Rooms Confirm",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "rooms.ts"
+    ]
+  },
+  {
+    "path": "/rooms/{room_id}",
+    "method": "DELETE",
+    "operation_id": "delete_room_rooms__room_id__delete",
+    "tags": [
+      "Rooms"
+    ],
+    "summary": "Delete Room",
+    "is_authenticated": true,
+    "parameters": [
+      "room_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "rooms.ts"
+    ]
+  },
+  {
+    "path": "/rooms/{room_id}",
+    "method": "GET",
+    "operation_id": "get_room_rooms__room_id__get",
+    "tags": [
+      "Rooms"
+    ],
+    "summary": "Get Room",
+    "is_authenticated": true,
+    "parameters": [
+      "room_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "rooms.ts"
+    ]
+  },
+  {
+    "path": "/rooms/{room_id}",
+    "method": "PUT",
+    "operation_id": "update_room_rooms__room_id__put",
+    "tags": [
+      "Rooms"
+    ],
+    "summary": "Update Room",
+    "is_authenticated": true,
+    "parameters": [
+      "room_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "rooms.ts"
+    ]
+  },
+  {
+    "path": "/rooms/{room_id}/availability",
+    "method": "GET",
+    "operation_id": "get_room_availability_rooms__room_id__availability_get",
+    "tags": [
+      "Rooms"
+    ],
+    "summary": "Get Room Availability",
+    "is_authenticated": true,
+    "parameters": [
+      "room_id",
+      "check_date",
+      "slot_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "rooms.ts"
+    ]
+  },
+  {
+    "path": "/sections/",
+    "method": "GET",
+    "operation_id": "get_sections_sections__get",
+    "tags": [
+      "Sections"
+    ],
+    "summary": "Get Sections",
+    "is_authenticated": true,
+    "parameters": [
+      "academic_year_id",
+      "semester_id",
+      "department_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "sections.ts"
+    ]
+  },
+  {
+    "path": "/sections/",
+    "method": "POST",
+    "operation_id": "create_section_sections__post",
+    "tags": [
+      "Sections"
+    ],
+    "summary": "Create Section",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "sections.ts"
+    ]
+  },
+  {
+    "path": "/sections/{section_id}",
+    "method": "DELETE",
+    "operation_id": "delete_section_sections__section_id__delete",
+    "tags": [
+      "Sections"
+    ],
+    "summary": "Delete Section",
+    "is_authenticated": true,
+    "parameters": [
+      "section_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "sections.ts"
+    ]
+  },
+  {
+    "path": "/sections/{section_id}",
+    "method": "GET",
+    "operation_id": "get_section_sections__section_id__get",
+    "tags": [
+      "Sections"
+    ],
+    "summary": "Get Section",
+    "is_authenticated": true,
+    "parameters": [
+      "section_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "sections.ts"
+    ]
+  },
+  {
+    "path": "/sections/{section_id}",
+    "method": "PUT",
+    "operation_id": "update_section_sections__section_id__put",
+    "tags": [
+      "Sections"
+    ],
+    "summary": "Update Section",
+    "is_authenticated": true,
+    "parameters": [
+      "section_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "sections.ts"
+    ]
+  },
+  {
+    "path": "/semesters/",
+    "method": "GET",
+    "operation_id": "get_semesters_semesters__get",
+    "tags": [
+      "Semesters"
+    ],
+    "summary": "Get Semesters",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "semesters.ts"
+    ]
+  },
+  {
+    "path": "/semesters/",
+    "method": "POST",
+    "operation_id": "create_semester_semesters__post",
+    "tags": [
+      "Semesters"
+    ],
+    "summary": "Create Semester",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "semesters.ts"
+    ]
+  },
+  {
+    "path": "/semesters/{semester_id}",
+    "method": "DELETE",
+    "operation_id": "delete_semester_semesters__semester_id__delete",
+    "tags": [
+      "Semesters"
+    ],
+    "summary": "Delete Semester",
+    "is_authenticated": true,
+    "parameters": [
+      "semester_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "semesters.ts"
+    ]
+  },
+  {
+    "path": "/semesters/{semester_id}",
+    "method": "GET",
+    "operation_id": "get_semester_semesters__semester_id__get",
+    "tags": [
+      "Semesters"
+    ],
+    "summary": "Get Semester",
+    "is_authenticated": true,
+    "parameters": [
+      "semester_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "semesters.ts"
+    ]
+  },
+  {
+    "path": "/semesters/{semester_id}",
+    "method": "PUT",
+    "operation_id": "update_semester_semesters__semester_id__put",
+    "tags": [
+      "Semesters"
+    ],
+    "summary": "Update Semester",
+    "is_authenticated": true,
+    "parameters": [
+      "semester_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "semesters.ts"
+    ]
+  },
+  {
+    "path": "/student/courses",
+    "method": "GET",
+    "operation_id": "get_student_courses_singular_student_courses_get",
+    "tags": [
+      "Student"
+    ],
+    "summary": "Get Student Courses Singular",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/student/live-status",
+    "method": "GET",
+    "operation_id": "get_student_live_status_student_live_status_get",
+    "tags": [
+      "Student"
+    ],
+    "summary": "Get Student Live Status",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/student/my-timetable",
+    "method": "GET",
+    "operation_id": "get_student_my_timetable_singular_student_my_timetable_get",
+    "tags": [
+      "Student"
+    ],
+    "summary": "Get Student My Timetable Singular",
+    "is_authenticated": true,
+    "parameters": [
+      "academic_year_id",
+      "date"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/students/",
+    "method": "GET",
+    "operation_id": "get_students_students__get",
+    "tags": [
+      "Students"
+    ],
+    "summary": "Get Students",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "students.ts"
+    ]
+  },
+  {
+    "path": "/students/",
+    "method": "POST",
+    "operation_id": "create_student_students__post",
+    "tags": [
+      "Students"
+    ],
+    "summary": "Create Student",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "students.ts"
+    ]
+  },
+  {
+    "path": "/students/live-status",
+    "method": "GET",
+    "operation_id": "get_student_live_status_students_live_status_get",
+    "tags": [
+      "Students"
+    ],
+    "summary": "Get Student Live Status",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "students.ts"
+    ]
+  },
+  {
+    "path": "/students/my-courses",
+    "method": "GET",
+    "operation_id": "get_student_courses_plural_students_my_courses_get",
+    "tags": [
+      "Students"
+    ],
+    "summary": "Get Student Courses Plural",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "students.ts"
+    ]
+  },
+  {
+    "path": "/students/my-timetable",
+    "method": "GET",
+    "operation_id": "get_student_my_timetable_plural_students_my_timetable_get",
+    "tags": [
+      "Students"
+    ],
+    "summary": "Get Student My Timetable Plural",
+    "is_authenticated": true,
+    "parameters": [
+      "academic_year_id",
+      "date"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "students.ts"
+    ]
+  },
+  {
+    "path": "/students/{student_id}",
+    "method": "DELETE",
+    "operation_id": "delete_student_students__student_id__delete",
+    "tags": [
+      "Students"
+    ],
+    "summary": "Delete Student",
+    "is_authenticated": true,
+    "parameters": [
+      "student_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "students.ts"
+    ]
+  },
+  {
+    "path": "/students/{student_id}",
+    "method": "GET",
+    "operation_id": "get_student_students__student_id__get",
+    "tags": [
+      "Students"
+    ],
+    "summary": "Get Student",
+    "is_authenticated": true,
+    "parameters": [
+      "student_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "students.ts"
+    ]
+  },
+  {
+    "path": "/students/{student_id}",
+    "method": "PUT",
+    "operation_id": "update_student_students__student_id__put",
+    "tags": [
+      "Students"
+    ],
+    "summary": "Update Student",
+    "is_authenticated": true,
+    "parameters": [
+      "student_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "students.ts"
+    ]
+  },
+  {
+    "path": "/substitutions/date-view",
+    "method": "GET",
+    "operation_id": "get_classes_for_date_substitutions_date_view_get",
+    "tags": [
+      "Faculty Substitution"
+    ],
+    "summary": "Get Classes For Date",
+    "is_authenticated": true,
+    "parameters": [
+      "date",
+      "section_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "substitutions.ts"
+    ]
+  },
+  {
+    "path": "/substitutions/my-assignments",
+    "method": "GET",
+    "operation_id": "get_my_substitution_assignments_substitutions_my_assignments_get",
+    "tags": [
+      "Faculty Substitution"
+    ],
+    "summary": "Get My Substitution Assignments",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "substitutions.ts"
+    ]
+  },
+  {
+    "path": "/substitutions/my-classes",
+    "method": "GET",
+    "operation_id": "get_my_classes_substitutions_my_classes_get",
+    "tags": [
+      "Faculty Substitution"
+    ],
+    "summary": "Get My Classes",
+    "is_authenticated": true,
+    "parameters": [
+      "from_date",
+      "days_ahead"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/substitutions/my-requests",
+    "method": "GET",
+    "operation_id": "get_my_substitution_requests_substitutions_my_requests_get",
+    "tags": [
+      "Faculty Substitution"
+    ],
+    "summary": "Get My Substitution Requests",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "substitutions.ts"
+    ]
+  },
+  {
+    "path": "/substitutions/pending",
+    "method": "GET",
+    "operation_id": "get_pending_substitutions_queue_substitutions_pending_get",
+    "tags": [
+      "Faculty Substitution"
+    ],
+    "summary": "Get Pending Substitutions Queue",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "substitutions.ts"
+    ]
+  },
+  {
+    "path": "/substitutions/requests",
+    "method": "POST",
+    "operation_id": "submit_substitution_request_substitutions_requests_post",
+    "tags": [
+      "Faculty Substitution"
+    ],
+    "summary": "Submit Substitution Request",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "substitutions.ts"
+    ]
+  },
+  {
+    "path": "/substitutions/requests/{id}",
+    "method": "GET",
+    "operation_id": "get_substitution_request_by_id_substitutions_requests__id__get",
+    "tags": [
+      "Faculty Substitution"
+    ],
+    "summary": "Get Substitution Request By Id",
+    "is_authenticated": true,
+    "parameters": [
+      "id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "substitutions.ts"
+    ]
+  },
+  {
+    "path": "/substitutions/requests/{id}/cancel",
+    "method": "POST",
+    "operation_id": "cancel_request_substitutions_requests__id__cancel_post",
+    "tags": [
+      "Faculty Substitution"
+    ],
+    "summary": "Cancel Request",
+    "is_authenticated": true,
+    "parameters": [
+      "id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "substitutions.ts"
+    ]
+  },
+  {
+    "path": "/substitutions/requests/{id}/candidates",
+    "method": "GET",
+    "operation_id": "get_candidate_recommendations_substitutions_requests__id__candidates_get",
+    "tags": [
+      "Faculty Substitution"
+    ],
+    "summary": "Get Candidate Recommendations",
+    "is_authenticated": true,
+    "parameters": [
+      "id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "substitutions.ts"
+    ]
+  },
+  {
+    "path": "/substitutions/requests/{id}/review",
+    "method": "POST",
+    "operation_id": "review_substitution_request_substitutions_requests__id__review_post",
+    "tags": [
+      "Faculty Substitution"
+    ],
+    "summary": "Review Substitution Request",
+    "is_authenticated": true,
+    "parameters": [
+      "id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "substitutions.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/cohorts",
+    "method": "GET",
+    "operation_id": "list_cohorts_endpoint_super_admin_cohorts_get",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "List Cohorts Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "program_id",
+      "regulation_id",
+      "is_active"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/cohorts",
+    "method": "POST",
+    "operation_id": "create_cohort_endpoint_super_admin_cohorts_post",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Create Cohort Endpoint",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/cohorts/{cohort_id}",
+    "method": "GET",
+    "operation_id": "get_cohort_endpoint_super_admin_cohorts__cohort_id__get",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Get Cohort Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "cohort_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/cohorts/{cohort_id}",
+    "method": "PUT",
+    "operation_id": "update_cohort_endpoint_super_admin_cohorts__cohort_id__put",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Update Cohort Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "cohort_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/curriculum-versions",
+    "method": "GET",
+    "operation_id": "list_curriculum_versions_endpoint_super_admin_curriculum_versions_get",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "List Curriculum Versions Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "department_id",
+      "program_id",
+      "regulation_id",
+      "status"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/curriculum-versions",
+    "method": "POST",
+    "operation_id": "create_curriculum_version_endpoint_super_admin_curriculum_versions_post",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Create Curriculum Version Endpoint",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/curriculum-versions/{version_id}",
+    "method": "GET",
+    "operation_id": "get_curriculum_version_endpoint_super_admin_curriculum_versions__version_id__get",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Get Curriculum Version Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "version_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/curriculum-versions/{version_id}/publish",
+    "method": "POST",
+    "operation_id": "publish_version_endpoint_super_admin_curriculum_versions__version_id__publish_post",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Publish Version Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "version_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/curriculum-versions/{version_id}/release",
+    "method": "POST",
+    "operation_id": "release_version_endpoint_super_admin_curriculum_versions__version_id__release_post",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Release Version Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "version_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/curriculum-versions/{version_id}/revise",
+    "method": "POST",
+    "operation_id": "revise_version_endpoint_super_admin_curriculum_versions__version_id__revise_post",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Revise Version Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "version_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/curriculum-versions/{version_id}/status",
+    "method": "POST",
+    "operation_id": "update_version_status_endpoint_super_admin_curriculum_versions__version_id__status_post",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Update Version Status Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "version_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/curriculum-versions/{version_id}/subjects",
+    "method": "POST",
+    "operation_id": "add_subject_mapping_endpoint_super_admin_curriculum_versions__version_id__subjects_post",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Add Subject Mapping Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "version_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/dashboard/stats",
+    "method": "GET",
+    "operation_id": "get_dashboard_stats_endpoint_super_admin_dashboard_stats_get",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Get Dashboard Stats Endpoint",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/documents/upload",
+    "method": "POST",
+    "operation_id": "upload_curriculum_document_endpoint_super_admin_documents_upload_post",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Upload Curriculum Document Endpoint",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/documents/{document_id}/extract",
+    "method": "POST",
+    "operation_id": "trigger_extraction_job_endpoint_super_admin_documents__document_id__extract_post",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Trigger Extraction Job Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "document_id",
+      "target_version_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/extraction-jobs/{job_id}",
+    "method": "GET",
+    "operation_id": "get_extraction_job_endpoint_super_admin_extraction_jobs__job_id__get",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Get Extraction Job Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "job_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/extraction-jobs/{job_id}/review",
+    "method": "POST",
+    "operation_id": "review_extraction_job_endpoint_super_admin_extraction_jobs__job_id__review_post",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Review Extraction Job Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "job_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/regulations",
+    "method": "GET",
+    "operation_id": "list_regulations_endpoint_super_admin_regulations_get",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "List Regulations Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "department_id",
+      "is_active"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/regulations",
+    "method": "POST",
+    "operation_id": "create_regulation_endpoint_super_admin_regulations_post",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Create Regulation Endpoint",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/regulations/{regulation_id}",
+    "method": "GET",
+    "operation_id": "get_regulation_endpoint_super_admin_regulations__regulation_id__get",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Get Regulation Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "regulation_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/regulations/{regulation_id}",
+    "method": "PUT",
+    "operation_id": "update_regulation_endpoint_super_admin_regulations__regulation_id__put",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Update Regulation Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "regulation_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/requests",
+    "method": "GET",
+    "operation_id": "list_requests_super_admin_endpoint_super_admin_requests_get",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "List Requests Super Admin Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "department_id",
+      "status"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/requests/{request_id}",
+    "method": "GET",
+    "operation_id": "get_request_super_admin_endpoint_super_admin_requests__request_id__get",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Get Request Super Admin Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "request_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/requests/{request_id}/messages",
+    "method": "POST",
+    "operation_id": "add_request_message_super_admin_endpoint_super_admin_requests__request_id__messages_post",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Add Request Message Super Admin Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "request_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/requests/{request_id}/status",
+    "method": "PUT",
+    "operation_id": "update_request_status_endpoint_super_admin_requests__request_id__status_put",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Update Request Status Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "request_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/subjects/{mapping_id}",
+    "method": "DELETE",
+    "operation_id": "delete_subject_mapping_endpoint_super_admin_subjects__mapping_id__delete",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Delete Subject Mapping Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "mapping_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "204",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/super-admin/subjects/{mapping_id}",
+    "method": "PUT",
+    "operation_id": "update_subject_mapping_endpoint_super_admin_subjects__mapping_id__put",
+    "tags": [
+      "Super Admin Curriculum"
+    ],
+    "summary": "Update Subject Mapping Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "mapping_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "curriculum.ts"
+    ]
+  },
+  {
+    "path": "/time-slots",
+    "method": "GET",
+    "operation_id": "get_time_slots_time_slots_get",
+    "tags": [
+      "Time Slots"
+    ],
+    "summary": "Get Time Slots",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "timeSlots.ts",
+      "academicCalendar.ts"
+    ]
+  },
+  {
+    "path": "/time-slots",
+    "method": "POST",
+    "operation_id": "create_time_slot_time_slots_post",
+    "tags": [
+      "Time Slots"
+    ],
+    "summary": "Create Time Slot",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timeSlots.ts",
+      "academicCalendar.ts"
+    ]
+  },
+  {
+    "path": "/time-slots/{slot_id}",
+    "method": "DELETE",
+    "operation_id": "delete_time_slot_time_slots__slot_id__delete",
+    "tags": [
+      "Time Slots"
+    ],
+    "summary": "Delete Time Slot",
+    "is_authenticated": true,
+    "parameters": [
+      "slot_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timeSlots.ts",
+      "academicCalendar.ts"
+    ]
+  },
+  {
+    "path": "/time-slots/{slot_id}",
+    "method": "GET",
+    "operation_id": "get_time_slot_time_slots__slot_id__get",
+    "tags": [
+      "Time Slots"
+    ],
+    "summary": "Get Time Slot",
+    "is_authenticated": true,
+    "parameters": [
+      "slot_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timeSlots.ts",
+      "academicCalendar.ts"
+    ]
+  },
+  {
+    "path": "/time-slots/{slot_id}",
+    "method": "PUT",
+    "operation_id": "update_time_slot_time_slots__slot_id__put",
+    "tags": [
+      "Time Slots"
+    ],
+    "summary": "Update Time Slot",
+    "is_authenticated": true,
+    "parameters": [
+      "slot_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timeSlots.ts",
+      "academicCalendar.ts"
+    ]
+  },
+  {
+    "path": "/timetable/academic-years",
+    "method": "GET",
+    "operation_id": "get_timetable_academic_years_timetable_academic_years_get",
+    "tags": [
+      "timetable"
+    ],
+    "summary": "Get Timetable Academic Years",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": false,
+    "responses": [
+      "200"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/timetable/canonical",
+    "method": "GET",
+    "operation_id": "get_canonical_timetable_endpoint_timetable_canonical_get",
+    "tags": [
+      "timetable"
+    ],
+    "summary": "Get Canonical Timetable Endpoint",
+    "is_authenticated": true,
+    "parameters": [
+      "academic_year_id",
+      "semester_id",
+      "department_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/timetable/departments",
+    "method": "GET",
+    "operation_id": "get_timetable_departments_timetable_departments_get",
+    "tags": [
+      "timetable"
+    ],
+    "summary": "Get Timetable Departments",
+    "is_authenticated": true,
+    "parameters": [
+      "academic_year_id",
+      "semester_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/timetable/disruptions/analyze",
+    "method": "POST",
+    "operation_id": "analyze_disruption_timetable_disruptions_analyze_post",
+    "tags": [
+      "Disruptions & Rescheduling"
+    ],
+    "summary": "Analyze Disruption",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/timetable/disruptions/confirm",
+    "method": "POST",
+    "operation_id": "confirm_and_publish_reschedule_timetable_disruptions_confirm_post",
+    "tags": [
+      "Disruptions & Rescheduling"
+    ],
+    "summary": "Confirm And Publish Reschedule",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/timetable/disruptions/propose",
+    "method": "POST",
+    "operation_id": "propose_reschedule_timetable_disruptions_propose_post",
+    "tags": [
+      "Disruptions & Rescheduling"
+    ],
+    "summary": "Propose Reschedule",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": []
+  },
+  {
+    "path": "/timetable/entries/{entry_id}",
+    "method": "PATCH",
+    "operation_id": "edit_entry_timetable_entries__entry_id__patch",
+    "tags": [
+      "timetable"
+    ],
+    "summary": "Edit Entry",
+    "is_authenticated": true,
+    "parameters": [
+      "entry_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/timetable/generate",
+    "method": "POST",
+    "operation_id": "generate_timetable_timetable_generate_post",
+    "tags": [
+      "timetable"
+    ],
+    "summary": "Generate Timetable",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/timetable/generate-preview",
+    "method": "POST",
+    "operation_id": "generate_timetable_preview_route_timetable_generate_preview_post",
+    "tags": [
+      "timetable"
+    ],
+    "summary": "Generate Timetable Preview Route",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/timetable/publish",
+    "method": "POST",
+    "operation_id": "publish_canonical_timetable_route_timetable_publish_post",
+    "tags": [
+      "timetable"
+    ],
+    "summary": "Publish Canonical Timetable Route",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/timetable/sections",
+    "method": "GET",
+    "operation_id": "get_timetable_sections_timetable_sections_get",
+    "tags": [
+      "timetable"
+    ],
+    "summary": "Get Timetable Sections",
+    "is_authenticated": true,
+    "parameters": [
+      "academic_year_id",
+      "semester_id",
+      "department_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/timetable/semesters",
+    "method": "GET",
+    "operation_id": "get_timetable_semesters_timetable_semesters_get",
+    "tags": [
+      "timetable"
+    ],
+    "summary": "Get Timetable Semesters",
+    "is_authenticated": true,
+    "parameters": [
+      "academic_year_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/timetable/versions",
+    "method": "GET",
+    "operation_id": "get_versions_timetable_versions_get",
+    "tags": [
+      "timetable"
+    ],
+    "summary": "Get Versions",
+    "is_authenticated": true,
+    "parameters": [
+      "academic_year_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/timetable/versions/{version_id}",
+    "method": "GET",
+    "operation_id": "get_version_timetable_versions__version_id__get",
+    "tags": [
+      "timetable"
+    ],
+    "summary": "Get Version",
+    "is_authenticated": true,
+    "parameters": [
+      "version_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/timetable/versions/{version_id}/finalize",
+    "method": "POST",
+    "operation_id": "finalize_version_timetable_versions__version_id__finalize_post",
+    "tags": [
+      "timetable"
+    ],
+    "summary": "Finalize Version",
+    "is_authenticated": true,
+    "parameters": [
+      "version_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/timetable/versions/{version_id}/publish",
+    "method": "POST",
+    "operation_id": "publish_version_timetable_versions__version_id__publish_post",
+    "tags": [
+      "timetable"
+    ],
+    "summary": "Publish Version",
+    "is_authenticated": true,
+    "parameters": [
+      "version_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/timetable/versions/{version_id}/validate",
+    "method": "POST",
+    "operation_id": "validate_version_timetable_versions__version_id__validate_post",
+    "tags": [
+      "timetable"
+    ],
+    "summary": "Validate Version",
+    "is_authenticated": true,
+    "parameters": [
+      "version_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "timetable.ts"
+    ]
+  },
+  {
+    "path": "/users",
+    "method": "GET",
+    "operation_id": "list_users_users_get",
+    "tags": [
+      "Users & Roles"
+    ],
+    "summary": "List Users",
+    "is_authenticated": true,
+    "parameters": [
+      "skip",
+      "limit",
+      "role",
+      "department_id",
+      "search",
+      "is_active"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "users.ts"
+    ]
+  },
+  {
+    "path": "/users",
+    "method": "POST",
+    "operation_id": "create_user_users_post",
+    "tags": [
+      "Users & Roles"
+    ],
+    "summary": "Create User",
+    "is_authenticated": true,
+    "parameters": [],
+    "has_body": true,
+    "responses": [
+      "201",
+      "422"
+    ],
+    "frontend_clients": [
+      "users.ts"
+    ]
+  },
+  {
+    "path": "/users/{user_id}",
+    "method": "GET",
+    "operation_id": "get_user_detail_users__user_id__get",
+    "tags": [
+      "Users & Roles"
+    ],
+    "summary": "Get User Detail",
+    "is_authenticated": true,
+    "parameters": [
+      "user_id"
+    ],
+    "has_body": false,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "users.ts"
+    ]
+  },
+  {
+    "path": "/users/{user_id}",
+    "method": "PATCH",
+    "operation_id": "update_user_users__user_id__patch",
+    "tags": [
+      "Users & Roles"
+    ],
+    "summary": "Update User",
+    "is_authenticated": true,
+    "parameters": [
+      "user_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "users.ts"
+    ]
+  },
+  {
+    "path": "/users/{user_id}/reset-password",
+    "method": "POST",
+    "operation_id": "reset_user_password_users__user_id__reset_password_post",
+    "tags": [
+      "Users & Roles"
+    ],
+    "summary": "Reset User Password",
+    "is_authenticated": true,
+    "parameters": [
+      "user_id"
+    ],
+    "has_body": true,
+    "responses": [
+      "200",
+      "422"
+    ],
+    "frontend_clients": [
+      "users.ts"
+    ]
+  }
+]

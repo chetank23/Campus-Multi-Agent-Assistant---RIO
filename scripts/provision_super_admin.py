@@ -4,7 +4,7 @@ scripts/provision_super_admin.py
 Privileged Administrative Provisioning CLI for RIO-MJP SUPER_ADMIN accounts.
 
 Usage:
-  python scripts/provision_super_admin.py --email superadmin@campus.edu --name "Dr. Eleanor Vance" --password "Test@1234"
+  python scripts/provision_super_admin.py --email superadmin@campus.edu --name "Super Admin" --password "Test@1234"
 """
 
 from __future__ import annotations

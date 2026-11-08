@@ -40,7 +40,21 @@ MANIFEST
 
 # Database
 *.sqlite3
+*.sqlite
+*.db
+test_pg_5433/
 REVA_School_of_CSE_Faculty.xlsx
+
+# Raw Data & Private Workbooks
+data/raw/
+reports/screenshots/
+
+# IDE & AI Tooling
+.kilo/
+.qodo/
+
+# Evaluation Results
+eval/results/
 
 # Node
 node_modules/
@@ -57,5 +71,6 @@ storage/curriculum_documents/*
 
 *credentials*
 aids_a_seed_credentials.json
+LOCAL_TEST_*
 backups/
 *.dump

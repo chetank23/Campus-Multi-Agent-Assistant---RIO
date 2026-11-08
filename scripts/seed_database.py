@@ -103,6 +103,15 @@ def validate_target_and_get_session():
             sys.exit(1)
         print(f"[seed_database] Verified isolated test database target: '{db_name}'.")
     elif is_test_db:
+        allow_faker = os.environ.get("ALLOW_FAKER_TEST_SEED", "").strip().lower() == "true"
+        if not allow_faker:
+            print("=" * 70, file=sys.stderr)
+            print("GUARD: The latest workbook 'RIO_MJP_AIDS_A_Clean_Test_Data_No_Attendance.xlsx' is the", file=sys.stderr)
+            print("authoritative source for the local test database. Loading synthetic Faker datasets", file=sys.stderr)
+            print("into the test environment is disabled. Use scripts/clean_and_replace_aids_a_test_data.py instead.", file=sys.stderr)
+            print("To override this, set ALLOW_FAKER_TEST_SEED=true.", file=sys.stderr)
+            print("=" * 70, file=sys.stderr)
+            sys.exit(1)
         print(f"[seed_database] Targeting test database: '{db_name}'.")
     else:
         # Development / non-test database: require explicit confirmation

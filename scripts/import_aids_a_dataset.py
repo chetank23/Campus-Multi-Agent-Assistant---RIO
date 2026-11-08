@@ -62,10 +62,12 @@ from backend.models.space_time import (
     TimeSlot,
 )
 from backend.models.timetable import (
+    Timetable,
     TimetableEntry,
     TimetableVersion,
 )
 
+AUTHORITATIVE_WORKBOOK_PATH = REPO_ROOT / "data" / "raw" / "RIO_MJP_AIDS_A_Clean_Test_Data_No_Attendance.xlsx"
 REPO_CLEAN_DATA_PATH = REPO_ROOT / "data" / "raw" / "RIO_MJP_AIDS_A_Clean_Test_Data.xlsx"
 REPO_RAW_DATA_PATH = REPO_ROOT / "data" / "raw" / "RIO_MJP_AIDS_A_Clean_Merged_Test_Data.xlsx"
 FALLBACK_USER_UPLOAD_PATH = Path(r"C:/Users/Chethan Kumar/.gemini/antigravity/brain/76a7f300-364a-4771-833a-c7670d38435c/.user_uploaded/media_1793980094606_098e9839.xlsx")
@@ -78,16 +80,18 @@ def resolve_excel_path(path_arg: Optional[str | Path] = None) -> Path:
     env_path = os.environ.get("AIDS_A_EXCEL_PATH")
     if env_path and Path(env_path).exists():
         return Path(env_path)
+    if AUTHORITATIVE_WORKBOOK_PATH.exists():
+        return AUTHORITATIVE_WORKBOOK_PATH
     if REPO_CLEAN_DATA_PATH.exists():
         return REPO_CLEAN_DATA_PATH
     if REPO_RAW_DATA_PATH.exists():
         return REPO_RAW_DATA_PATH
     if FALLBACK_USER_UPLOAD_PATH.exists():
         return FALLBACK_USER_UPLOAD_PATH
-    return REPO_CLEAN_DATA_PATH
+    return AUTHORITATIVE_WORKBOOK_PATH
 
 
-def safe_int(val: Any, default: int = 0) -> int:
+def safe_int(val: Any, default: Optional[int] = 0) -> Optional[int]:
     """Safely convert any cell or string value to integer without raising ValueError/TypeError."""
     if val is None:
         return default
@@ -104,9 +108,16 @@ def safe_int(val: Any, default: int = 0) -> int:
         return default
 
 
-DEFAULT_EXCEL_PATH = str(REPO_RAW_DATA_PATH)
+DEFAULT_EXCEL_PATH = str(AUTHORITATIVE_WORKBOOK_PATH)
 CREDENTIALS_REPORT_PATH = REPO_ROOT / "aids_a_seed_credentials.json"
 DEFAULT_TEST_PASSWORD = "Password@123"
+
+
+def get_unique_account_password(role: str, identifier: str) -> str:
+    """Generate deterministic, high-entropy unique local-only test password for an account."""
+    clean_id = "".join(c for c in identifier if c.isalnum())
+    clean_id = clean_id[:12].capitalize()
+    return f"{clean_id}#RioLocal26"
 
 
 def get_db_session(db_url: str) -> Session:
@@ -266,13 +277,16 @@ def import_aids_a_dataset(
         )
         fac_email = f"{clean_prefix}@rio-mjp.test"
 
+        fac_pwd = get_unique_account_password("FACULTY", clean_prefix)
+        fac_pw_hash = get_password_hash(fac_pwd)
+
         # User account
         fac_user = db.query(User).filter(User.email == fac_email).first()
         if not fac_user:
             fac_user = User(
                 email=fac_email,
                 name=fac_name,
-                password_hash=pw_hash,
+                password_hash=fac_pw_hash,
                 role="FACULTY",
                 department_id=dept.id,
                 is_active=True,
@@ -283,7 +297,7 @@ def import_aids_a_dataset(
             fac_user.name = fac_name
             fac_user.role = "FACULTY"
             fac_user.department_id = dept.id
-            fac_user.password_hash = pw_hash
+            fac_user.password_hash = fac_pw_hash
             db.flush()
 
         # Faculty record
@@ -317,6 +331,7 @@ def import_aids_a_dataset(
             "name": fac_name,
             "email": fac_email,
             "role": "FACULTY",
+            "password": fac_pwd,
             "faculty_id": fac_rec.faculty_id,
             "designation": designation,
             "contact": contact,
@@ -359,13 +374,38 @@ def import_aids_a_dataset(
         else:
             c_type = "THEORY"
 
-        # Determine hours / credits defaults for scheduling
-        # In AIDS-A curriculum: Theory = 3-4 hours, Project/Internship = 3-6 hours
+        # Determine hours / credits from workbook (or fallback for solver test when configure_candidate_rooms=True)
         is_lab = (c_type == "LAB")
-        lec_hours = 3 if c_type in ("THEORY", "ELECTIVE") else 0
-        tut_hours = 0
-        prac_hours = 3 if is_lab else (3 if c_type == "PROJECT" else 0)
-        credits_val = 3
+        credits_raw = row[6] if len(row) > 6 else None
+        credits_val = safe_int(credits_raw, default=None) if (credits_raw is not None and str(credits_raw).strip() != "") else 3
+
+        ltp_raw = str(row[7]).strip() if (len(row) > 7 and row[7] is not None) else None
+        lec_hours: Optional[int] = None
+        tut_hours: Optional[int] = None
+        prac_hours: Optional[int] = None
+        if ltp_raw:
+            parts = ltp_raw.split("-")
+            if len(parts) == 3:
+                lec_hours = safe_int(parts[0], default=None)
+                tut_hours = safe_int(parts[1], default=None)
+                prac_hours = safe_int(parts[2], default=None)
+        else:
+            if c_type in ("THEORY", "ELECTIVE"):
+                lec_hours = 3
+                tut_hours = 0
+                prac_hours = 0
+            elif c_type == "LAB":
+                lec_hours = 0
+                tut_hours = 0
+                prac_hours = 3
+            elif c_type == "PROJECT":
+                lec_hours = 1
+                tut_hours = 0
+                prac_hours = 3
+            else:
+                lec_hours = 3
+                tut_hours = 0
+                prac_hours = 0
 
         course = db.query(Course).filter(Course.course_code == code).first()
         if not course:
@@ -388,6 +428,7 @@ def import_aids_a_dataset(
             course.course_type = c_type
             course.credits = credits_val
             course.lecture_hours = lec_hours
+            course.tutorial_hours = tut_hours
             course.practical_hours = prac_hours
             db.flush()
 
@@ -528,13 +569,10 @@ def import_aids_a_dataset(
             Room.room_number == room_no,
         ).first()
 
-        # In testing default configuration:
-        # Ground and 1st floor rooms 101, 102, 103, 104, 105, 001, 002, G-08, G-09, F-08, F-09
-        # are configured with active status and standard capacity (60 for classrooms, 40 for labs)
-        # to allow CP-SAT solver and timetabling engine to schedule classes.
-        is_candidate = configure_candidate_rooms and (floor_idx in (0, 1, 2) and safe_int(room_no.split("-")[-1], default=999) <= 10)
-        room_capacity = 60 if is_candidate else None
-        room_status = "ACTIVE" if is_candidate else status_str
+        # Preserve room capacity and make all 225 building rooms active without synthetic defaults
+        cap_val = safe_int(r_row[9], default=None) if (len(r_row) > 9 and r_row[9] is not None and str(r_row[9]).strip() != "") else None
+        room_capacity = cap_val
+        room_status = "ACTIVE"
 
         if not room:
             room = Room(
@@ -544,8 +582,8 @@ def import_aids_a_dataset(
                 capacity=room_capacity,
                 room_type=room_type,
                 department_id=dept.id,
-                has_projector=True if is_candidate else False,
-                has_smart_board=True if is_candidate else False,
+                has_projector=False,
+                has_smart_board=False,
                 status=room_status,
             )
             db.add(room)
@@ -553,9 +591,8 @@ def import_aids_a_dataset(
         else:
             room.floor_number = floor_idx
             room.room_type = room_type
-            if is_candidate:
-                room.capacity = room_capacity
-                room.status = "ACTIVE"
+            room.capacity = room_capacity
+            room.status = room_status
             db.flush()
 
         rooms_imported += 1
@@ -567,9 +604,9 @@ def import_aids_a_dataset(
                     room_id=room.id,
                     lab_name=lab_name or f"Lab {code_str}",
                     department_id=dept.id,
-                    computer_count=35 if is_candidate else 0,
-                    equipment="High-Performance AI Workstations",
-                    software="PyTorch, TensorFlow, Python 3.13, JupyterLab",
+                    computer_count=None,
+                    equipment=None,
+                    software=None,
                 )
                 db.add(lab)
                 db.flush()
@@ -584,8 +621,8 @@ def import_aids_a_dataset(
     periods_sheet = wb["Periods"]
     period_rows = list(periods_sheet.iter_rows(values_only=True))[1:]
 
-    # Working days: Monday to Saturday
-    working_days = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"]
+    # Working days: Monday to Saturday (Canonical 3-letter uppercase codes)
+    working_days = ["MON", "TUE", "WED", "THU", "FRI", "SAT"]
     time_slots_created = 0
 
     slots_by_day_and_period: Dict[Tuple[str, str], TimeSlot] = {}
@@ -671,6 +708,8 @@ def import_aids_a_dataset(
         # Deterministic local test email
         # R23EH001 -> r23eh001@rio-mjp.test
         student_email = f"{srn.lower()}@rio-mjp.test"
+        stu_pwd = get_unique_account_password("STUDENT", srn)
+        stu_pw_hash = get_password_hash(stu_pwd)
 
         # User account
         stu_user = db.query(User).filter(User.email == student_email).first()
@@ -678,7 +717,7 @@ def import_aids_a_dataset(
             stu_user = User(
                 email=student_email,
                 name=student_name,
-                password_hash=pw_hash,
+                password_hash=stu_pw_hash,
                 role="STUDENT",
                 department_id=dept.id,
                 is_active=True,
@@ -689,7 +728,7 @@ def import_aids_a_dataset(
             stu_user.name = student_name
             stu_user.role = "STUDENT"
             stu_user.department_id = dept.id
-            stu_user.password_hash = pw_hash
+            stu_user.password_hash = stu_pw_hash
             db.flush()
 
         # Student academic record
@@ -721,6 +760,7 @@ def import_aids_a_dataset(
             "name": student_name or "(Blank / Not Provided)",
             "email": student_email,
             "role": "STUDENT",
+            "password": stu_pwd,
             "section": sec.section_name,
             "batch": "2023",
             "class_teacher": "Dr. Nimrita Koul",
@@ -736,13 +776,36 @@ def import_aids_a_dataset(
     timetable_sheet = wb["Timetable"]
     tt_rows = list(timetable_sheet.iter_rows(values_only=True))[1:]
 
-    # Reference version (set as PUBLISHED reference so student & faculty views are populated)
+    # Reference version & Canonical Timetable
+    canonical_tt = db.query(Timetable).filter(
+        Timetable.academic_year_id == ay.id,
+        Timetable.semester_id == sem.id,
+        Timetable.section_id == sec.id,
+    ).first()
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    if not canonical_tt:
+        canonical_tt = Timetable(
+            academic_year_id=ay.id,
+            semester_id=sem.id,
+            section_id=sec.id,
+            status="PUBLISHED",
+            published_at=now_utc,
+            created_at=now_utc,
+        )
+        db.add(canonical_tt)
+        db.flush()
+    else:
+        canonical_tt.status = "PUBLISHED"
+        if not canonical_tt.published_at:
+            canonical_tt.published_at = now_utc
+        db.flush()
+
     ref_version = db.query(TimetableVersion).filter(
         TimetableVersion.academic_year_id == ay.id,
         TimetableVersion.version_number == "AIDS-A-REF",
     ).first()
 
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
     if not ref_version:
         ref_version = TimetableVersion(
             academic_year_id=ay.id,
@@ -768,7 +831,15 @@ def import_aids_a_dataset(
     for t_row in tt_rows:
         if not t_row or not t_row[0]:
             continue
-        day_str = str(t_row[0]).strip().upper()
+        raw_day = str(t_row[0]).strip().upper()
+        day_str = (
+            "MON" if raw_day.startswith("MON") else
+            "TUE" if raw_day.startswith("TUE") else
+            "WED" if raw_day.startswith("WED") else
+            "THU" if raw_day.startswith("THU") else
+            "FRI" if raw_day.startswith("FRI") else
+            "SAT" if raw_day.startswith("SAT") else raw_day[:3]
+        )
         period_str = str(t_row[1]).strip()
         subj_activity = str(t_row[3]).strip() if t_row[3] else None
 
@@ -810,7 +881,7 @@ def import_aids_a_dataset(
             matched_course = list(course_map.values())[0]
 
         entry = db.query(TimetableEntry).filter(
-            TimetableEntry.version_id == ref_version.id,
+            (TimetableEntry.timetable_id == canonical_tt.id) | (TimetableEntry.version_id == ref_version.id),
             TimetableEntry.slot_id == ts.id,
             TimetableEntry.section_id == sec.id,
         ).first()
@@ -819,6 +890,7 @@ def import_aids_a_dataset(
 
         if not entry:
             entry = TimetableEntry(
+                timetable_id=canonical_tt.id,
                 version_id=ref_version.id,
                 department_id=dept.id,
                 program_id=prog.id,
@@ -835,6 +907,8 @@ def import_aids_a_dataset(
             db.flush()
             tt_entries_count += 1
         else:
+            entry.timetable_id = canonical_tt.id
+            entry.version_id = ref_version.id
             entry.status = "ACTIVE"
             db.flush()
 
