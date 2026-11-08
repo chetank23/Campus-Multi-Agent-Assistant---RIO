@@ -494,13 +494,20 @@ class Scenario13Timeout(BaseScenario):
         res: SolverResult = solver.solve()
         solve_time = time.time() - t0
 
+        val_valid = False
+        blockers = 0
+        if res.feasible and res.entries:
+            val = validate_timetable(res.entries, opt_input)
+            val_valid = val.is_valid
+            blockers = val.blocker_count
+
         return {
             "scenario_id": self.scenario_id,
             "description": self.description,
             "solver_status": res.status,
             "timetable_generated": res.feasible,
-            "validation_valid": False,
-            "hard_violation_count": 0,
+            "validation_valid": val_valid,
+            "hard_violation_count": blockers,
             "soft_score": 0.0,
             "runtime_seconds": round(solve_time, 4),
             "diagnostic_outcome": res.diagnostics or [res.message],

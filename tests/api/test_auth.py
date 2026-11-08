@@ -80,6 +80,7 @@ def test_refresh_token_success(get_seeded_users):
     assert rotated_cookie != original_refresh_token
 
     # A rotated token is single-use: replaying the old cookie is rejected.
+    fresh_client.cookies.clear()
     fresh_client.cookies.set("refresh_token", original_refresh_token)
     replay_resp = fresh_client.post("/auth/refresh")
     assert replay_resp.status_code == 401
@@ -121,6 +122,7 @@ def test_access_token_cannot_be_used_as_refresh_token(get_seeded_users):
     email = get_seeded_users["ADMIN"]
     login_resp = fresh_client.post("/auth/login", json={"email": email, "password": "Test@1234"})
     access_token = login_resp.json()["access_token"]
+    fresh_client.cookies.clear()
     fresh_client.cookies.set("refresh_token", access_token)
     response = fresh_client.post("/auth/refresh")
     assert response.status_code == 401

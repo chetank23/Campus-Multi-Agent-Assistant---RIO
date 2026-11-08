@@ -81,7 +81,7 @@ def get_faculty_my_timetable(
         .outerjoin(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
         .filter(
             ((Timetable.id != None) & (Timetable.status == "PUBLISHED")) |  # noqa: E711
-            ((TimetableVersion.id != None) & (TimetableVersion.status == "PUBLISHED")),  # noqa: E711
+            ((TimetableEntry.timetable_id == None) & (TimetableVersion.id != None) & (TimetableVersion.status == "PUBLISHED")),  # noqa: E711
             TimetableEntry.faculty_id == fac.id,
             TimetableEntry.status != "CANCELLED",
         )

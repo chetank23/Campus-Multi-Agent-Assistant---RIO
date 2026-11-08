@@ -51,7 +51,7 @@ from backend.main import app
 from backend.models.identity import User
 from backend.config import SessionLocal, engine
 from sqlalchemy.orm import Session
-from scripts.import_aids_a_dataset import import_aids_a_dataset
+from scripts.import_aids_a_dataset import import_aids_a_dataset, get_unique_account_password
 
 client = TestClient(app)
 
@@ -66,14 +66,20 @@ def ensure_aids_a_dataset():
 
 @pytest.fixture(scope="module")
 def student_token():
-    resp = client.post("/auth/login", json={"email": "r23eh001@rio-mjp.test", "password": "Password@123"})
+    pwd = get_unique_account_password("STUDENT", "R23EH001")
+    resp = client.post("/auth/login", json={"email": "r23eh001@rio-mjp.test", "password": pwd})
+    if resp.status_code != 200:
+        resp = client.post("/auth/login", json={"email": "r23eh001@rio-mjp.test", "password": "Password@123"})
     assert resp.status_code == 200, f"Student login failed: {resp.text}"
     return resp.json()["access_token"]
 
 
 @pytest.fixture(scope="module")
 def faculty_token():
-    resp = client.post("/auth/login", json={"email": "nimrita.koul@rio-mjp.test", "password": "Password@123"})
+    pwd = get_unique_account_password("FACULTY", "nimrita.koul")
+    resp = client.post("/auth/login", json={"email": "nimrita.koul@rio-mjp.test", "password": pwd})
+    if resp.status_code != 200:
+        resp = client.post("/auth/login", json={"email": "nimrita.koul@rio-mjp.test", "password": "Password@123"})
     assert resp.status_code == 200, f"Faculty login failed: {resp.text}"
     return resp.json()["access_token"]
 
@@ -85,6 +91,8 @@ def admin_token():
         admin_user = db.query(User).filter(User.role == "ADMIN").first()
         admin_email = admin_user.email if admin_user else "admin@campus.edu"
     resp = client.post("/auth/login", json={"email": admin_email, "password": "Test@1234"})
+    if resp.status_code != 200:
+        resp = client.post("/auth/login", json={"email": admin_email, "password": "Admin#RioLocal26"})
     if resp.status_code != 200:
         resp = client.post("/auth/login", json={"email": "admin@campus.edu", "password": "AdminPassword123!"})
     assert resp.status_code == 200, f"Admin login failed: {resp.text}"

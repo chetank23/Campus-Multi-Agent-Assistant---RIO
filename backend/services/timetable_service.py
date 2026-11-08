@@ -488,6 +488,12 @@ def publish_canonical_timetable(
                     db.add(canonical_tt)
                     db.flush()
 
+                # Supersede any legacy unlinked entries for this section so only canonical entries remain active
+                db.query(TimetableEntry).filter(
+                    TimetableEntry.section_id == sec_id,
+                    TimetableEntry.timetable_id == None,  # noqa: E711
+                ).update({"status": "CANCELLED"}, synchronize_session=False)
+
                 # Legacy mirror version for compatibility (version_number max length 10)
                 version_code = f"CANON-{sec_id}"[:10]
                 legacy_ver = db.query(TimetableVersion).filter(
