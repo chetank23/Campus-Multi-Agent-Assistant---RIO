@@ -16,7 +16,7 @@ from backend.models.academic import Department, Program, AcademicYear, Semester,
 from backend.models.space_time import Building, Room, Lab, TimeSlot
 from backend.models.courses import Course, CourseAssignment
 from backend.core.security import verify_password
-from scripts.import_aids_a_dataset import import_aids_a_dataset, DEFAULT_TEST_PASSWORD
+from scripts.import_aids_a_dataset import import_aids_a_dataset, DEFAULT_TEST_PASSWORD, get_unique_account_password
 
 client = TestClient(app)
 
@@ -72,7 +72,8 @@ class TestAidsAImportAndLogin:
             assert fac_user is not None
             assert fac_user.name == "Dr. Nimrita Koul"
             assert fac_user.role == "FACULTY"
-            assert verify_password(DEFAULT_TEST_PASSWORD, fac_user.password_hash)
+            fac_pwd = get_unique_account_password("FACULTY", fac_user.email.split("@")[0])
+            assert verify_password(fac_pwd, fac_user.password_hash) or verify_password(DEFAULT_TEST_PASSWORD, fac_user.password_hash)
 
             fac_rec = test_db.query(Faculty).filter(Faculty.user_id == fac_user.id).first()
             assert fac_rec is not None
@@ -98,7 +99,7 @@ class TestAidsAImportAndLogin:
         # Test login API for Dr. Nimrita Koul
         res = client.post("/auth/login", json={
             "email": "nimrita.koul@rio-mjp.test",
-            "password": DEFAULT_TEST_PASSWORD,
+            "password": get_unique_account_password("FACULTY", "nimrita.koul"),
         })
         assert res.status_code == 200, res.text
         data = res.json()
@@ -138,7 +139,8 @@ class TestAidsAImportAndLogin:
                 assert stu.user is not None, f"User missing for student {expected_srn}"
                 assert stu.user.email == f"{expected_srn.lower()}@rio-mjp.test"
                 assert stu.user.role == "STUDENT"
-                assert verify_password(DEFAULT_TEST_PASSWORD, stu.user.password_hash)
+                stu_pwd = get_unique_account_password("STUDENT", expected_srn)
+                assert verify_password(stu_pwd, stu.user.password_hash) or verify_password(DEFAULT_TEST_PASSWORD, stu.user.password_hash)
 
                 if expected_srn in expected_blank_srns:
                     assert stu.user.name == "", f"Expected blank name for {expected_srn}, got '{stu.user.name}'"
@@ -150,9 +152,10 @@ class TestAidsAImportAndLogin:
         for idx in range(1, 61):
             test_srn = f"R23EH{idx:03d}"
             test_email = f"{test_srn.lower()}@rio-mjp.test"
+            test_pwd = get_unique_account_password("STUDENT", test_srn)
             res = client.post("/auth/login", json={
                 "email": test_email,
-                "password": DEFAULT_TEST_PASSWORD,
+                "password": test_pwd,
             })
             assert res.status_code == 200, f"Login failed for {test_srn}: {res.text}"
             token = res.json()["access_token"]
@@ -210,10 +213,27 @@ class TestAidsAImportAndLogin:
                 assert flr_labs == 2, f"Floor {flr} has {flr_labs} labs instead of 2"
 
     def test_05_periods_and_breaks(self):
+        import datetime
         with Session(engine) as test_db:
-            working_days = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"]
+            working_days = ["MON", "TUE", "WED", "THU", "FRI", "SAT"]
+            expected_schedule = [
+                ("P1", datetime.time(8, 30), datetime.time(9, 25), "CLASS"),
+                ("P2", datetime.time(9, 25), datetime.time(10, 20), "CLASS"),
+                ("TEA BREAK", datetime.time(10, 20), datetime.time(10, 40), "BREAK"),
+                ("P3", datetime.time(10, 40), datetime.time(11, 35), "CLASS"),
+                ("P4", datetime.time(11, 35), datetime.time(12, 30), "CLASS"),
+                ("LUNCH BREAK", datetime.time(12, 30), datetime.time(13, 30), "LUNCH"),
+                ("P5", datetime.time(13, 30), datetime.time(14, 25), "CLASS"),
+                ("P6", datetime.time(14, 25), datetime.time(15, 20), "CLASS"),
+                ("P7", datetime.time(15, 20), datetime.time(16, 15), "CLASS"),
+            ]
             for day in working_days:
-                slots = test_db.query(TimeSlot).filter(TimeSlot.day == day).all()
+                slots = (
+                    test_db.query(TimeSlot)
+                    .filter(TimeSlot.day == day)
+                    .order_by(TimeSlot.start_time.asc())
+                    .all()
+                )
                 assert len(slots) == 9, f"Expected 9 slots on {day}, found {len(slots)}"
 
                 class_slots = [s for s in slots if s.slot_type == "CLASS"]
@@ -221,11 +241,16 @@ class TestAidsAImportAndLogin:
                 assert len(class_slots) == 7, f"Expected 7 class periods, found {len(class_slots)}"
                 assert len(break_slots) == 2, f"Expected 2 breaks (tea + lunch), found {len(break_slots)}"
 
+                for slot, (name, exp_st, exp_et, exp_type) in zip(slots, expected_schedule):
+                    assert slot.start_time == exp_st, f"{day} {name} start {slot.start_time} != {exp_st}"
+                    assert slot.end_time == exp_et, f"{day} {name} end {slot.end_time} != {exp_et}"
+                    assert slot.slot_type == exp_type, f"{day} {name} type {slot.slot_type} != {exp_type}"
+
     def test_06_student_rbac_and_isolation(self):
         # 1. Log in as student R23EH001
         res = client.post("/auth/login", json={
             "email": "r23eh001@rio-mjp.test",
-            "password": DEFAULT_TEST_PASSWORD,
+            "password": get_unique_account_password("STUDENT", "R23EH001"),
         })
         assert res.status_code == 200
         token = res.json()["access_token"]

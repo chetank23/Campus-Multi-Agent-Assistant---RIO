@@ -72,7 +72,7 @@ def run_super_admin_live_browser():
         if not sa:
             sa = User(
                 email="superadmin@campus.edu",
-                name="Dr. Eleanor Vance",
+                name="Super Admin",
                 password_hash=get_password_hash("Test@1234"),
                 role="SUPER_ADMIN",
                 is_active=True,

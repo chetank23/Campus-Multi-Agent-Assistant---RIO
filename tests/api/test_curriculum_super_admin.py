@@ -53,7 +53,7 @@ def super_admin_auth():
         if not user:
             user = User(
                 email="superadmin@campus.edu",
-                name="Dr. Eleanor Vance",
+                name="Super Admin",
                 password_hash=get_password_hash("Test@1234"),
                 role="SUPER_ADMIN",
                 is_active=True,
