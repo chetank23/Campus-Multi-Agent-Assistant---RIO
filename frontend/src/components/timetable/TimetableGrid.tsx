@@ -8,7 +8,6 @@ import type { FacultyResponse } from '@/api/faculty';
 import type { RoomResponse } from '@/api/rooms';
 import { TimetableCell } from './TimetableCell';
 import { EditEntryModal } from './EditEntryModal';
-import { formatTime12h } from '@/utils/timeFormatter';
 import { exportTimetableToPDF } from '@/utils/pdfGenerator';
 
 type AnyTimetableEntry = TimetableEntryResult | TimetableEntryResponse;
@@ -36,6 +35,18 @@ const DAY_LABELS: Record<string, string> = {
   SAT: 'Saturday',
 };
 
+const normalizeDay = (d?: string | null): string => {
+  if (!d) return 'MON';
+  const u = d.toUpperCase().trim();
+  if (u.startsWith('MON')) return 'MON';
+  if (u.startsWith('TUE')) return 'TUE';
+  if (u.startsWith('WED')) return 'WED';
+  if (u.startsWith('THU')) return 'THU';
+  if (u.startsWith('FRI')) return 'FRI';
+  if (u.startsWith('SAT')) return 'SAT';
+  return u.slice(0, 3);
+};
+
 export const TimetableGrid: React.FC<TimetableGridProps> = ({
   entries,
   timeSlots,
@@ -53,12 +64,14 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
   const sortedSlots = useMemo(() => {
     const uniqueTimes = new Map<string, TimeSlotResponse>();
     timeSlots.forEach((slot) => {
-      const key = `${slot.start_time}-${slot.end_time}`;
+      const start = (slot.start_time || '').slice(0, 5);
+      const end = (slot.end_time || '').slice(0, 5);
+      const key = `${start}-${end}`;
       if (!uniqueTimes.has(key)) {
         uniqueTimes.set(key, slot);
       }
     });
-    return Array.from(uniqueTimes.values()).sort((a, b) => a.start_time.localeCompare(b.start_time));
+    return Array.from(uniqueTimes.values()).sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
   }, [timeSlots]);
 
   // Group entries by day and time signature
@@ -67,17 +80,22 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
     DAYS.forEach((day) => {
       mat[day] = {};
       sortedSlots.forEach((slot) => {
-        const timeKey = `${slot.start_time}-${slot.end_time}`;
+        const start = (slot.start_time || '').slice(0, 5);
+        const end = (slot.end_time || '').slice(0, 5);
+        const timeKey = `${start}-${end}`;
         mat[day][timeKey] = [];
       });
     });
 
     entries.forEach((entry) => {
       const slot = timeSlots.find((s) => s.id === entry.slot_id);
-      if (slot && mat[slot.day]) {
-        const timeKey = `${slot.start_time}-${slot.end_time}`;
-        if (mat[slot.day][timeKey]) {
-          mat[slot.day][timeKey].push(entry);
+      const dayKey = normalizeDay(slot?.day);
+      if (slot && mat[dayKey]) {
+        const start = (slot.start_time || '').slice(0, 5);
+        const end = (slot.end_time || '').slice(0, 5);
+        const timeKey = `${start}-${end}`;
+        if (mat[dayKey][timeKey]) {
+          mat[dayKey][timeKey].push(entry);
         }
       }
     });
@@ -218,50 +236,68 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
         <table className="w-full border-collapse text-xs">
           <thead>
             <tr className="bg-slate-100 border-b border-slate-300 text-slate-700">
-              <th className="w-24 p-3 border-r border-slate-300 font-bold text-center">Day / Time</th>
-              {sortedSlots.map((slot) => (
-                <th key={slot.id} className="p-2.5 border-r last:border-r-0 border-slate-300 font-bold text-center">
-                  <div className="text-slate-800">{formatTime12h(slot.start_time)}</div>
-                  <div className="text-[10px] text-slate-500 font-normal">to {formatTime12h(slot.end_time)}</div>
-                </th>
-              ))}
+              <th className="w-28 p-3.5 border-r border-slate-300 font-bold text-center uppercase tracking-wider text-xs">Day / Time</th>
+              {sortedSlots.map((slot) => {
+                const start = (slot.start_time || '').slice(0, 5);
+                const end = (slot.end_time || '').slice(0, 5);
+                const isTeaBreak = slot.slot_type === 'BREAK' || (start === '10:20' && end === '10:40');
+                const isLunchBreak = slot.slot_type === 'LUNCH' || (start === '12:30' && end === '13:30');
+                const isBreak = isTeaBreak || isLunchBreak;
+                const label = isTeaBreak ? 'Tea Break: 10:20–10:40' : isLunchBreak ? 'Lunch Break: 12:30–13:30' : `${start}–${end}`;
+
+                return (
+                  <th
+                    key={slot.id}
+                    className={`p-3 border-r last:border-r-0 border-slate-300 font-bold text-center text-xs tracking-tight ${
+                      isBreak ? 'bg-amber-50/90 text-amber-900 w-28' : 'text-slate-900 min-w-[150px]'
+                    }`}
+                  >
+                    <div className="font-bold font-tabular leading-snug">{label}</div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
             {DAYS.map((dayKey) => (
               <tr key={dayKey} className="border-b last:border-b-0 border-slate-200 hover:bg-slate-50/50 transition-colors">
                 {/* Day Header Column */}
-                <td className="w-24 p-3 border-r border-slate-300 bg-slate-100 font-bold text-slate-800 text-center uppercase tracking-wide">
+                <td className="w-28 p-3.5 border-r border-slate-300 bg-slate-50/90 font-extrabold text-slate-800 text-center uppercase tracking-wide align-top">
                   {DAY_LABELS[dayKey] || dayKey}
                 </td>
 
                 {/* Slot Cells */}
                 {sortedSlots.map((slot) => {
-                  const timeKey = `${slot.start_time}-${slot.end_time}`;
+                  const start = (slot.start_time || '').slice(0, 5);
+                  const end = (slot.end_time || '').slice(0, 5);
+                  const timeKey = `${start}-${end}`;
                   const cellEntries = matrix[dayKey]?.[timeKey] || [];
 
                   // Handle explicit Break/Lunch slots
-                  if (slot.slot_type === 'LUNCH') {
+                  const isTeaBreak = slot.slot_type === 'BREAK' || (start === '10:20' && end === '10:40');
+                  const isLunchBreak = slot.slot_type === 'LUNCH' || (start === '12:30' && end === '13:30');
+
+                  if (isLunchBreak) {
                     return (
-                      <td key={slot.id} className="p-2 border-r last:border-r-0 border-slate-200 bg-amber-50/60 text-amber-800 text-center font-bold text-[11px] tracking-wider uppercase">
-                        Lunch Break
+                      <td key={slot.id} className="p-2 border-r last:border-r-0 border-slate-200 bg-amber-50/60 text-amber-800 text-center font-bold text-[11px] tracking-wider uppercase align-middle">
+                        <span className="block px-2 py-1 rounded bg-amber-100/60 font-medium">Lunch Break: 12:30–13:30</span>
                       </td>
                     );
                   }
-                  if (slot.slot_type === 'BREAK') {
+                  if (isTeaBreak) {
                     return (
-                      <td key={slot.id} className="p-2 border-r last:border-r-0 border-slate-200 bg-blue-50/60 text-blue-800 text-center font-bold text-[11px] tracking-wider uppercase">
-                        Tea Break
+                      <td key={slot.id} className="p-2 border-r last:border-r-0 border-slate-200 bg-amber-50/60 text-amber-800 text-center font-bold text-[11px] tracking-wider uppercase align-middle">
+                        <span className="block px-2 py-1 rounded bg-amber-100/60 font-medium">Tea Break: 10:20–10:40</span>
                       </td>
                     );
                   }
 
                   return (
-                    <td key={slot.id} className="p-1.5 border-r last:border-r-0 border-slate-200 min-h-[90px] vertical-top">
+                    <td key={slot.id} className="p-2 border-r last:border-r-0 border-slate-200 min-h-[110px] align-top">
                       {cellEntries.length === 0 ? (
-                        <div className="h-full min-h-[70px] flex items-center justify-center text-slate-300 text-xs">—</div>
+                        <div className="h-full min-h-[70px] flex items-center justify-center text-slate-300 text-xs italic">—</div>
                       ) : (
-                        <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-col gap-2">
                           {cellEntries.map((entry, idx) => {
                             const data = getCellData(entry);
                             const key = 'id' in entry ? entry.id : `${entry.course_assignment_id}-${idx}`;
@@ -277,7 +313,8 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
                                 className={isEditable && 'id' in entry ? 'cursor-pointer hover:ring-2 hover:ring-indigo-500 rounded transition-all' : ''}
                               >
                                 <TimetableCell
-                                  courseName={data.courseCode}
+                                  courseCode={data.courseCode}
+                                  courseName={data.courseName}
                                   facultyName={data.facultyName}
                                   roomName={data.roomName}
                                   hourType={data.hourType}

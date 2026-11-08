@@ -155,6 +155,7 @@ export const FacultyTimetablePage: React.FC = () => {
             <PersonalTimetableGrid
               entries={entries}
               role="FACULTY"
+              workingDays={timetable?.working_days || 'MON_SAT'}
               emptyMessage="No published timetable entries found for your teaching assignments"
             />
           </div>

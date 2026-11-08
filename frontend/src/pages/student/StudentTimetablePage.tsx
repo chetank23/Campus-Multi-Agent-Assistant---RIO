@@ -165,12 +165,40 @@ export const StudentTimetablePage: React.FC = () => {
             </div>
           </div>
 
+          {/* ── Class Teacher Banner ── */}
+          {timetable?.class_teacher_name && (
+            <div className="bg-white border border-[#E5ECF5] rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-full bg-[#EFF6FF] text-[#2563EB] flex items-center justify-center font-bold text-sm">
+                  {timetable.class_teacher_name[0]}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-[#17243B] flex items-center gap-2">
+                    <span>{timetable.class_teacher_name}</span>
+                    <span className="text-[10px] font-semibold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-full">
+                      Class Teacher
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-[#71819A]">
+                    {timetable.class_teacher_designation || 'Faculty'}
+                  </div>
+                </div>
+              </div>
+              {timetable.class_teacher_contact && (
+                <div className="text-xs text-[#536783] bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                  Contact: <span className="font-semibold text-slate-800">{timetable.class_teacher_contact}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── Timetable Grid / Agenda ── */}
           <div className="bg-white rounded-[24px] border border-[#E5ECF5] p-4 sm:p-5 shadow-xs">
             <PersonalTimetableGrid
               entries={entries}
               role="STUDENT"
-              emptyMessage="No published timetable entries found for your section/batch"
+              workingDays={timetable?.working_days || 'MON_SAT'}
+              emptyMessage="No timetable has been published for your section yet."
             />
           </div>
         </>

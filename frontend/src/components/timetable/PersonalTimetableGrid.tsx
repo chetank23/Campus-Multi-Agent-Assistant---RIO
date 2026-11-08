@@ -2,23 +2,20 @@ import React, { useMemo, useState } from 'react';
 import {
   CalendarDays,
   Clock,
-  MapPin,
-  User,
-  Users,
   Grid3X3,
   ListFilter,
 } from 'lucide-react';
 import type { PersonalTimetableEntry } from '@/api/timetable';
 import { formatTime12h } from '@/utils/timeFormatter';
-import { StatusBadge } from '@/components/common/StatusBadge';
 
-interface PersonalTimetableGridProps {
+export interface PersonalTimetableGridProps {
   entries: PersonalTimetableEntry[];
   role: 'FACULTY' | 'STUDENT';
   emptyMessage?: string;
+  workingDays?: 'MON_FRI' | 'MON_SAT';
 }
 
-const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const ALL_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 const DAY_LABELS: Record<string, string> = {
   MON: 'Monday',
@@ -30,18 +27,40 @@ const DAY_LABELS: Record<string, string> = {
   SUN: 'Sunday',
 };
 
+// 7 Instructional Periods + 2 Institutional Breaks (Authoritative schedule)
+const STANDARD_PERIOD_COLUMNS = [
+  { key: 'P1', timeLabel: '08:30–09:25', name: 'Period 1', start: '08:30', end: '09:25', isBreak: false },
+  { key: 'P2', timeLabel: '09:25–10:20', name: 'Period 2', start: '09:25', end: '10:20', isBreak: false },
+  { key: 'TEA_BREAK', timeLabel: '10:20–10:40', name: 'Tea Break', start: '10:20', end: '10:40', isBreak: true },
+  { key: 'P3', timeLabel: '10:40–11:35', name: 'Period 3', start: '10:40', end: '11:35', isBreak: false },
+  { key: 'P4', timeLabel: '11:35–12:30', name: 'Period 4', start: '11:35', end: '12:30', isBreak: false },
+  { key: 'LUNCH_BREAK', timeLabel: '12:30–13:30', name: 'Lunch Break', start: '12:30', end: '13:30', isBreak: true },
+  { key: 'P5', timeLabel: '13:30–14:25', name: 'Period 5', start: '13:30', end: '14:25', isBreak: false },
+  { key: 'P6', timeLabel: '14:25–15:20', name: 'Period 6', start: '14:25', end: '15:20', isBreak: false },
+  { key: 'P7', timeLabel: '15:20–16:15', name: 'Period 7', start: '15:20', end: '16:15', isBreak: false },
+];
+
 export const PersonalTimetableGrid: React.FC<PersonalTimetableGridProps> = ({
   entries,
   role,
   emptyMessage = 'No schedule entries found.',
+  workingDays = 'MON_SAT',
 }) => {
   const [activeDay, setActiveDay] = useState<string>('ALL');
   const [viewMode, setViewMode] = useState<'grid' | 'agenda'>('grid');
 
+  // Determine active days based on workingDays prop and actual entries
+  const activeDaysList = useMemo(() => {
+    if (workingDays === 'MON_FRI') {
+      return ['MON', 'TUE', 'WED', 'THU', 'FRI'];
+    }
+    return ALL_DAYS;
+  }, [workingDays]);
+
   // Group entries by day
   const entriesByDay = useMemo(() => {
     const map: Record<string, PersonalTimetableEntry[]> = {};
-    DAYS.forEach((d) => {
+    activeDaysList.forEach((d) => {
       map[d] = [];
     });
 
@@ -53,33 +72,23 @@ export const PersonalTimetableGrid: React.FC<PersonalTimetableGridProps> = ({
                   d.startsWith('THU') ? 'THU' :
                   d.startsWith('FRI') ? 'FRI' :
                   d.startsWith('SAT') ? 'SAT' : 'MON';
-      if (!map[key]) map[key] = [];
-      map[key].push(entry);
+      if (map[key]) {
+        map[key].push(entry);
+      }
     });
 
-    // Sort entries within each day by start_time
+    // Sort entries within each day chronologically
     Object.keys(map).forEach((d) => {
       map[d].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
     });
 
     return map;
-  }, [entries]);
-
-  // Distinct time intervals across all days for the grid view
-  const timeIntervals = useMemo(() => {
-    const set = new Set<string>();
-    entries.forEach((e) => {
-      if (e.start_time && e.end_time) {
-        set.add(`${e.start_time}-${e.end_time}`);
-      }
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [entries]);
+  }, [entries, activeDaysList]);
 
   const filteredDays = useMemo(() => {
-    if (activeDay === 'ALL') return DAYS;
+    if (activeDay === 'ALL') return activeDaysList;
     return [activeDay];
-  }, [activeDay]);
+  }, [activeDay, activeDaysList]);
 
   if (!entries || entries.length === 0) {
     if (role === 'STUDENT') {
@@ -90,7 +99,7 @@ export const PersonalTimetableGrid: React.FC<PersonalTimetableGridProps> = ({
           </div>
           <h3 className="text-sm font-bold text-[#17243B]">{emptyMessage}</h3>
           <p className="text-xs text-[#71819A] mt-1.5 max-w-sm mx-auto leading-relaxed">
-            When an administrator publishes a verified timetable version for your section, your complete scheduled classes will appear here.
+            When an administrator publishes the timetable for your section, your complete scheduled classes will appear here.
           </p>
         </div>
       );
@@ -103,7 +112,7 @@ export const PersonalTimetableGrid: React.FC<PersonalTimetableGridProps> = ({
         </div>
         <h3 className="text-sm font-bold text-[#101D36]">{emptyMessage}</h3>
         <p className="text-xs text-[#647795] mt-1 max-w-sm mx-auto leading-relaxed">
-          When an administrator publishes a verified timetable version for your department, your complete teaching assignments will appear here.
+          When an administrator publishes the timetable for your department, your complete teaching assignments will appear here.
         </p>
       </div>
     );
@@ -126,7 +135,7 @@ export const PersonalTimetableGrid: React.FC<PersonalTimetableGridProps> = ({
           >
             Full Week ({entries.length})
           </button>
-          {DAYS.map((d) => {
+          {activeDaysList.map((d) => {
             const count = entriesByDay[d]?.length || 0;
             return (
               <button
@@ -189,29 +198,27 @@ export const PersonalTimetableGrid: React.FC<PersonalTimetableGridProps> = ({
       {viewMode === 'grid' && (
         <div className="bg-white rounded-xl border border-slate-200/90 shadow-card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse min-w-[700px]">
+            <table className="w-full border-collapse min-w-[850px]">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200/90">
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider w-28 shrink-0">
                     Day
                   </th>
-                  {timeIntervals.map((interval) => {
-                    const [start, end] = interval.split('-');
-                    return (
-                      <th
-                        key={interval}
-                        className="px-3 py-3 text-center text-xs font-semibold text-slate-700 tracking-tight font-tabular border-l border-slate-200/60"
-                      >
-                        <div className="flex items-center justify-center gap-1 text-slate-800">
-                          <Clock size={12} className="text-slate-400" />
-                          <span>{formatTime12h(start)}</span>
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-normal">
-                          to {formatTime12h(end)}
-                        </div>
-                      </th>
-                    );
-                  })}
+                  {STANDARD_PERIOD_COLUMNS.map((col) => (
+                    <th
+                      key={col.key}
+                      className={`px-2.5 py-3 text-center border-l border-slate-200/60 ${
+                        col.isBreak ? 'bg-amber-50/40 w-24' : 'w-32'
+                      }`}
+                    >
+                      <div className="text-xs font-bold font-tabular text-slate-900 leading-snug">
+                        {col.timeLabel}
+                      </div>
+                      <div className="text-[10px] font-medium text-slate-500 mt-0.5">
+                        {col.name}
+                      </div>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -226,95 +233,117 @@ export const PersonalTimetableGrid: React.FC<PersonalTimetableGridProps> = ({
                         </div>
                       </td>
 
-                      {timeIntervals.map((interval) => {
-                        const [start, end] = interval.split('-');
-                        const match = dayEntries.find(
-                          (e) => e.start_time === start && e.end_time === end
-                        );
-
-                        if (!match) {
+                      {STANDARD_PERIOD_COLUMNS.map((col) => {
+                        if (col.isBreak) {
                           return (
                             <td
-                              key={interval}
+                              key={col.key}
+                              className="px-1 py-2 align-middle text-center border-l border-slate-200/50 bg-amber-50/30 text-amber-900/60 select-none"
+                            >
+                              <div className="h-full min-h-[80px] flex flex-col items-center justify-center text-[11px] font-semibold tracking-wider uppercase">
+                                <span>{col.name}</span>
+                              </div>
+                            </td>
+                          );
+                        }
+
+                        const matches = dayEntries.filter(
+                          (e) => (e.start_time || '').slice(0, 5) === col.start
+                        );
+
+                        if (matches.length === 0) {
+                          return (
+                            <td
+                              key={col.key}
                               className="px-2 py-3 align-top text-center border-l border-slate-200/40 text-slate-300 text-xs"
                             >
-                              <div className="h-full min-h-[72px] flex items-center justify-center rounded-lg border border-dashed border-slate-100 bg-slate-50/20 text-[11px]">
+                              <div className="h-full min-h-[80px] flex items-center justify-center rounded-lg border border-dashed border-slate-100 bg-slate-50/20 text-[11px]">
                                 —
                               </div>
                             </td>
                           );
                         }
 
-                        const isLab =
-                          match.slot_type === 'LAB' ||
-                          match.course_type === 'LAB' ||
-                          match.course_type === 'PRACTICAL';
-
                         return (
                           <td
-                            key={interval}
-                            className="px-2 py-2.5 align-top border-l border-slate-200/40"
+                            key={col.key}
+                            className="px-2 py-2.5 align-top border-l border-slate-200/40 min-h-[110px]"
                           >
-                            <div
-                              className={`rounded-lg p-2.5 border transition-shadow shadow-xs hover:shadow-subtle ${
-                                isLab
-                                  ? 'bg-amber-50/80 border-amber-200 text-amber-950'
-                                  : 'bg-primary-50/80 border-primary-200 text-primary-950'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between gap-1 mb-1">
-                                <span className="font-bold text-xs tracking-tight truncate">
-                                  {match.course_code || 'COURSE'}
-                                </span>
-                                <span
-                                  className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
-                                    isLab
-                                      ? 'bg-amber-200 text-amber-900'
-                                      : 'bg-primary-200 text-primary-900'
-                                  }`}
-                                >
-                                  {match.course_type || 'THEORY'}
-                                </span>
-                              </div>
+                            <div className="flex flex-col gap-2">
+                              {matches.map((match, mIdx) => {
+                                const isLab =
+                                  match.slot_type === 'LAB' ||
+                                  match.course_type === 'LAB' ||
+                                  match.course_type === 'PRACTICAL';
 
-                              <p className="text-[11px] font-medium leading-tight line-clamp-2 mb-2 text-slate-800">
-                                {match.course_name || 'Scheduled Session'}
-                              </p>
-
-                              <div className="space-y-1 text-[10px] pt-1.5 border-t border-slate-200/60 text-slate-600">
-                                {match.room_number && (
-                                  <div className="flex items-center gap-1 truncate">
-                                    <MapPin size={10} className="shrink-0 text-slate-400" />
-                                    <span className="font-semibold text-slate-700">
-                                      {match.room_number}
-                                    </span>
-                                    {match.building_name && (
-                                      <span className="text-slate-400 truncate">
-                                        ({match.building_name})
+                                return (
+                                  <div
+                                    key={match.id || `${match.course_code}-${mIdx}`}
+                                    className={`rounded-lg p-2.5 border transition-shadow shadow-xs hover:shadow-subtle ${
+                                      isLab
+                                        ? 'bg-amber-50/90 border-amber-200 text-amber-950'
+                                        : 'bg-primary-50/90 border-primary-200 text-primary-950'
+                                    }`}
+                                  >
+                                    <div className="flex items-start justify-between gap-1 mb-1">
+                                      <span className="font-extrabold text-xs text-slate-900 tracking-tight">
+                                        {match.course_code || 'COURSE'}
                                       </span>
-                                    )}
-                                  </div>
-                                )}
-
-                                {role === 'FACULTY' && match.section_name && (
-                                  <div className="flex items-center gap-1 truncate">
-                                    <Users size={10} className="shrink-0 text-slate-400" />
-                                    <span>Section {match.section_name}</span>
-                                    {match.batch_name && (
-                                      <span className="text-slate-400 font-semibold">
-                                        • {match.batch_name}
+                                      <span
+                                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                          isLab
+                                            ? 'bg-amber-200 text-amber-900'
+                                            : 'bg-primary-200 text-primary-900'
+                                        }`}
+                                      >
+                                        {isLab ? 'Lab' : match.course_type || 'Theory'}
                                       </span>
-                                    )}
-                                  </div>
-                                )}
+                                    </div>
 
-                                {role === 'STUDENT' && match.faculty_name && (
-                                  <div className="flex items-center gap-1 truncate">
-                                    <User size={10} className="shrink-0 text-slate-400" />
-                                    <span className="truncate">{match.faculty_name}</span>
+                                    {/* Subject Title */}
+                                    <div className="text-[11px] font-medium leading-snug mb-2 text-slate-800 break-words">
+                                      {match.course_name || 'Scheduled Session'}
+                                    </div>
+
+                                    <div className="space-y-1 text-[11px] pt-1.5 border-t border-slate-200/70 text-slate-700">
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-slate-500 font-normal">Room:</span>
+                                        <span className="font-bold text-slate-900">
+                                          {match.room_number || 'TBD'}
+                                        </span>
+                                        {match.building_name && (
+                                          <span className="text-slate-400 font-normal text-[10px]">
+                                            ({match.building_name})
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {role === 'FACULTY' && match.section_name && (
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-slate-500 font-normal">Sec:</span>
+                                          <span className="font-semibold text-slate-800">
+                                            {match.section_name}
+                                          </span>
+                                          {match.batch_name && (
+                                            <span className="text-slate-400 font-semibold text-[10px]">
+                                              • {match.batch_name}
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      {match.faculty_name && (
+                                        <div className="flex items-start gap-1">
+                                          <span className="text-slate-500 font-normal shrink-0">Faculty:</span>
+                                          <span className="font-semibold text-slate-900 break-words">
+                                            {match.faculty_name}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
-                                )}
-                              </div>
+                                );
+                              })}
                             </div>
                           </td>
                         );
@@ -371,69 +400,47 @@ export const PersonalTimetableGrid: React.FC<PersonalTimetableGridProps> = ({
                           </div>
                           <div>
                             <div className="text-xs font-bold text-slate-900 font-tabular">
-                              {formatTime12h(e.start_time)} – {formatTime12h(e.end_time)}
+                              {e.start_time && e.end_time
+                                ? `${formatTime12h(e.start_time)} – ${formatTime12h(e.end_time)}`
+                                : 'Time TBD'}
                             </div>
-                            <div className="text-[11px] text-slate-400 capitalize">
-                              {e.slot_type?.toLowerCase() || 'Session'}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Course info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-xs text-primary-700 bg-primary-50 px-2 py-0.5 rounded border border-primary-200/80">
-                              {e.course_code || 'CODE'}
-                            </span>
-                            <span className="text-sm font-semibold text-slate-900 truncate">
-                              {e.course_name || 'Course Name'}
-                            </span>
                             <span
-                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                                isLab
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-slate-100 text-slate-700'
+                              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded inline-block mt-0.5 ${
+                                isLab ? 'bg-amber-100 text-amber-800' : 'bg-primary-100 text-primary-800'
                               }`}
                             >
-                              {e.course_type || 'THEORY'}
+                              {isLab ? 'Lab / Practical' : e.course_type || 'Theory'}
                             </span>
                           </div>
                         </div>
 
-                        {/* Location & Meta */}
-                        <div className="flex items-center gap-4 text-xs text-slate-600 shrink-0">
-                          {e.room_number && (
-                            <div className="flex items-center gap-1.5">
-                              <MapPin size={13} className="text-slate-400" />
-                              <span className="font-semibold text-slate-800">{e.room_number}</span>
-                              {e.building_name && (
-                                <span className="text-slate-400 hidden lg:inline">
-                                  ({e.building_name})
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {role === 'FACULTY' && e.section_name && (
-                            <div className="flex items-center gap-1.5">
-                              <Users size={13} className="text-slate-400" />
-                              <span>Sec {e.section_name}</span>
-                              {e.batch_name && (
-                                <span className="font-semibold text-slate-800">
-                                  [{e.batch_name}]
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {role === 'STUDENT' && e.faculty_name && (
-                            <div className="flex items-center gap-1.5">
-                              <User size={13} className="text-slate-400" />
-                              <span className="font-medium text-slate-800">{e.faculty_name}</span>
-                            </div>
-                          )}
-
-                          <StatusBadge status={e.status} size="sm" />
+                        {/* Course details */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-900 font-tabular">
+                              {e.course_code || 'COURSE'}
+                            </span>
+                            <span className="text-xs font-semibold text-slate-800 truncate">
+                              {e.course_name || 'Scheduled Session'}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span>
+                              Room: <strong className="text-slate-700">{e.room_number || 'TBD'}</strong>
+                              {e.building_name && ` (${e.building_name})`}
+                            </span>
+                            {role === 'FACULTY' && e.section_name && (
+                              <span>
+                                Section: <strong className="text-slate-700">{e.section_name}</strong>
+                                {e.batch_name && ` • ${e.batch_name}`}
+                              </span>
+                            )}
+                            {e.faculty_name && (
+                              <span>
+                                Faculty: <strong className="text-slate-700">{e.faculty_name}</strong>
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
