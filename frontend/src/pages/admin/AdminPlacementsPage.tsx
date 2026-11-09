@@ -35,7 +35,9 @@ import {
   FormModal,
   StatusBadge,
   type StatusVariant,
+  RefreshButton,
 } from '@/components/common';
+import { useToast } from '@/context/useToast';
 
 import {
   placementsApi,
@@ -58,6 +60,7 @@ const STATUS_VARIANT_MAP: Record<string, StatusVariant> = {
 
 export function AdminPlacementsPage() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'drives' | 'academic_records'>('drives');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -165,12 +168,13 @@ export function AdminPlacementsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-placement-drives'] });
       queryClient.invalidateQueries({ queryKey: ['placement-dashboard-stats'] });
+      toast.success('Placement drive created successfully!');
       setIsCreateModalOpen(false);
       resetForm();
     },
     onError: (err) => {
       const msg = isAxiosError(err) ? err.response?.data?.detail : String(err);
-      alert(`Failed to create placement drive: ${msg}`);
+      toast.error(`Failed to create placement drive: ${msg}`);
     },
   });
 
@@ -179,11 +183,12 @@ export function AdminPlacementsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-placement-drives'] });
       queryClient.invalidateQueries({ queryKey: ['placement-dashboard-stats'] });
+      toast.success('Placement drive published to student cohort successfully!');
       closeActionModal();
     },
     onError: (err) => {
       const msg = isAxiosError(err) ? err.response?.data?.detail : String(err);
-      alert(`Publish failed: ${msg}`);
+      toast.error(`Publish failed: ${msg}`);
     },
   });
 
@@ -193,11 +198,12 @@ export function AdminPlacementsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-placement-drives'] });
       queryClient.invalidateQueries({ queryKey: ['placement-dashboard-stats'] });
+      toast.warning('Placement drive postponed and candidates notified.');
       closeActionModal();
     },
     onError: (err) => {
       const msg = isAxiosError(err) ? err.response?.data?.detail : String(err);
-      alert(`Postpone failed: ${msg}`);
+      toast.error(`Postpone failed: ${msg}`);
     },
   });
 
@@ -207,11 +213,12 @@ export function AdminPlacementsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-placement-drives'] });
       queryClient.invalidateQueries({ queryKey: ['placement-dashboard-stats'] });
+      toast.warning('Placement drive cancelled.');
       closeActionModal();
     },
     onError: (err) => {
       const msg = isAxiosError(err) ? err.response?.data?.detail : String(err);
-      alert(`Cancel failed: ${msg}`);
+      toast.error(`Cancel failed: ${msg}`);
     },
   });
 
@@ -220,22 +227,23 @@ export function AdminPlacementsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-placement-drives'] });
       queryClient.invalidateQueries({ queryKey: ['placement-dashboard-stats'] });
+      toast.info('Placement drive closed for new registrations.');
     },
     onError: (err) => {
       const msg = isAxiosError(err) ? err.response?.data?.detail : String(err);
-      alert(`Close failed: ${msg}`);
+      toast.error(`Close failed: ${msg}`);
     },
   });
 
   const upsertRecordMutation = useMutation({
     mutationFn: placementsApi.upsertAcademicRecord,
     onSuccess: () => {
-      alert('Student academic metrics saved successfully.');
+      toast.success('Student academic metrics saved successfully.');
       setIsRecordModalOpen(false);
     },
     onError: (err) => {
       const msg = isAxiosError(err) ? err.response?.data?.detail : String(err);
-      alert(`Save failed: ${msg}`);
+      toast.error(`Save failed: ${msg}`);
     },
   });
 
@@ -433,6 +441,14 @@ export function AdminPlacementsPage() {
       <PageHeader
         title="CDC Placement Management & Recruitment Hub"
         subtitle="Coordinate campus placement drives, manage structured eligibility, publish schedules, and evaluate student candidate pools."
+        refresh={
+          <RefreshButton
+            entityName="Placement Drives"
+            queryKeys={[['admin-placement-drives'], ['placement-dashboard-stats']]}
+            label="Refresh"
+            variant="outline"
+          />
+        }
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -906,13 +922,13 @@ export function AdminPlacementsPage() {
                   publishMutation.mutate(actionModal.driveId);
                 } else if (actionModal.type === 'postpone') {
                   if (!actionModal.reason.trim()) {
-                    alert('Reason is required.');
+                    toast.warning('A reason is required to postpone this placement drive.');
                     return;
                   }
                   postponeMutation.mutate({ id: actionModal.driveId, reason: actionModal.reason });
                 } else if (actionModal.type === 'cancel') {
                   if (!actionModal.reason.trim()) {
-                    alert('Reason is required.');
+                    toast.warning('A reason is required to cancel this placement drive.');
                     return;
                   }
                   cancelMutation.mutate({ id: actionModal.driveId, reason: actionModal.reason });

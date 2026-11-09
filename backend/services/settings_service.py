@@ -463,9 +463,18 @@ def execute_data_clear(
             else:
                 deleted_counts[tbl] = 0
 
-        # Prune obsolete audit logs for cleared operational timetable records
+        # Retain historical audit logs for governance & accountability; mark historical entities as cleared
         if "timetable" in cats_to_process:
-            db.execute(text("DELETE FROM audit_logs WHERE entity_type IN ('Timetable', 'TimetableVersion', 'TimetableEntry')"))
+            db.execute(text("""
+                UPDATE audit_logs
+                SET new_value = jsonb_set(
+                    COALESCE(new_value, '{}'::jsonb),
+                    '{lifecycle_status}',
+                    '"HISTORICAL_CLEARED"'::jsonb
+                )
+                WHERE entity_type IN ('Timetable', 'TimetableVersion', 'TimetableEntry')
+                  AND (new_value->>'lifecycle_status' IS NULL OR new_value->>'lifecycle_status' != 'HISTORICAL_CLEARED')
+            """))
 
         # Record audit log
         audit = AuditLog(

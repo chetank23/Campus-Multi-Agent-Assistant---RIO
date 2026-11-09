@@ -31,7 +31,7 @@ import {
 import { apiGetMe } from '@/api/auth';
 import { getStudentMyTimetable, getStudentLiveStatus } from '@/api/timetable';
 import { useAuth } from '@/auth/useAuth';
-import { LoadingState } from '@/components/common';
+import { LoadingState, RefreshButton } from '@/components/common';
 import { formatTime12h } from '@/utils/timeFormatter';
 
 const DAYS_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
@@ -155,6 +155,24 @@ export function StudentDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* ── Top Header with Real-Time Refresh Control ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E5ECF5]">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-black text-[#17243B] tracking-tight">
+            Welcome back, {user?.name || 'Student'}!
+          </h2>
+          <p className="text-xs font-semibold text-[#71819A] mt-0.5">
+            Student Academic Dashboard & Real-Time Schedule Hub
+          </p>
+        </div>
+        <RefreshButton
+          entityName="Student Portal"
+          queryKeys={[['student', 'my-timetable'], ['student-live-status'], ['auth', 'me']]}
+          label="Refresh Dashboard"
+          variant="outline"
+        />
+      </div>
+
       {/* ── Live Class Real-Time Status Banner ── */}
       {liveStatus && (liveStatus.ongoing_class || liveStatus.next_class) && (
         <div className="p-4 sm:p-5 rounded-[24px] bg-gradient-to-r from-[#1E3A8A] to-[#2563EB] text-white shadow-xs flex flex-wrap items-center justify-between gap-4">

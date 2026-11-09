@@ -3,10 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Building2 } from 'lucide-react';
 import { isAxiosError } from 'axios';
 import { DataTable, type Column, FormModal, ConfirmDialog, PageHeader } from '@/components/common';
+import { useToast } from '@/context/useToast';
 import { departmentsApi, type DepartmentResponse, type DepartmentUpdate } from '@/api/departments';
 
 export function DepartmentsPage() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [selectedDept, setSelectedDept] = useState<DepartmentResponse | null>(null);
@@ -46,12 +48,15 @@ export function DepartmentsPage() {
 
   const createMutation = useMutation({
     mutationFn: departmentsApi.create,
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['departments'] });
+      toast.success(`Department "${res?.name || ''}" created successfully!`);
       closeForm();
     },
     onError: (err: unknown) => {
-      setFormError(getErrorMsg(err, 'Failed to create department.'));
+      const msg = getErrorMsg(err, 'Failed to create department.');
+      setFormError(msg);
+      toast.error(msg);
     },
   });
 
@@ -59,10 +64,13 @@ export function DepartmentsPage() {
     mutationFn: ({ id, dept }: { id: number; dept: DepartmentUpdate }) => departmentsApi.update(id, dept),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['departments'] });
+      toast.success('Department updated successfully!');
       closeForm();
     },
     onError: (err: unknown) => {
-      setFormError(getErrorMsg(err, 'Failed to update department.'));
+      const msg = getErrorMsg(err, 'Failed to update department.');
+      setFormError(msg);
+      toast.error(msg);
     },
   });
 
@@ -70,11 +78,13 @@ export function DepartmentsPage() {
     mutationFn: departmentsApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['departments'] });
+      toast.success('Department deleted successfully.');
       setIsConfirmOpen(false);
       setSelectedDept(null);
     },
     onError: (err: unknown) => {
-      alert(getErrorMsg(err, 'Failed to delete department. It might be in use by programs or faculty.'));
+      const msg = getErrorMsg(err, 'Failed to delete department. It might be in use by programs or faculty.');
+      toast.error(msg);
       setIsConfirmOpen(false);
     },
   });

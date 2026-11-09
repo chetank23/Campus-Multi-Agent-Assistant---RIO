@@ -2,12 +2,14 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, DoorOpen } from 'lucide-react';
 import { isAxiosError } from 'axios';
-import { DataTable, type Column, FormModal, ConfirmDialog, PageHeader, StatusBadge } from '@/components/common';
+import { DataTable, type Column, FormModal, ConfirmDialog, PageHeader, StatusBadge, RefreshButton } from '@/components/common';
+import { useToast } from '@/context/useToast';
 import { roomsApi, type RoomResponse, type RoomUpdate } from '@/api/rooms';
 import { buildingsApi } from '@/api/buildings';
 
 export function RoomsPage() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<RoomResponse | null>(null);
@@ -58,12 +60,15 @@ export function RoomsPage() {
 
   const createMutation = useMutation({
     mutationFn: roomsApi.create,
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['rooms'] });
+      toast.success(`Room ${res?.room_number || ''} created successfully!`);
       closeForm();
     },
     onError: (err: unknown) => {
-      setFormError(getErrorMsg(err, 'Failed to create room.'));
+      const msg = getErrorMsg(err, 'Failed to create room.');
+      setFormError(msg);
+      toast.error(msg);
     },
   });
 
@@ -71,10 +76,13 @@ export function RoomsPage() {
     mutationFn: ({ id, rm }: { id: number; rm: RoomUpdate }) => roomsApi.update(id, rm),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rooms'] });
+      toast.success('Room updated successfully!');
       closeForm();
     },
     onError: (err: unknown) => {
-      setFormError(getErrorMsg(err, 'Failed to update room.'));
+      const msg = getErrorMsg(err, 'Failed to update room.');
+      setFormError(msg);
+      toast.error(msg);
     },
   });
 
@@ -82,11 +90,13 @@ export function RoomsPage() {
     mutationFn: roomsApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rooms'] });
+      toast.success('Room deleted successfully.');
       setIsConfirmOpen(false);
       setSelectedRoom(null);
     },
     onError: (err: unknown) => {
-      alert(getErrorMsg(err, 'Failed to delete room. It might be referenced by timetable schedules.'));
+      const msg = getErrorMsg(err, 'Failed to delete room. It might be referenced by timetable schedules.');
+      toast.error(msg);
       setIsConfirmOpen(false);
     },
   });
@@ -200,6 +210,14 @@ export function RoomsPage() {
         title="Rooms & Lecture Halls"
         subtitle="Manage instructional spaces, auditoriums, department laboratories, and seating capacities."
         icon={<DoorOpen size={20} />}
+        refresh={
+          <RefreshButton
+            entityName="Rooms & Labs"
+            queryKeys={[['rooms'], ['buildings']]}
+            label="Refresh"
+            variant="outline"
+          />
+        }
         actions={
           <button
             onClick={() => setIsFormOpen(true)}

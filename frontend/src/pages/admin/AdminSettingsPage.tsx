@@ -27,7 +27,8 @@ import {
   Loader2,
   X,
 } from 'lucide-react';
-import { PageHeader } from '@/components/common';
+import { PageHeader, RefreshButton } from '@/components/common';
+import { useToast } from '@/context/useToast';
 import {
   settingsApi,
   type DataClearPreviewResponse,
@@ -39,9 +40,10 @@ type SettingsTab = 'general' | 'data' | 'timetable' | 'access' | 'system';
 export const AdminSettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { refresh: refreshNotifications } = useNotifications();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
 
-  // Notification Toast State
+  // Notification Toast State (maintains inline toast for backward compatibility with live tests)
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Data Management Selection State
@@ -114,10 +116,13 @@ export const AdminSettingsPage: React.FC = () => {
       }),
     onSuccess: () => {
       setToastMessage({ type: 'success', text: 'General settings updated successfully!' });
+      toast.success('General institutional settings updated successfully!');
       refetchSettings();
     },
     onError: (err: any) => {
-      setToastMessage({ type: 'error', text: err?.response?.data?.detail || 'Failed to update settings.' });
+      const msg = err?.response?.data?.detail || 'Failed to update settings.';
+      setToastMessage({ type: 'error', text: msg });
+      toast.error(`Update failed: ${msg}`);
     },
   });
 
@@ -131,10 +136,13 @@ export const AdminSettingsPage: React.FC = () => {
       }),
     onSuccess: () => {
       setToastMessage({ type: 'success', text: 'Timetable defaults saved successfully!' });
+      toast.success('Timetable generation defaults saved successfully!');
       refetchSettings();
     },
     onError: (err: any) => {
-      setToastMessage({ type: 'error', text: err?.response?.data?.detail || 'Failed to save timetable settings.' });
+      const msg = err?.response?.data?.detail || 'Failed to save timetable settings.';
+      setToastMessage({ type: 'error', text: msg });
+      toast.error(`Save failed: ${msg}`);
     },
   });
 
@@ -148,7 +156,9 @@ export const AdminSettingsPage: React.FC = () => {
       setConfirmCheckbox(false);
     },
     onError: (err: any) => {
-      setToastMessage({ type: 'error', text: err?.response?.data?.detail || 'Failed to generate preview.' });
+      const msg = err?.response?.data?.detail || 'Failed to generate preview.';
+      setToastMessage({ type: 'error', text: msg });
+      toast.error(`Preview failed: ${msg}`);
     },
   });
 
@@ -160,10 +170,12 @@ export const AdminSettingsPage: React.FC = () => {
       setShowPreviewModal(false);
       setPreviewData(null);
       setSelectedCategories([]);
+      const successText = `Successfully cleared ${res.total_records_deleted} operational records (Audit Log #${res.audit_log_id}).`;
       setToastMessage({
         type: 'success',
-        text: `Successfully cleared ${res.total_records_deleted} operational records (Audit Log #${res.audit_log_id}).`,
+        text: successText,
       });
+      toast.success(successText, { duration: 6000 });
       // Purge and invalidate all stale queries across the entire application
       await queryClient.invalidateQueries();
       refetchDataSummary();
@@ -171,7 +183,9 @@ export const AdminSettingsPage: React.FC = () => {
       refreshNotifications();
     },
     onError: (err: any) => {
-      setToastMessage({ type: 'error', text: err?.response?.data?.detail || 'Failed to execute clear operation.' });
+      const msg = err?.response?.data?.detail || 'Failed to execute clear operation.';
+      setToastMessage({ type: 'error', text: msg });
+      toast.error(`Clear operation failed: ${msg}`);
     },
   });
 
@@ -204,6 +218,14 @@ export const AdminSettingsPage: React.FC = () => {
       <PageHeader
         title="Settings & Data Management"
         subtitle="Configure institutional defaults, safe operational data lifecycle, timetable parameters, and system integrations."
+        refresh={
+          <RefreshButton
+            entityName="Settings & Operational Summary"
+            queryKeys={[['admin-system-settings'], ['admin-data-management-summary']]}
+            label="Refresh Settings"
+            variant="outline"
+          />
+        }
       />
 
       {/* ── Global Toast ─────────────────────────────────────────────────── */}

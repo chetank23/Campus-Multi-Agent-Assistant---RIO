@@ -12,6 +12,7 @@ interface PageHeaderProps {
   badge?: React.ReactNode;
   breadcrumbs?: BreadcrumbItem[];
   actions?: React.ReactNode;
+  refresh?: React.ReactNode;
   className?: string;
 }
 
@@ -22,6 +23,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   badge,
   breadcrumbs,
   actions,
+  refresh,
   className = '',
 }) => {
   return (
@@ -65,8 +67,9 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           </div>
         </div>
 
-        {actions && (
+        {(actions || refresh) && (
           <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center flex-wrap">
+            {refresh}
             {actions}
           </div>
         )}

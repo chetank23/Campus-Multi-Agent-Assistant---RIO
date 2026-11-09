@@ -5,10 +5,9 @@ import {
   BookOpen,
   Users,
   MapPin,
-  RefreshCw,
 } from 'lucide-react';
 import { getFacultyMyTimetable } from '@/api/timetable';
-import { LoadingState, ErrorState } from '@/components/common';
+import { LoadingState, ErrorState, RefreshButton } from '@/components/common';
 import { PersonalTimetableGrid } from '@/components/timetable/PersonalTimetableGrid';
 
 export const FacultyTimetablePage: React.FC = () => {
@@ -18,7 +17,6 @@ export const FacultyTimetablePage: React.FC = () => {
     isError,
     error,
     refetch,
-    isFetching,
   } = useQuery({
     queryKey: ['faculty', 'my-timetable'],
     queryFn: () => getFacultyMyTimetable(),
@@ -69,15 +67,12 @@ export const FacultyTimetablePage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#E3EBF6] bg-white text-xs font-semibold text-[#101D36] hover:bg-[#F1F6FD] hover:border-[#CDE1FB] transition-all shadow-2xs self-start sm:self-auto disabled:opacity-50"
-        >
-          <RefreshCw size={13} className={isFetching ? 'animate-spin text-[#3975D1]' : 'text-[#647795]'} />
-          <span>Refresh</span>
-        </button>
+        <RefreshButton
+          entityName="Teaching Schedule"
+          onRefresh={() => refetch()}
+          label="Refresh Schedule"
+          variant="outline"
+        />
       </div>
 
       {isLoading ? (

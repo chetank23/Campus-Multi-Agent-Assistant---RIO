@@ -51,6 +51,8 @@ export interface AuditLogItem {
   entity_id: number | null;
   old_value: Record<string, unknown> | null;
   new_value: Record<string, unknown> | null;
+  lifecycle_status?: string;
+  is_historical?: boolean;
   timestamp: string;
 }
 
@@ -65,6 +67,7 @@ export async function getAuditLogs(params: {
   user_id?: number;
   action?: string;
   entity_type?: string;
+  lifecycle_status?: string;
   skip?: number;
   limit?: number;
 } = {}) {

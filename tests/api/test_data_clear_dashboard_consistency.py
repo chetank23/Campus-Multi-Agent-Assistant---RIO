@@ -128,7 +128,9 @@ def test_clear_operational_data_and_dashboard_consistency(admin_token: str, facu
     assert len(items) > 0
     assert items[0]["action"] == "CLEAR_GENERATED_OPERATIONAL_DATA"
     for log_item in items:
-        assert log_item["entity_type"] not in ("Timetable", "TimetableVersion", "TimetableEntry")
+        if log_item["entity_type"] in ("Timetable", "TimetableVersion", "TimetableEntry"):
+            assert log_item.get("is_historical") is True
+            assert log_item.get("lifecycle_status") == "HISTORICAL_CLEARED"
 
     # 8. Cross-role notification delivery verification
     # Admin inbox

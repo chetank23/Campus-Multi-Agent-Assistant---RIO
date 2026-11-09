@@ -37,6 +37,7 @@ import { roomsApi } from '@/api/rooms';
 import { academicYearsApi } from '@/api/academicYears';
 import { getTimetableVersions, type TimetableVersionResponse } from '@/api/timetable';
 import { StatusBadge } from '@/components/common/StatusBadge';
+import { RefreshButton } from '@/components/common/RefreshButton';
 import { analyticsApi } from '@/api/analytics';
 import { academicCalendarApi } from '@/api/academicCalendar';
 import { getAuditLogs } from '@/api/workflows';
@@ -256,7 +257,7 @@ export function AdminDashboard() {
   return (
     <div className="space-y-5 pb-8 max-w-[1536px] mx-auto text-[#111D35]">
       {/* ── Greeting Header ────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-1 pb-1">
         <div>
           <h1 className="text-2xl sm:text-[28px] font-extrabold text-[#111D35] tracking-tight flex items-center gap-2">
             <span>{greeting}, {user?.name || 'Administrator'}</span>
@@ -267,13 +268,28 @@ export function AdminDashboard() {
           </p>
         </div>
 
-        <div className="text-left md:text-right shrink-0">
-          <p className="text-xs sm:text-sm font-semibold text-[#111D35] tracking-tight">
-            {dateString}
-          </p>
-          <p className="text-xs font-bold text-[#536783] mt-0.5 font-tabular">
-            {timeString}
-          </p>
+        <div className="flex items-center gap-3 self-start md:self-center">
+          <RefreshButton
+            entityName="Dashboard"
+            queryKeys={[
+              ['admin-analytics-overview'],
+              ['admin-dept-progress'],
+              ['timetable-canonical'],
+              ['timetableVersions'],
+              ['admin-recent-audit'],
+              ['admin-academic-events'],
+            ]}
+            label="Refresh"
+            variant="outline"
+          />
+          <div className="text-left md:text-right shrink-0 border-l border-slate-200 pl-3">
+            <p className="text-xs sm:text-sm font-semibold text-[#111D35] tracking-tight">
+              {dateString}
+            </p>
+            <p className="text-xs font-bold text-[#536783] mt-0.5 font-tabular">
+              {timeString}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -900,19 +916,33 @@ export function AdminDashboard() {
               ) : !auditLogsData?.items || auditLogsData.items.length === 0 ? (
                 <p className="text-xs text-slate-500 text-center py-4">No recent activity recorded</p>
               ) : (
-                auditLogsData.items.slice(0, 3).map((log) => (
-                  <div key={log.id} className="p-2 rounded-lg bg-slate-50/80 border border-slate-100 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-800 text-[11px]">{(log.action || '').replace(/_/g, ' ')}</span>
-                      <span className="text-[10px] text-slate-400 font-mono">
-                        {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                auditLogsData.items.slice(0, 3).map((log) => {
+                  const isHistorical =
+                    (log as any).is_historical ||
+                    ((log as any).new_value && (log as any).new_value.lifecycle_status === 'HISTORICAL_CLEARED');
+                  return (
+                    <div key={log.id} className="p-2 rounded-lg bg-slate-50/80 border border-slate-100 text-xs">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-800 text-[11px]">
+                            {(log.action || '').replace(/_/g, ' ')}
+                          </span>
+                          {isHistorical && (
+                            <span className="text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-1 py-0.2 rounded">
+                              Historical
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5 truncate">
+                        Entity: {log.entity_type} {log.entity_id ? `#${log.entity_id}` : ''}
+                      </div>
                     </div>
-                    <div className="text-[10px] text-slate-500 mt-0.5 truncate">
-                      Entity: {log.entity_type} {log.entity_id ? `#${log.entity_id}` : ''}
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

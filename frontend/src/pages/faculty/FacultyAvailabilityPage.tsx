@@ -8,7 +8,9 @@ import {
   FormModal,
   ConfirmDialog,
   StatusBadge,
+  RefreshButton,
 } from '@/components/common';
+import { useToast } from '@/context/useToast';
 import {
   facultyAvailabilityApi,
   type FacultyAvailabilityItem,
@@ -20,6 +22,7 @@ import { useAuth } from '@/auth/useAuth';
 export function FacultyAvailabilityPage() {
   const queryClient = useQueryClient();
   const { user: me } = useAuth();
+  const { toast } = useToast();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -62,20 +65,29 @@ export function FacultyAvailabilityPage() {
     mutationFn: facultyAvailabilityApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-availability'] });
+      toast.success('Teaching availability preference saved successfully!');
       setIsModalOpen(false);
       resetForm();
     },
-    onError: (err) => setFormError(getErrorMsg(err, 'Failed to save availability preference.')),
+    onError: (err) => {
+      const msg = getErrorMsg(err, 'Failed to save availability preference.');
+      setFormError(msg);
+      toast.error(msg);
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: facultyAvailabilityApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-availability'] });
+      toast.success('Availability preference removed.');
       setIsDeleteOpen(false);
       setDeleteTargetId(null);
     },
-    onError: (err) => alert(getErrorMsg(err, 'Failed to remove preference.')),
+    onError: (err) => {
+      const msg = getErrorMsg(err, 'Failed to remove preference.');
+      toast.error(msg);
+    },
   });
 
   const resetForm = () => {
@@ -171,16 +183,25 @@ export function FacultyAvailabilityPage() {
             Indicate your preferred time slots, restricted research windows, and teaching constraints.
           </p>
         </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setIsModalOpen(true);
-          }}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-[#2B568F] hover:bg-[#1D3B5C] text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
-        >
-          <Plus size={16} />
-          Set Slot Preference
-        </button>
+        <div className="flex items-center gap-2.5">
+          <RefreshButton
+            entityName="Availability"
+            queryKeys={[['my-availability'], ['time-slots-active']]}
+            variant="outline"
+            label="Refresh"
+            className="bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white"
+          />
+          <button
+            onClick={() => {
+              resetForm();
+              setIsModalOpen(true);
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#2B568F] hover:bg-[#1D3B5C] text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+          >
+            <Plus size={16} />
+            Set Slot Preference
+          </button>
+        </div>
       </div>
 
       {/* Info Callout */}

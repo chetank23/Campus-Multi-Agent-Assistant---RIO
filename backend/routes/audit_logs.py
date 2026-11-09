@@ -20,6 +20,7 @@ def list_audit_logs(
     user_id: Optional[int] = Query(None, gt=0),
     action: Optional[str] = Query(None, min_length=1, max_length=150),
     entity_type: Optional[str] = Query(None, min_length=1, max_length=50),
+    lifecycle_status: Optional[str] = Query(None, max_length=50),
     since: Optional[datetime] = Query(None),
     until: Optional[datetime] = Query(None),
     skip: int = Query(0, ge=0),
@@ -36,6 +37,13 @@ def list_audit_logs(
         query = query.filter(AuditLog.action.ilike(f"%{action}%"))
     if entity_type:
         query = query.filter(AuditLog.entity_type == entity_type)
+    if lifecycle_status == "HISTORICAL_CLEARED":
+        query = query.filter(AuditLog.new_value["lifecycle_status"].astext == "HISTORICAL_CLEARED")
+    elif lifecycle_status == "ACTIVE":
+        query = query.filter(
+            (AuditLog.new_value["lifecycle_status"].astext.is_(None))
+            | (AuditLog.new_value["lifecycle_status"].astext != "HISTORICAL_CLEARED")
+        )
     if since:
         query = query.filter(AuditLog.timestamp >= since)
     if until:
@@ -58,6 +66,13 @@ def list_audit_logs(
                 "entity_id": row.entity_id,
                 "old_value": row.old_value,
                 "new_value": row.new_value,
+                "lifecycle_status": (row.new_value or {}).get("lifecycle_status", "ACTIVE")
+                if isinstance(row.new_value, dict)
+                else "ACTIVE",
+                "is_historical": bool(
+                    isinstance(row.new_value, dict)
+                    and row.new_value.get("lifecycle_status") == "HISTORICAL_CLEARED"
+                ),
                 "timestamp": row.timestamp,
             }
             for row in rows

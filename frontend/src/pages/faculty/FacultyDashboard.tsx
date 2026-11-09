@@ -40,7 +40,7 @@ import {
 import { apiGetMe } from '@/api/auth';
 import { getFacultyMyTimetable } from '@/api/timetable';
 import { useAuth } from '@/auth/useAuth';
-import { LoadingState } from '@/components/common';
+import { LoadingState, RefreshButton } from '@/components/common';
 import { formatTime12h } from '@/utils/timeFormatter';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
@@ -222,19 +222,27 @@ export function FacultyDashboard() {
             </p>
           </div>
 
-          {/* Right: Inspirational Academic Quote Card (Matching Reference) */}
-          <div className="lg:max-w-sm rounded-2xl bg-gradient-to-br from-[#F8FAFD] to-[#EDF4FE] border border-[#DCE7F6] p-4 shadow-2xs relative">
-            <div className="flex items-start gap-3">
-              <div className="w-7 h-7 rounded-full bg-[#3975D1]/15 text-[#3975D1] font-serif font-black text-lg flex items-center justify-center shrink-0">
-                “
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-[#101D36] leading-relaxed italic">
-                  “Education is not the filling of a pail, but the lighting of a fire.”
-                </p>
-                <p className="text-[11px] font-bold text-[#647795] mt-1 text-right">
-                  — W.B. Yeats
-                </p>
+          {/* Right: Inspirational Academic Quote Card + Refresh Control */}
+          <div className="flex flex-col items-end gap-3 lg:max-w-sm w-full">
+            <RefreshButton
+              entityName="Faculty Portal"
+              queryKeys={[['faculty', 'my-timetable'], ['auth', 'me']]}
+              label="Refresh Dashboard"
+              variant="outline"
+            />
+            <div className="w-full rounded-2xl bg-gradient-to-br from-[#F8FAFD] to-[#EDF4FE] border border-[#DCE7F6] p-4 shadow-2xs relative">
+              <div className="flex items-start gap-3">
+                <div className="w-7 h-7 rounded-full bg-[#3975D1]/15 text-[#3975D1] font-serif font-black text-lg flex items-center justify-center shrink-0">
+                  “
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-[#101D36] leading-relaxed italic">
+                    “Education is not the filling of a pail, but the lighting of a fire.”
+                  </p>
+                  <p className="text-[11px] font-bold text-[#647795] mt-1 text-right">
+                    — W.B. Yeats
+                  </p>
+                </div>
               </div>
             </div>
           </div>

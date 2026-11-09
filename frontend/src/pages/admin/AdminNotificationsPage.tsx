@@ -22,11 +22,14 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { useNotifications } from '@/context/useNotifications';
+import { useToast } from '@/context/useToast';
+import { RefreshButton } from '@/components/common';
 import { broadcastAnnouncement, type NotificationItem } from '@/api/notifications';
 import { departmentsApi, type DepartmentResponse } from '@/api/departments';
 
 export const AdminNotificationsPage: React.FC = () => {
   const { notifications, unreadCount, markAsRead, markAllAsRead, refresh } = useNotifications();
+  const { toast } = useToast();
 
   // Tabs: 'feed' | 'broadcast'
   const [activeTab, setActiveTab] = useState<'feed' | 'broadcast'>('feed');
@@ -63,18 +66,22 @@ export const AdminNotificationsPage: React.FC = () => {
         department_id: targetScope === 'DEPARTMENT' && selectedDeptId ? Number(selectedDeptId) : undefined,
       });
 
+      const succMsg = `${res.message} (${res.recipients_count} notifications created).`;
       setBroadcastResult({
         success: true,
-        message: `${res.message} (${res.recipients_count} notifications created).`,
+        message: succMsg,
       });
+      toast.success(succMsg, { duration: 5000 });
       setTitle('');
       setMessage('');
       refresh();
     } catch {
+      const errMsg = 'Broadcast dispatch failed. Please check backend logs.';
       setBroadcastResult({
         success: false,
-        message: 'Broadcast dispatch failed. Please check backend logs.',
+        message: errMsg,
       });
+      toast.error(errMsg);
     } finally {
       setIsBroadcasting(false);
     }
@@ -110,31 +117,39 @@ export const AdminNotificationsPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Tab Controls */}
-        <div className="flex items-center gap-2 bg-[#F1F6FD] p-1 rounded-xl border border-[#E3EBF6] self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => setActiveTab('feed')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'feed'
-                ? 'bg-white text-[#101D36] shadow-xs'
-                : 'text-[#647795] hover:text-[#101D36]'
-            }`}
-          >
-            Alert Feed ({unreadCount} unread)
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('broadcast')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === 'broadcast'
-                ? 'bg-[#3975D1] text-white shadow-xs'
-                : 'text-[#647795] hover:text-[#101D36]'
-            }`}
-          >
-            <Send size={12} />
-            <span>Campus Broadcast</span>
-          </button>
+        {/* Header Actions & Tab Controls */}
+        <div className="flex items-center gap-3 self-start sm:self-auto flex-wrap">
+          <RefreshButton
+            onRefresh={refresh}
+            entityName="Notifications"
+            variant="outline"
+            label="Refresh Feed"
+          />
+          <div className="flex items-center gap-2 bg-[#F1F6FD] p-1 rounded-xl border border-[#E3EBF6]">
+            <button
+              type="button"
+              onClick={() => setActiveTab('feed')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'feed'
+                  ? 'bg-white text-[#101D36] shadow-xs'
+                  : 'text-[#647795] hover:text-[#101D36]'
+              }`}
+            >
+              Alert Feed ({unreadCount} unread)
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('broadcast')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                activeTab === 'broadcast'
+                  ? 'bg-[#3975D1] text-white shadow-xs'
+                  : 'text-[#647795] hover:text-[#101D36]'
+              }`}
+            >
+              <Send size={12} />
+              <span>Campus Broadcast</span>
+            </button>
+          </div>
         </div>
       </div>
 

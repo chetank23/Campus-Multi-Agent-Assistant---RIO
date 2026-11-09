@@ -4,6 +4,7 @@ import { IconButton } from './IconButton';
 import { EmptyState } from './EmptyState';
 import { ErrorState } from './ErrorState';
 import { SearchBar } from './SearchBar';
+import { RefreshButton } from './RefreshButton';
 
 export interface Column<T> {
   header: string;
@@ -61,7 +62,7 @@ export function DataTable<T>({
     );
   }
 
-  const hasHeaderToolbar = title || subtitle || onSearchChange || actions;
+  const hasHeaderToolbar = title || subtitle || onSearchChange || onRefresh || actions;
   const colSpanCount = columns.length + (onEdit || onDelete ? 1 : 0);
 
   return (
@@ -74,13 +75,21 @@ export function DataTable<T>({
               {subtitle && <p className="text-xs text-[#536783] mt-0.5">{subtitle}</p>}
             </div>
           )}
-          <div className="flex items-center gap-3 ml-auto w-full sm:w-auto">
+          <div className="flex items-center gap-3 ml-auto w-full sm:w-auto flex-wrap sm:flex-nowrap">
             {onSearchChange && (
               <SearchBar
                 value={searchValue || ''}
                 onChange={onSearchChange}
                 placeholder={searchPlaceholder || 'Filter rows…'}
                 className="w-full sm:w-64"
+              />
+            )}
+            {onRefresh && (
+              <RefreshButton
+                onRefresh={onRefresh}
+                entityName={title || 'Table'}
+                size="sm"
+                variant="outline"
               />
             )}
             {actions}

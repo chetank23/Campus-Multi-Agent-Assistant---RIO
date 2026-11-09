@@ -12,3 +12,4 @@ export * from './SearchBar';
 export * from './FilterBar';
 export * from './IconButton';
 export * from './SignOutConfirmDialog';
+export * from './RefreshButton';

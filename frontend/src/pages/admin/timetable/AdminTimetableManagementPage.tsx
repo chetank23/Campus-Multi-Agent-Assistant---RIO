@@ -22,7 +22,8 @@ import {
   type TimetablePreviewResponse,
   type TimetablePreviewEntry,
 } from '@/api/timetable';
-import { PageHeader } from '@/components/common';
+import { PageHeader, RefreshButton } from '@/components/common';
+import { useToast } from '@/context/useToast';
 
 const DAY_LABELS: Record<string, string> = {
   MON: 'Monday',
@@ -60,6 +61,7 @@ const normalizeDay = (d?: string | null): string => {
 
 export const AdminTimetableManagementPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // Scope selection state
   const [selectedAyId, setSelectedAyId] = useState<number | ''>('');
@@ -140,6 +142,14 @@ export const AdminTimetableManagementPage: React.FC = () => {
         const firstSec = data.sections[0] as unknown as { section_id?: number; id?: number };
         setActiveSectionId(firstSec.section_id || firstSec.id || null);
       }
+      toast.success(
+        `Optimized schedule generated: ${data.entries.length} class slots allocated across ${data.sections.length} sections with 0 constraint conflicts.`,
+        { duration: 5000 }
+      );
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to generate timetable preview.';
+      toast.error(`Generation failed: ${msg}`);
     },
   });
 
@@ -160,9 +170,17 @@ export const AdminTimetableManagementPage: React.FC = () => {
     onSuccess: (res) => {
       setShowPublishModal(false);
       setPreviewData(null);
-      setPublishSuccessMsg(`Timetable successfully published! ${res.total_entries_published} classes scheduled across ${res.published_timetables.length} sections.`);
+      const msg = `Timetable successfully published! ${res.total_entries_published} classes scheduled across ${res.published_timetables.length} sections.`;
+      setPublishSuccessMsg(msg);
+      toast.success(msg, { duration: 6000 });
       refetchPublished();
       queryClient.invalidateQueries({ queryKey: ['timetable-canonical'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-analytics-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-dept-progress'] });
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to publish timetable.';
+      toast.error(`Publication failed: ${msg}`);
     },
   });
 
@@ -251,6 +269,18 @@ export const AdminTimetableManagementPage: React.FC = () => {
       <PageHeader
         title="Timetable Management"
         subtitle="Generate, validate, and publish canonical schedules for academic sections."
+        refresh={
+          <RefreshButton
+            entityName="Timetable"
+            onRefresh={() => {
+              refetchPublished();
+              queryClient.invalidateQueries({ queryKey: ['timetable-canonical'] });
+              queryClient.invalidateQueries({ queryKey: ['timetable-sections'] });
+            }}
+            label="Refresh Scope"
+            variant="outline"
+          />
+        }
       />
 
       {/* ── 1. Academic Scope Selection Bar ────────────────────────────── */}
