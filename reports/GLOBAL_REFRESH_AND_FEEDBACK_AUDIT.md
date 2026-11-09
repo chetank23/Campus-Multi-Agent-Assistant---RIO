@@ -67,10 +67,10 @@ Every user portal (Admin, Faculty, Student) was audited. All identified refresh 
 | **Timetable Management**<br>`/admin/timetable` | ADMIN | `/timetable/history`<br>`/timetable/active` | Page header spinner & debounce | Toast: *"Latest Timetable Manager data refreshed successfully."* | **PASS** |
 | **Notifications Broadcast**<br>`/admin/notifications` | ADMIN | `/notifications` | Page header spinner & debounce | Toast: *"Latest Campus Broadcasts data refreshed successfully."* | **PASS** |
 | **Faculty Timetable**<br>`/faculty/timetable` | FACULTY | `/faculty/my-timetable` | Header spinner, button disabled | Toast: *"Latest Teaching Schedule data refreshed successfully."* | **PASS** |
-| **Faculty Dashboard**<br>`/faculty` | FACULTY | `/faculty/my-timetable`<br>`/auth/me` | Hero card spinner, button disabled | Toast: *"Latest Teaching Schedule data refreshed successfully."* | **PASS** |
+| **Faculty Dashboard**<br>`/faculty` | FACULTY | `/faculty/my-timetable`<br>`/auth/me` | Hero card spinner, button disabled | Toast: *"Latest Faculty Portal data refreshed successfully."* | **PASS** |
 | **Faculty Availability**<br>`/faculty/availability` | FACULTY | `/faculty/my-availability` | Header spinner & debounce | Toast: *"Latest Availability Preferences data refreshed successfully."* | **PASS** |
 | **Student Dashboard**<br>`/student` | STUDENT | `/student/my-timetable`<br>`/student-live-status`<br>`/auth/me` | Header spinner, button disabled | Toast: *"Latest Student Portal data refreshed successfully."* | **PASS** |
-| **Student Timetable**<br>`/student/timetable` | STUDENT | `/student/my-timetable` | Header spinner, button disabled | Toast: *"Latest Student Portal data refreshed successfully."* | **PASS** |
+| **Student Timetable**<br>`/student/timetable` | STUDENT | `/student/my-timetable` | Header spinner, button disabled | Toast: *"Latest Class Schedule data refreshed successfully."* | **PASS** |
 
 ---
 
@@ -214,3 +214,4 @@ A complete Playwright browser test (`scripts/verify_global_refresh_and_feedback_
 ## 9. Conclusion & Release Readiness
 
 Phase 2 is fully complete and verified. Every user action provides explicit, predictable feedback. No silent failures or duplicate submissions occur. Historical data remains protected for compliance, while active operational dashboards truthfully reflect the PostgreSQL database state across all roles.
+

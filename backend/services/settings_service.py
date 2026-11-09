@@ -464,15 +464,24 @@ def execute_data_clear(
                 deleted_counts[tbl] = 0
 
         # Retain historical audit logs for governance & accountability; mark historical entities as cleared
+        cleared_entity_types = []
         if "timetable" in cats_to_process:
-            db.execute(text("""
+            cleared_entity_types.extend(["Timetable", "TimetableVersion", "TimetableEntry", "TIMETABLE", "TIMETABLE_VERSION", "TIMETABLE_ENTRY"])
+        if "resources" in cats_to_process:
+            cleared_entity_types.extend(["ResourceBooking", "RESOURCE_BOOKING"])
+        if "faculty_ops" in cats_to_process:
+            cleared_entity_types.extend(["FacultySubstitution", "FACULTY_SUBSTITUTION", "ChangeRequest", "CHANGE_REQUEST"])
+
+        if cleared_entity_types:
+            placeholders = ", ".join(f"'{et}'" for et in cleared_entity_types)
+            db.execute(text(f"""
                 UPDATE audit_logs
                 SET new_value = jsonb_set(
-                    COALESCE(new_value, '{}'::jsonb),
-                    '{lifecycle_status}',
+                    COALESCE(new_value, '{{}}'::jsonb),
+                    '{{lifecycle_status}}',
                     '"HISTORICAL_CLEARED"'::jsonb
                 )
-                WHERE entity_type IN ('Timetable', 'TimetableVersion', 'TimetableEntry')
+                WHERE entity_type IN ({placeholders})
                   AND (new_value->>'lifecycle_status' IS NULL OR new_value->>'lifecycle_status' != 'HISTORICAL_CLEARED')
             """))
 

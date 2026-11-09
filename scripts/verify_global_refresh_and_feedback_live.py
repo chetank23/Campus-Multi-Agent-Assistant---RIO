@@ -65,8 +65,8 @@ def run_phase2_audit():
         adm_refresh_btn.click()
         print("    [+] Clicked Refresh. Checking for loading state and feedback...")
 
-        # Wait for toast
-        adm_toast = adm_pg.locator("div[role='status']").first
+        # Wait for toast specific to Dashboard
+        adm_toast = adm_pg.locator("div[role='status']:has-text('Dashboard')").first
         adm_toast.wait_for(state="visible", timeout=8000)
         toast_text = adm_toast.text_content() or ""
         print(f"    [+] Toast verified: '{toast_text.strip()}'")
@@ -97,7 +97,7 @@ def run_phase2_audit():
         audit_refresh_btn.wait_for(state="visible", timeout=10000)
         audit_refresh_btn.click()
 
-        audit_toast = adm_pg.locator("div[role='status']").first
+        audit_toast = adm_pg.locator("div[role='status']:has-text('Audit Trail')").first
         audit_toast.wait_for(state="visible", timeout=8000)
         print(f"    [+] Audit refresh toast verified: '{audit_toast.text_content()}'")
 
@@ -118,7 +118,7 @@ def run_phase2_audit():
             "role": "ADMIN",
             "refresh_api": "/admin/audit-logs",
             "loading_state": "Spinner & status filter reaction",
-            "success_feedback": "Audit logs refreshed & historical records clearly distinguished",
+            "success_feedback": audit_toast.text_content().strip(),
             "timestamp_truthful": True,
             "status": "PASS",
         })
@@ -131,7 +131,7 @@ def run_phase2_audit():
         settings_refresh_btn.wait_for(state="visible", timeout=10000)
         settings_refresh_btn.click()
 
-        settings_toast = adm_pg.locator("div[role='status']").first
+        settings_toast = adm_pg.locator("div[role='status']:has-text('Settings & Operational Summary')").first
         settings_toast.wait_for(state="visible", timeout=8000)
         print(f"    [+] Settings refresh toast verified: '{settings_toast.text_content()}'")
 
@@ -165,7 +165,7 @@ def run_phase2_audit():
         rooms_refresh.wait_for(state="visible", timeout=10000)
         rooms_refresh.click()
 
-        rooms_toast = adm_pg.locator("div[role='status']").first
+        rooms_toast = adm_pg.locator("div[role='status']:has-text('Rooms & Labs')").first
         rooms_toast.wait_for(state="visible", timeout=8000)
         print(f"    [+] Rooms refresh toast verified: '{rooms_toast.text_content()}'")
 
@@ -176,7 +176,7 @@ def run_phase2_audit():
             "role": "ADMIN",
             "refresh_api": "/rooms",
             "loading_state": "DataTable toolbar spinner & disabled state",
-            "success_feedback": "Latest Rooms & Labs data refreshed successfully.",
+            "success_feedback": rooms_toast.text_content().strip(),
             "timestamp_truthful": True,
             "status": "PASS",
         })
@@ -192,7 +192,7 @@ def run_phase2_audit():
         fac_tt_refresh.wait_for(state="visible", timeout=10000)
         fac_tt_refresh.click()
 
-        fac_tt_toast = fac_pg.locator("div[role='status']").first
+        fac_tt_toast = fac_pg.locator("div[role='status']:has-text('Teaching Schedule')").first
         fac_tt_toast.wait_for(state="visible", timeout=8000)
         print(f"    [+] Faculty timetable refresh toast verified: '{fac_tt_toast.text_content()}'")
 
@@ -217,7 +217,7 @@ def run_phase2_audit():
         fac_dash_refresh.wait_for(state="visible", timeout=10000)
         fac_dash_refresh.click()
 
-        fac_dash_toast = fac_pg.locator("div[role='status']").first
+        fac_dash_toast = fac_pg.locator("div[role='status']:has-text('Faculty Portal')").first
         fac_dash_toast.wait_for(state="visible", timeout=8000)
         print(f"    [+] Faculty dashboard refresh toast verified: '{fac_dash_toast.text_content()}'")
 
@@ -242,7 +242,7 @@ def run_phase2_audit():
         stu_dash_refresh.wait_for(state="visible", timeout=10000)
         stu_dash_refresh.click()
 
-        stu_dash_toast = stu_pg.locator("div[role='status']").first
+        stu_dash_toast = stu_pg.locator("div[role='status']:has-text('Student Portal')").first
         stu_dash_toast.wait_for(state="visible", timeout=8000)
         print(f"    [+] Student dashboard refresh toast verified: '{stu_dash_toast.text_content()}'")
 
@@ -266,7 +266,7 @@ def run_phase2_audit():
         stu_tt_refresh.wait_for(state="visible", timeout=10000)
         stu_tt_refresh.click()
 
-        stu_tt_toast = stu_pg.locator("div[role='status']").first
+        stu_tt_toast = stu_pg.locator("div[role='status']:has-text('Class Schedule')").first
         stu_tt_toast.wait_for(state="visible", timeout=8000)
         print(f"    [+] Student timetable refresh toast verified: '{stu_tt_toast.text_content()}'")
 
