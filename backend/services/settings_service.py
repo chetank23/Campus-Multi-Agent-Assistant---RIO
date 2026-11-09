@@ -129,20 +129,120 @@ def update_general_settings(db: Session, payload: GeneralSettingsUpdate, user: U
     return get_general_settings(db)
 
 
+def _normalize_break_period(item: object) -> Optional[BreakPeriod]:
+    """
+    Validates and constructs a BreakPeriod from stored dictionary data.
+    Ensures item is a dict with non-empty 'name', 'start', and 'end' strings.
+    Safely rejects primitives (bool, int, str), malformed dictionaries, or missing fields.
+    """
+    if not isinstance(item, dict):
+        return None
+    name = item.get("name")
+    start = item.get("start")
+    end = item.get("end")
+    if (
+        isinstance(name, str)
+        and isinstance(start, str)
+        and isinstance(end, str)
+        and name.strip()
+        and start.strip()
+        and end.strip()
+    ):
+        return BreakPeriod(name=name.strip(), start=start.strip(), end=end.strip())
+    return None
+
+
+def _deserialize_break_periods(raw: object) -> List[BreakPeriod]:
+    """
+    Normalizes a list of break periods from stored settings.
+    If raw data is invalid, empty, or malformed, safely defaults to the authoritative REVA schedule:
+      - Tea Break: 10:20–10:40
+      - Lunch Break: 12:30–13:30
+    """
+    default_reva_breaks = [
+        BreakPeriod(name="Tea Break", start="10:20", end="10:40"),
+        BreakPeriod(name="Lunch Break", start="12:30", end="13:30"),
+    ]
+    if not isinstance(raw, list):
+        return default_reva_breaks
+
+    parsed: List[BreakPeriod] = []
+    for item in raw:
+        normalized = _normalize_break_period(item)
+        if normalized is not None:
+            parsed.append(normalized)
+
+    return parsed if parsed else default_reva_breaks
+
+
+def _deserialize_working_days(val: object, default: str = "MON_SAT") -> str:
+    """
+    Validates and normalizes working_days string.
+    Only allows 'MON_SAT' or 'MON_FRI'; defaults safely if invalid or malformed.
+    """
+    if isinstance(val, str):
+        cleaned = val.strip().upper()
+        if cleaned in ("MON_SAT", "MON_FRI"):
+            return cleaned
+    return default
+
+
+def _deserialize_positive_int(val: object, default: int) -> int:
+    """
+    Validates and extracts a positive integer.
+    Rejects booleans (since in Python isinstance(True, int) is True), non-positive integers,
+    and unparseable values, returning the default.
+    """
+    if isinstance(val, int) and not isinstance(val, bool) and val > 0:
+        return val
+    if isinstance(val, str):
+        try:
+            parsed = int(val.strip())
+            if parsed > 0:
+                return parsed
+        except (ValueError, TypeError):
+            pass
+    return default
+
+
+def _deserialize_bool(val: object, default: bool = True) -> bool:
+    """
+    Validates and normalizes a boolean configuration value.
+    """
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        cleaned = val.strip().lower()
+        if cleaned in ("true", "1", "yes"):
+            return True
+        if cleaned in ("false", "0", "no"):
+            return False
+    return default
+
+
 def get_timetable_settings(db: Session) -> TimetableSettingsResponse:
     setting = _get_or_create_setting(
         db, "timetable_defaults", "TIMETABLE", DEFAULT_TIMETABLE, "Canonical timetable solver defaults"
     )
-    data = {**DEFAULT_TIMETABLE, **(setting.value or {})}
-    breaks = [BreakPeriod(**b) for b in data.get("break_times", [])]
+    raw_data = setting.value if isinstance(setting.value, dict) else {}
+    merged: Dict[str, Any] = {**DEFAULT_TIMETABLE, **raw_data}
+
+    working_days: str = _deserialize_working_days(merged.get("working_days"), default="MON_SAT")
+    periods_per_day: int = _deserialize_positive_int(merged.get("periods_per_day"), default=7)
+    period_duration_minutes: int = _deserialize_positive_int(merged.get("period_duration_minutes"), default=55)
+    breaks: List[BreakPeriod] = _deserialize_break_periods(merged.get("break_times"))
+    max_consecutive: int = _deserialize_positive_int(merged.get("max_consecutive_faculty_lectures"), default=3)
+    enable_soft_lab: bool = _deserialize_bool(merged.get("enable_soft_lab_preference"), default=True)
+    updated_iso: Optional[str] = setting.updated_at.isoformat() if setting.updated_at is not None else None
+
     return TimetableSettingsResponse(
-        working_days=data.get("working_days", "MON_SAT"),
-        periods_per_day=data.get("periods_per_day", 7),
-        period_duration_minutes=data.get("period_duration_minutes", 55),
+        working_days=working_days,
+        periods_per_day=periods_per_day,
+        period_duration_minutes=period_duration_minutes,
         break_times=breaks,
-        max_consecutive_faculty_lectures=data.get("max_consecutive_faculty_lectures", 3),
-        enable_soft_lab_preference=data.get("enable_soft_lab_preference", True),
-        updated_at=setting.updated_at.isoformat() if setting.updated_at else None,
+        max_consecutive_faculty_lectures=max_consecutive,
+        enable_soft_lab_preference=enable_soft_lab,
+        updated_at=updated_iso,
     )
 
 
@@ -150,13 +250,18 @@ def update_timetable_settings(db: Session, payload: TimetableSettingsUpdate, use
     setting = _get_or_create_setting(
         db, "timetable_defaults", "TIMETABLE", DEFAULT_TIMETABLE, "Canonical timetable solver defaults"
     )
-    current = {**DEFAULT_TIMETABLE, **(setting.value or {})}
+    raw_current = setting.value if isinstance(setting.value, dict) else {}
+    current: Dict[str, Any] = {**DEFAULT_TIMETABLE, **raw_current}
     if payload.working_days is not None:
-        current["working_days"] = payload.working_days
+        current["working_days"] = _deserialize_working_days(payload.working_days, default="MON_SAT")
     if payload.max_consecutive_faculty_lectures is not None:
-        current["max_consecutive_faculty_lectures"] = payload.max_consecutive_faculty_lectures
+        current["max_consecutive_faculty_lectures"] = _deserialize_positive_int(
+            payload.max_consecutive_faculty_lectures, default=3
+        )
     if payload.enable_soft_lab_preference is not None:
-        current["enable_soft_lab_preference"] = payload.enable_soft_lab_preference
+        current["enable_soft_lab_preference"] = _deserialize_bool(
+            payload.enable_soft_lab_preference, default=True
+        )
 
     setting.value = current
     setting.updated_at = utc_now()
