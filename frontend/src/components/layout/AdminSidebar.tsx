@@ -244,7 +244,7 @@ const adminSections: NavSection[] = [
         id: 'settings',
         label: 'Settings',
         icon: <Settings size={17} className="shrink-0" />,
-        soon: true,
+        to: '/admin/settings',
       },
     ],
   },

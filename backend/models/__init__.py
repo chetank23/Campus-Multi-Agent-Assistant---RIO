@@ -83,6 +83,9 @@ from .curriculum import (  # noqa: F401
     FacultyCourseOffering,
 )
 
+# System Settings
+from .system_setting import SystemSetting  # noqa: F401
+
 # Expose the metadata object Alembic needs
 metadata = Base.metadata
 
@@ -140,4 +143,5 @@ __all__ = [
     "CurriculumRequestMessage",
     "SectionCourseOffering",
     "FacultyCourseOffering",
+    "SystemSetting",
 ]

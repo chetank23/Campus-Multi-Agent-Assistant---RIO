@@ -496,6 +496,13 @@ def publish_canonical_timetable(
 
                 # Legacy mirror version for compatibility (version_number max length 10)
                 version_code = f"CANON-{sec_id}"[:10]
+
+                # Archive any other previously published versions so there is never more than 1 active published version per section
+                db.query(TimetableVersion).filter(
+                    TimetableVersion.academic_year_id == request.academic_year_id,
+                    TimetableVersion.version_number != version_code,
+                    TimetableVersion.status == "PUBLISHED",
+                ).update({"status": "ARCHIVED"}, synchronize_session=False)
                 legacy_ver = db.query(TimetableVersion).filter(
                     TimetableVersion.academic_year_id == request.academic_year_id,
                     TimetableVersion.version_number == version_code,

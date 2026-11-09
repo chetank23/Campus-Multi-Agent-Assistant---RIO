@@ -9,6 +9,6 @@ export interface TimeSlotResponse {
 }
 
 export const getTimeSlots = async (): Promise<TimeSlotResponse[]> => {
-  const response = await apiClient.get('/time-slots/');
+  const response = await apiClient.get('/time-slots');
   return response.data;
 };

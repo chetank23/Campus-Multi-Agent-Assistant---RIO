@@ -22,20 +22,24 @@ BASE_URL = "http://127.0.0.1:8000"
 def get_tokens():
     tokens = {}
     creds = {
-        "SUPER_ADMIN": ("superadmin@campus.edu", "Test@1234"),
-        "ADMIN": ("admin@campus.edu", "Test@1234"),
-        "FACULTY": ("nimrita.koul@rio-mjp.test", "Nimritakoul#RioLocal26"),
-        "STUDENT": ("r23eh001@rio-mjp.test", "R23eh001#RioLocal26"),
+        "SUPER_ADMIN": ("superadmin@campus.edu", ["Superadmin#RioLocal26", "Test@1234", "Admin#RioLocal26"]),
+        "ADMIN": ("admin@campus.edu", ["Admin#RioLocal26", "Test@1234"]),
+        "FACULTY": ("nimrita.koul@rio-mjp.test", ["Nimritakoul#RioLocal26", "Password@123", "Test@1234"]),
+        "STUDENT": ("r23eh001@rio-mjp.test", ["R23eh001#RioLocal26", "Password@123", "Test@1234"]),
     }
-    for role, (email, pwd) in creds.items():
-        try:
-            r = requests.post(f"{BASE_URL}/auth/login", json={"email": email, "password": pwd}, timeout=5)
-            if r.status_code == 200:
-                tokens[role] = r.json()["access_token"]
-            else:
-                print(f"[WARN] Failed to get token for {role}: {r.status_code} {r.text}")
-        except Exception as e:
-            print(f"[ERROR] Connection error getting token for {role}: {e}")
+    for role, (email, pwds) in creds.items():
+        if isinstance(pwds, str):
+            pwds = [pwds]
+        for pwd in pwds:
+            try:
+                r = requests.post(f"{BASE_URL}/auth/login", json={"email": email, "password": pwd}, timeout=5)
+                if r.status_code == 200:
+                    tokens[role] = r.json()["access_token"]
+                    break
+            except Exception as e:
+                print(f"[ERROR] Connection error getting token for {role}: {e}")
+        if role not in tokens:
+            print(f"[WARN] Failed to get token for {role}")
     return tokens
 
 

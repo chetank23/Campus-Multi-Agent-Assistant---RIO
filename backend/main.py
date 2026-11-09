@@ -36,6 +36,7 @@ from backend.routes import (
     rooms,
     section,
     semester,
+    settings,
     student,
     substitutions,
     time_slot,
@@ -119,3 +120,5 @@ app.include_router(data_import.router)
 app.include_router(curriculum.router)
 app.include_router(curriculum.super_admin_router)
 app.include_router(curriculum.admin_curriculum_router)
+app.include_router(settings.router)
+

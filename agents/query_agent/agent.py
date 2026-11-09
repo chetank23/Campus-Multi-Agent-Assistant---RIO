@@ -1079,7 +1079,11 @@ def run_query_agent(
     if api_key and not api_key.startswith("mock-") and not api_key.startswith("test-"):
         try:
             import anthropic
-            client = anthropic.Anthropic(api_key=api_key)
+            client = anthropic.Anthropic(
+                api_key=api_key,
+                timeout=10.0,
+                max_retries=2,
+            )
 
             from anthropic.types import ToolParam
 

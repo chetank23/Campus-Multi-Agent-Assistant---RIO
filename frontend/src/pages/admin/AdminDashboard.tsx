@@ -107,25 +107,25 @@ export function AdminDashboard() {
   } = useQuery({
     queryKey: ['timetableVersions'],
     queryFn: () => getTimetableVersions(),
-    staleTime: 60_000,
+    staleTime: 10_000,
   });
 
   const { data: deptProgress, isLoading: isDeptProgressLoading } = useQuery({
     queryKey: ['admin-dept-progress'],
     queryFn: analyticsApi.getDepartmentProgress,
-    staleTime: 60_000,
+    staleTime: 10_000,
   });
 
   const { data: calendarEvents, isLoading: isCalendarLoading } = useQuery({
     queryKey: ['admin-academic-calendar'],
     queryFn: academicCalendarApi.getAll,
-    staleTime: 60_000,
+    staleTime: 30_000,
   });
 
   const { data: auditLogsData, isLoading: isAuditLoading } = useQuery({
     queryKey: ['admin-recent-audit'],
     queryFn: () => getAuditLogs({ limit: 4 }),
-    staleTime: 30_000,
+    staleTime: 10_000,
   });
 
   const { data: systemHealth } = useQuery({
@@ -785,6 +785,13 @@ export function AdminDashboard() {
                           <span className="text-[11px] text-[#8190A5] mt-0.5">
                             Use the generation engine to solve and create schedule versions.
                           </span>
+                          <Link
+                            to="/admin/timetable"
+                            className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold transition-colors"
+                          >
+                            <Calendar size={13} />
+                            <span>Generate Timetable</span>
+                          </Link>
                         </div>
                       </td>
                     </tr>
@@ -902,7 +909,7 @@ export function AdminDashboard() {
                       </span>
                     </div>
                     <div className="text-[10px] text-slate-500 mt-0.5 truncate">
-                      Entity: {log.entity_type} #{log.entity_id}
+                      Entity: {log.entity_type} {log.entity_id ? `#${log.entity_id}` : ''}
                     </div>
                   </div>
                 ))

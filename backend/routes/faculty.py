@@ -1,5 +1,5 @@
 import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
@@ -55,6 +55,7 @@ def get_faculty_members(
 def get_faculty_my_timetable(
     academic_year_id: Optional[int] = None,
     date: Optional[datetime.date] = None,
+    response: Response = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("FACULTY")),
 ):
@@ -62,6 +63,9 @@ def get_faculty_my_timetable(
     Returns the published timetable entries assigned to the authenticated faculty member.
     Unpublished drafts, other faculty members' schedules, and non-faculty users are strictly excluded.
     """
+    if response:
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
     fac = (
         db.query(Faculty)
         .options(joinedload(Faculty.department), joinedload(Faculty.user))

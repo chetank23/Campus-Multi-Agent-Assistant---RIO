@@ -1,5 +1,5 @@
 import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
@@ -46,6 +46,7 @@ def get_students(
 def _get_student_my_timetable_handler(
     academic_year_id: Optional[int] = None,
     date: Optional[datetime.date] = None,
+    response: Optional[Response] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("STUDENT")),
 ) -> StudentTimetableResponse:
@@ -53,6 +54,9 @@ def _get_student_my_timetable_handler(
     Returns the published timetable entries applicable to the authenticated student's section/batch.
     Arbitrary student IDs or section IDs cannot be passed to circumvent ownership.
     """
+    if response:
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
     stu = (
         db.query(Student)
         .options(
@@ -234,20 +238,22 @@ def _get_student_my_timetable_handler(
 def get_student_my_timetable_plural(
     academic_year_id: Optional[int] = None,
     date: Optional[datetime.date] = None,
+    response: Response = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("STUDENT")),
 ):
-    return _get_student_my_timetable_handler(academic_year_id, date, db, current_user)
+    return _get_student_my_timetable_handler(academic_year_id, date, response, db, current_user)
 
 
 @student_router.get("/my-timetable", response_model=StudentTimetableResponse)
 def get_student_my_timetable_singular(
     academic_year_id: Optional[int] = None,
     date: Optional[datetime.date] = None,
+    response: Response = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("STUDENT")),
 ):
-    return _get_student_my_timetable_handler(academic_year_id, date, db, current_user)
+    return _get_student_my_timetable_handler(academic_year_id, date, response, db, current_user)
 
 
 def _get_student_courses_handler(db: Session, current_user: User) -> List[StudentCourseResponse]:

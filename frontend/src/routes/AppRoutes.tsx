@@ -57,6 +57,7 @@ import { FacultySubstitutionPage } from '@/pages/faculty/FacultySubstitutionPage
 import { AdminNotificationsPage } from '@/pages/admin/AdminNotificationsPage';
 import { AdminChangeRequestsPage } from '@/pages/admin/AdminChangeRequestsPage';
 import { AdminAuditLogsPage } from '@/pages/admin/AdminAuditLogsPage';
+import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage';
 
 import { SuperAdminLayout } from '@/layouts/SuperAdminLayout';
 import { SuperAdminDashboard } from '@/pages/super_admin/SuperAdminDashboard';
@@ -205,6 +206,7 @@ export function AppRoutes() {
           <Route path="/admin/reports" element={<ReportsPage />} />
           {/* System Administration */}
           <Route path="/admin/system/users" element={<UsersPage />} />
+          <Route path="/admin/settings" element={<AdminSettingsPage />} />
         </Route>
       </Route>
 

@@ -1,6 +1,6 @@
 import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session, joinedload
 
 from backend.database import get_db
@@ -128,6 +128,7 @@ def get_canonical_timetable_endpoint(
     academic_year_id: int,
     semester_id: int,
     department_id: int,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("ADMIN")),
 ):
@@ -135,6 +136,8 @@ def get_canonical_timetable_endpoint(
     Retrieves the published canonical timetables and entries for the selected academic scope.
     Exactly ONE canonical timetable exists per Academic Year + Semester + Section.
     """
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
     return get_canonical_timetables(
         db=db,
         academic_year_id=academic_year_id,
@@ -229,13 +232,17 @@ from typing import List, Optional
 @router.get("/versions", response_model=List[TimetableVersionResponse])
 def get_versions(
     academic_year_id: Optional[int] = None,
+    response: Response = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("ADMIN"))
 ):
+    if response:
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
     query = db.query(TimetableVersion)
     if academic_year_id:
         query = query.filter(TimetableVersion.academic_year_id == academic_year_id)
-    return query.all()
+    return query.order_by(TimetableVersion.id.desc()).all()
 
 from sqlalchemy.orm import Session, joinedload
 from backend.models.academic import Faculty, Section

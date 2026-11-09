@@ -32,12 +32,12 @@ export interface TimeSlotCreate {
 
 export const academicCalendarApi = {
   getAll: async (): Promise<AcademicCalendarItem[]> => {
-    const { data } = await apiClient.get<AcademicCalendarItem[]>('/academic-calendar/');
+    const { data } = await apiClient.get<AcademicCalendarItem[]>('/academic-calendar');
     return data;
   },
 
   create: async (item: AcademicCalendarCreate): Promise<AcademicCalendarItem> => {
-    const { data } = await apiClient.post<AcademicCalendarItem>('/academic-calendar/', item);
+    const { data } = await apiClient.post<AcademicCalendarItem>('/academic-calendar', item);
     return data;
   },
 
@@ -53,12 +53,12 @@ export const academicCalendarApi = {
 
 export const timeSlotsApi = {
   getAll: async (): Promise<TimeSlotItem[]> => {
-    const { data } = await apiClient.get<TimeSlotItem[]>('/time-slots/');
+    const { data } = await apiClient.get<TimeSlotItem[]>('/time-slots');
     return data;
   },
 
   create: async (item: TimeSlotCreate): Promise<TimeSlotItem> => {
-    const { data } = await apiClient.post<TimeSlotItem>('/time-slots/', item);
+    const { data } = await apiClient.post<TimeSlotItem>('/time-slots', item);
     return data;
   },
 

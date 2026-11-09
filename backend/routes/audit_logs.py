@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -16,6 +16,7 @@ router = APIRouter(prefix="/admin/audit-logs", tags=["Audit Logs"])
 
 @router.get("")
 def list_audit_logs(
+    response: Response,
     user_id: Optional[int] = Query(None, gt=0),
     action: Optional[str] = Query(None, min_length=1, max_length=150),
     entity_type: Optional[str] = Query(None, min_length=1, max_length=50),
@@ -26,6 +27,8 @@ def list_audit_logs(
     admin_user: User = Depends(require_role("ADMIN")),
     db: Session = Depends(get_db),
 ):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
     query = db.query(AuditLog)
     if user_id is not None:
         query = query.filter(AuditLog.user_id == user_id)

@@ -9,7 +9,7 @@ Restricted to ADMIN role.
 from __future__ import annotations
 
 from typing import Any, Dict, List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -20,7 +20,7 @@ from backend.models.courses import Course
 from backend.models.identity import User
 from backend.models.resources import Resource, ResourceBooking
 from backend.models.space_time import Building, Room
-from backend.models.timetable import TimetableEntry, TimetableVersion
+from backend.models.timetable import Timetable, TimetableEntry, TimetableVersion
 from backend.models.workflow import ChangeRequest
 
 router = APIRouter(prefix="/admin/analytics", tags=["Reports & Analytics"])
@@ -28,6 +28,7 @@ router = APIRouter(prefix="/admin/analytics", tags=["Reports & Analytics"])
 
 @router.get("/overview")
 def get_analytics_overview(
+    response: Response,
     admin_user: User = Depends(require_role("ADMIN")),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
@@ -35,6 +36,9 @@ def get_analytics_overview(
     Returns verified institutional analytics aggregated across academic, space, timetable,
     and workflow databases.
     """
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+
     # 1. User & People metrics
     total_users = db.query(func.count(User.id)).scalar() or 0
     total_students = db.query(func.count(Student.id)).scalar() or 0
@@ -53,14 +57,23 @@ def get_analytics_overview(
     classroom_rooms = total_rooms - lab_rooms
     total_capacity = db.query(func.sum(Room.capacity)).scalar() or 0
 
-    # 4. Timetable version status breakdown
-    version_rows = (
-        db.query(TimetableVersion.status, func.count(TimetableVersion.id))
-        .group_by(TimetableVersion.status)
+    # 4. Timetable version status breakdown (truthfully derived, prioritizing canonical headers)
+    canonical_rows = (
+        db.query(Timetable.status, func.count(Timetable.id))
+        .group_by(Timetable.status)
         .all()
     )
-    timetable_breakdown = {status: count for status, count in version_rows}
-    total_versions = sum(timetable_breakdown.values())
+    if canonical_rows:
+        timetable_breakdown = {status: count for status, count in canonical_rows}
+        total_versions = sum(timetable_breakdown.values())
+    else:
+        version_rows = (
+            db.query(TimetableVersion.status, func.count(TimetableVersion.id))
+            .group_by(TimetableVersion.status)
+            .all()
+        )
+        timetable_breakdown = {status: count for status, count in version_rows}
+        total_versions = sum(timetable_breakdown.values())
 
     # 5. Resource bookings breakdown
     booking_rows = (
@@ -148,6 +161,7 @@ def get_analytics_overview(
 
 @router.get("/department-progress")
 def get_department_progress(
+    response: Response,
     admin_user: User = Depends(require_role("ADMIN")),
     db: Session = Depends(get_db),
 ) -> List[Dict[str, Any]]:
@@ -155,6 +169,9 @@ def get_department_progress(
     Computes truthful timetable completion progress for every academic department:
     Total sections vs sections with published schedules.
     """
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+
     departments = db.query(Department).all()
     results = []
 
@@ -169,19 +186,33 @@ def get_department_progress(
 
         # Published sections
         if total_sec == 0:
-            pct = 100 if d.department_code else 0
+            pct = 0
             published_sec = 0
         else:
-            published_sec = (
-                db.query(func.count(func.distinct(TimetableEntry.section_id)))
-                .join(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
+            # Check canonical Timetable records first
+            canon_published = (
+                db.query(func.count(func.distinct(Timetable.section_id)))
+                .join(Section, Timetable.section_id == Section.id)
                 .filter(
-                    TimetableVersion.status == "PUBLISHED",
-                    TimetableEntry.department_id == d.id,
+                    Section.department_id == d.id,
+                    Timetable.status == "PUBLISHED",
                 )
                 .scalar()
                 or 0
             )
+            if canon_published > 0:
+                published_sec = canon_published
+            else:
+                published_sec = (
+                    db.query(func.count(func.distinct(TimetableEntry.section_id)))
+                    .join(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
+                    .filter(
+                        TimetableVersion.status == "PUBLISHED",
+                        TimetableEntry.department_id == d.id,
+                    )
+                    .scalar()
+                    or 0
+                )
             pct = min(100, int((published_sec / total_sec) * 100))
 
         results.append({
