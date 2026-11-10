@@ -18,7 +18,13 @@ import {
   AlertCircle,
   Search,
   ChevronRight,
-  Sparkles,
+  Calendar,
+  User,
+  MapPin,
+  Info,
+  TrendingUp,
+  Check,
+  X,
 } from 'lucide-react';
 import { isAxiosError } from 'axios';
 
@@ -43,6 +49,14 @@ const STATUS_VARIANT_MAP: Record<string, StatusVariant> = {
   APPROVED: 'success',
   REJECTED: 'danger',
   CANCELLED: 'neutral',
+};
+
+const getFacultyInitials = (name: string): string => {
+  const cleaned = name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.|Mrs\.)\s+/i, '').trim();
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'FC';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
 export function AdminSubstitutionPage() {
@@ -361,101 +375,144 @@ export function AdminSubstitutionPage() {
         <FormModal
           isOpen={true}
           title="Review Substitution & Assign Faculty"
+          maxWidth="2xl"
           onClose={() => setInspectingRequest(null)}
         >
-          <form onSubmit={handleApprove} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+          <form onSubmit={handleApprove} className="space-y-4">
             {/* Target Occurrence Summary */}
-            <div className="bg-gray-50 dark:bg-gray-900 p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 space-y-2">
+            <div className="bg-[#0B1528] text-white rounded-2xl p-4 sm:p-5 border border-slate-800 shadow-sm space-y-3.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-primary-700 dark:text-primary-300 uppercase">
-                  Class Occurrence
+                <span className="text-[10px] font-bold text-sky-400 uppercase tracking-widest">
+                  CLASS OCCURRENCE
                 </span>
-                <span className="text-xs font-medium text-gray-500">
-                  Version {inspectingRequest.version}
+                <span className="text-xs font-medium text-slate-300 bg-slate-800/80 border border-slate-700/60 px-2.5 py-0.5 rounded-full">
+                  Version {inspectingRequest.version || 1}
                 </span>
               </div>
-              <div className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                {inspectingRequest.course_code} - {inspectingRequest.course_name}
+
+              <div>
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  {inspectingRequest.course_code} – {inspectingRequest.course_name}
+                </h3>
               </div>
-              <div className="text-xs text-gray-600 dark:text-gray-400 grid grid-cols-2 gap-2">
-                <div>
-                  Date: <span className="font-semibold">{inspectingRequest.substitution_date}</span> (
-                  {inspectingRequest.slot_day})
-                </div>
-                <div>
-                  Time:{' '}
-                  <span className="font-semibold">
-                    {inspectingRequest.start_time} - {inspectingRequest.end_time}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-xs">
+                <div className="flex items-center gap-2 text-slate-300">
+                  <Calendar className="h-4 w-4 text-sky-400 shrink-0" />
+                  <span>
+                    Date:{' '}
+                    <strong className="font-semibold text-white">
+                      {inspectingRequest.substitution_date} ({inspectingRequest.slot_day})
+                    </strong>
                   </span>
                 </div>
-                <div>
-                  Off-Duty Faculty:{' '}
-                  <span className="font-semibold text-gray-900 dark:text-gray-200">
-                    {inspectingRequest.original_faculty_name}
+                <div className="flex items-center gap-2 text-slate-300">
+                  <Clock className="h-4 w-4 text-sky-400 shrink-0" />
+                  <span>
+                    Time:{' '}
+                    <strong className="font-semibold text-white">
+                      {inspectingRequest.start_time} – {inspectingRequest.end_time}
+                    </strong>
                   </span>
                 </div>
-                <div>
-                  Room: <span className="font-semibold">{inspectingRequest.room_number || 'N/A'}</span>
+                <div className="flex items-center gap-2 text-slate-300">
+                  <User className="h-4 w-4 text-sky-400 shrink-0" />
+                  <span>
+                    Off-Duty Faculty:{' '}
+                    <strong className="font-semibold text-white">
+                      {inspectingRequest.original_faculty_name}
+                    </strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-slate-300">
+                  <MapPin className="h-4 w-4 text-sky-400 shrink-0" />
+                  <span>
+                    Room:{' '}
+                    <strong className="font-semibold text-white">
+                      {inspectingRequest.room_number || 'N/A'}
+                    </strong>
+                  </span>
                 </div>
               </div>
-              <div className="text-xs bg-amber-50 dark:bg-amber-950/40 p-2 rounded border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200">
-                <span className="font-semibold">Faculty Reason:</span> {inspectingRequest.reason}
+
+              <div className="bg-slate-800/80 border border-slate-700/60 rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 text-xs text-slate-300">
+                <Info className="h-4 w-4 text-sky-400 shrink-0" />
+                <span>
+                  Faculty Reason:{' '}
+                  <strong className="font-bold text-white uppercase">
+                    {inspectingRequest.reason}
+                  </strong>
+                </span>
               </div>
             </div>
 
             {reviewError && (
-              <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-xs rounded-lg border border-red-200 dark:border-red-800 flex items-start gap-2">
+              <div className="p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200 flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>{reviewError}</span>
               </div>
             )}
 
             {/* Candidate Recommendations List */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase flex items-center gap-1.5">
-                  <Sparkles size={14} className="text-primary-600" />
-                  Deterministic Ranked Candidates
-                </label>
+            <div className="space-y-3 pt-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-blue-600 shrink-0" />
+                  <h4 className="text-sm font-bold text-slate-900 tracking-tight">
+                    Deterministic Ranked Candidates
+                  </h4>
+                </div>
                 <div className="flex items-center gap-2">
                   {candidateRecs?.evaluation_status && (
                     <span
-                      className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                      className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border ${
                         candidateRecs.evaluation_status === 'ELIGIBLE'
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                           : candidateRecs.evaluation_status === 'NO_ELIGIBLE_CANDIDATE'
-                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                          : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                          ? 'bg-slate-100 text-slate-700 border-slate-200'
+                          : 'bg-amber-50 text-amber-800 border-amber-200'
                       }`}
                     >
-                      {candidateRecs.evaluation_status.replace(/_/g, ' ')}
+                      {candidateRecs.evaluation_status === 'NO_ELIGIBLE_CANDIDATE'
+                        ? 'No Eligible Candidate'
+                        : candidateRecs.evaluation_status.replace(/_/g, ' ')}
                     </span>
                   )}
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs font-semibold text-slate-600">
                     {candidateRecs?.candidates.filter((c) => c.is_eligible).length || 0} Eligible
                   </span>
                 </div>
               </div>
 
               {candidateRecs?.evaluation_status === 'CANNOT_DETERMINE' && (
-                <div className="mb-3 p-2.5 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs rounded-lg border border-amber-200 dark:border-amber-800">
-                  <span className="font-semibold">Cannot Determine Substitute:</span>{' '}
-                  {candidateRecs.cannot_determine_reason || 'Missing or ambiguous qualification data.'}
+                <div className="bg-[#F0F5FF] border border-blue-100 rounded-xl p-3.5 flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <Info className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="text-xs text-slate-700 leading-relaxed">
+                    <strong className="font-bold text-slate-900">Cannot Determine Substitute:</strong>{' '}
+                    {candidateRecs.cannot_determine_reason || 'Missing or ambiguous qualification data.'}
+                  </div>
                 </div>
               )}
 
               {candidateRecs?.evaluation_status === 'NO_ELIGIBLE_CANDIDATE' && (
-                <div className="mb-3 p-2.5 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs rounded-lg border border-amber-200 dark:border-amber-800">
-                  <span className="font-semibold">No Eligible Substitute:</span> All evaluated faculty members have active timetable clashes, lack verified course qualifications, or exceed maximum teaching loads.
+                <div className="bg-[#F0F5FF] border border-blue-100 rounded-xl p-3.5 flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <Info className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="text-xs text-slate-700 leading-relaxed">
+                    <strong className="font-bold text-slate-900">No Eligible Substitute:</strong> All evaluated faculty members have active timetable clashes, lack verified course qualifications, or exceed maximum teaching loads.
+                  </div>
                 </div>
               )}
 
               {candidatesLoading ? (
-                <div className="py-8 text-center text-xs text-gray-500">
+                <div className="py-8 text-center text-xs text-slate-500">
                   Evaluating clashes, teaching qualifications, and workload limits...
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {candidateRecs?.candidates.map((cand) => {
                     const isSelected = selectedCandidateId === cand.faculty_id;
                     return (
@@ -467,72 +524,91 @@ export function AdminSubstitutionPage() {
                             setReviewError(null);
                           }
                         }}
-                        className={`p-3 rounded-xl border transition-all ${
+                        className={`rounded-2xl border p-4 space-y-3 transition-all ${
                           !cand.is_eligible
-                            ? 'opacity-60 bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-800 cursor-not-allowed'
+                            ? 'bg-white border-slate-200 shadow-2xs'
                             : isSelected
-                            ? 'border-primary-600 bg-primary-50/50 dark:bg-primary-950/30 shadow-sm cursor-pointer'
-                            : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 cursor-pointer'
+                            ? 'bg-blue-50/20 border-2 border-blue-600 shadow-xs cursor-pointer ring-2 ring-blue-500/10'
+                            : 'bg-white border-slate-200 hover:border-blue-300 shadow-2xs cursor-pointer'
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="radio"
-                              name="selectedCandidate"
-                              checked={isSelected}
-                              disabled={!cand.is_eligible}
-                              onChange={() => setSelectedCandidateId(cand.faculty_id)}
-                              className="text-primary-600 focus:ring-primary-500"
-                            />
+                          <div className="flex items-center gap-3">
+                            {cand.is_eligible && (
+                              <input
+                                type="radio"
+                                name="selectedCandidate"
+                                checked={isSelected}
+                                onChange={() => {
+                                  setSelectedCandidateId(cand.faculty_id);
+                                  setReviewError(null);
+                                }}
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 shrink-0"
+                              />
+                            )}
+                            <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-700 font-bold text-xs flex items-center justify-center shrink-0 border border-blue-100">
+                              {getFacultyInitials(cand.faculty_name)}
+                            </div>
                             <div>
-                              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                              <h4 className="text-sm font-bold text-slate-900 tracking-tight">
                                 {cand.faculty_name}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {cand.department_name || 'Faculty'} | {cand.designation || 'Lecturer'}
-                              </div>
+                              </h4>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                {cand.department_name || 'AI & DS'} | {cand.designation || 'Faculty Member'}
+                              </p>
                             </div>
                           </div>
 
                           <div className="text-right">
-                            <span
-                              className={`inline-block px-2 py-0.5 text-xs font-semibold rounded-full ${
-                                cand.qualification_tier === 'DIRECT_ASSIGNMENT'
-                                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
-                                  : cand.qualification_tier === 'DEPARTMENT_MATCH'
-                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
-                              }`}
-                            >
-                              {cand.qualification_tier.replace('_', ' ')}
-                            </span>
-                            <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mt-1">
+                            {cand.is_eligible ? (
+                              <span
+                                className={`inline-block px-2.5 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${
+                                  cand.qualification_tier === 'DIRECT_ASSIGNMENT'
+                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                    : cand.qualification_tier === 'DEPARTMENT_MATCH'
+                                    ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                    : 'bg-slate-100 text-slate-800 border border-slate-200'
+                                }`}
+                              >
+                                {cand.qualification_tier.replace('_', ' ')}
+                              </span>
+                            ) : (
+                              <span className="inline-block px-2.5 py-0.5 text-[10px] font-bold rounded bg-slate-200/80 text-slate-700 border border-slate-300/60 uppercase tracking-wider">
+                                UNQUALIFIED
+                              </span>
+                            )}
+                            <div className="text-xs font-medium text-slate-500 mt-1">
                               Load: {cand.current_weekly_load}/{cand.max_weekly_load} hrs ({cand.load_percentage}%)
                             </div>
                           </div>
                         </div>
 
                         {/* Breakdown pills */}
-                        <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-1.5">
+                        <div className="flex flex-wrap gap-2 pt-1">
                           {cand.eligibility_breakdown.map((b, idx) => (
                             <span
                               key={idx}
                               title={b.detail}
-                              className={`text-[10px] px-2 py-0.5 rounded font-medium ${
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold ${
                                 b.status === 'PASS'
-                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                  : 'bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300'
+                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80'
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
                               }`}
                             >
-                              {b.factor}: {b.status}
+                              {b.status === 'PASS' ? (
+                                <Check className="h-3 w-3 stroke-[3] text-emerald-600" />
+                              ) : (
+                                <X className="h-3 w-3 stroke-[3] text-slate-500" />
+                              )}
+                              <span>{b.factor}: {b.status}</span>
                             </span>
                           ))}
                         </div>
 
-                        {!cand.is_eligible && (
-                          <div className="mt-1.5 text-xs text-red-600 dark:text-red-400 font-medium">
-                            Ineligible: {cand.ineligibility_reasons.join(', ')}
+                        {!cand.is_eligible && cand.ineligibility_reasons.length > 0 && (
+                          <div className="flex items-center gap-2 text-xs text-slate-500 pt-2 border-t border-slate-100">
+                            <Info className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <span>Ineligible: {cand.ineligibility_reasons.join(', ')}</span>
                           </div>
                         )}
                       </div>
@@ -543,26 +619,26 @@ export function AdminSubstitutionPage() {
             </div>
 
             {/* Actions */}
-            <div className="pt-3 border-t border-gray-200 dark:border-gray-800 flex justify-between items-center">
+            <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
               <button
                 type="button"
                 onClick={() => setRejectModalOpen(true)}
-                className="text-xs text-red-600 hover:text-red-800 font-medium transition-colors"
+                className="text-xs text-rose-600 hover:text-rose-700 font-semibold transition-colors"
               >
                 Reject Request...
               </button>
-              <div className="flex gap-2">
+              <div className="flex gap-2.5">
                 <button
                   type="button"
                   onClick={() => setInspectingRequest(null)}
-                  className="px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  className="px-5 py-2.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={reviewMutation.isPending || !selectedCandidateId}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-sm transition-colors disabled:opacity-50"
+                  className="px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors disabled:opacity-50"
                 >
                   {reviewMutation.isPending ? 'Approving...' : 'Approve Substitution'}
                 </button>
