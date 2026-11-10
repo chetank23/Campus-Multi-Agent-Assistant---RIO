@@ -373,16 +373,16 @@ def format_grounded_response(
         if "message" in tool_result and not tool_result.get("entries"):
             return sanitize_plain_english(tool_result["message"]), sources
 
-        entries = tool_result.get("entries", [])
-        if not entries:
-            sec_name = tool_result.get("section", "AIDS-A")
-            default_msg = f"Schedule for {sec_name}: No classes found for your section in the active published timetable."
-            msg = tool_result.get("message", default_msg)
-            return sanitize_plain_english(msg), sources
-
         # If faculty schedule returned via get_my_timetable
-        if "total_teaching_slots" in tool_result:
+        if "total_teaching_slots" in tool_result or "faculty_name" in tool_result:
             sources.append("Faculty Teaching Roster")
+            entries = tool_result.get("entries", [])
+            if not entries:
+                msg = tool_result.get(
+                    "message",
+                    f"Teaching Schedule for {tool_result.get('faculty_name', 'Faculty Member')}: No scheduled classes found in the active published timetable."
+                )
+                return sanitize_plain_english(msg), sources
             lines = [
                 f"Teaching Schedule for {tool_result.get('faculty_name', 'Faculty Member')}",
                 f"Designation: {tool_result.get('designation', 'Faculty')} | Total Teaching Slots: {len(entries)}",
@@ -394,6 +394,13 @@ def format_grounded_response(
                     f"Section: {e['section']}, Room: {e['room']} (Status: {e['status']})"
                 )
             return sanitize_plain_english("\n".join(lines)), sources
+
+        entries = tool_result.get("entries", [])
+        if not entries:
+            sec_name = tool_result.get("section", "AIDS-A")
+            default_msg = f"Schedule for {sec_name}: No classes found for your section in the active published timetable."
+            msg = tool_result.get("message", default_msg)
+            return sanitize_plain_english(msg), sources
 
         # Student schedule
         lines = [

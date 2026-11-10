@@ -180,13 +180,13 @@ def classify_intent(message: str) -> str:
     # 6. Unsupported domain operations (e.g., grades, fees, account deletion, security credential exfiltration)
     unsupported_patterns = [
         (r"\b(?:password\s*hashes?|print\s*passwords?|show\s*passwords?|dump\s*passwords?|ignore\s*previous\s*instructions)\b", "security credential access"),
-        (r"\b(?:create|delete|drop|modify|update)\s+(?:all\s+)?(?:courses?|students?|faculty)\b", "database record modification via chat"),
+        (r"\b(?:delete|drop|remove)\b.*?\b(?:courses?|catalog)\b", "course deletion"),
+        (r"\b(?:delete|drop|remove)\b.*?\b(?:department|departments)\b", "department deletion"),
         (r"\b(?:change|update|edit|modify|submit|enter|post)\b.*?\b(?:grade|grades|marks|gpa|cgpa)\b", "grade management"),
         (r"\b(?:pay|payment|refund|waive|process)\b.*?\b(?:fee|fees|tuition|dues)\b", "fee payment and refund processing"),
-        (r"\b(?:delete|drop|remove)\b.*?\b(?:department|departments)\b", "department deletion"),
-        (r"\b(?:delete|drop|remove)\b.*?\b(?:courses?|catalog)\b", "course deletion"),
         (r"\b(?:reset|change)\b.*?\bpassword\b", "password management"),
         (r"\b(?:create|delete)\b.*?\buser\s+account\b", "user account creation or deletion"),
+        (r"\b(?:create|delete|drop|modify|update)\s+(?:all\s+)?(?:students?|faculty)\b", "database record modification via chat"),
     ]
     for pat, desc in unsupported_patterns:
         if re.search(pat, msg):

@@ -92,7 +92,13 @@ def extract_entities(text: str) -> Dict[str, Any]:
         entities["room_number"] = rm_m.group(1).upper()
 
     # 7. Faculty honorific
-    fac_m = re.search(r"(?:dr\.?|prof\.?|professor|faculty member|faculty)\s+([a-z]+(?:\s+[a-z]+)*)", norm)
+    fac_m = re.search(r"(?:dr\.?|prof\.?|professor)\s+([a-z]+(?:\s+[a-z]+)*)", norm)
+    if not fac_m:
+        fac_m = re.search(r"(?:faculty member|faculty)\s+([a-z]+(?:\s+[a-z]+)*)", norm)
+        if fac_m:
+            cand = fac_m.group(1).title()
+            if cand.lower().split()[0] in ("members", "member", "teach", "teaches", "teaching", "who", "which", "in", "for", "of"):
+                fac_m = None
     if fac_m:
         entities["faculty_name"] = fac_m.group(1).title()
 
@@ -207,6 +213,14 @@ def match_intent(
             )
 
         # 2. Faculty directory search
+        if ("teach" in msg or "faculty" in msg) and entities.get("section_name"):
+            return IntentMatch(
+                intent_name="ADMIN_FACULTY_LOOKUP",
+                tool_name="search_faculty_directory",
+                tool_args={"section_name": entities.get("section_name")},
+                extracted_entities=entities,
+            )
+
         if any(k in msg for k in ["find faculty", "lookup faculty", "search faculty", "list faculty", "faculty member"]):
             name_q = entities.get("faculty_name")
             if not name_q:

@@ -113,6 +113,7 @@ def search_faculty_directory_data(
     user: User,
     search_query: Optional[str] = None,
     department_name: Optional[str] = None,
+    section_name: Optional[str] = None,
     has_availability: Optional[bool] = None,
     limit: int = 50,
 ) -> Dict[str, Any]:
@@ -128,6 +129,11 @@ def search_faculty_directory_data(
 
     if user.role == "ADMIN" and user.department_id:
         query = query.filter(Faculty.department_id == user.department_id)
+
+    if section_name:
+        query = query.join(CourseAssignment, CourseAssignment.faculty_id == Faculty.id).join(Section, CourseAssignment.section_id == Section.id).filter(
+            Section.section_name.ilike(f"%{section_name.strip()}%")
+        )
 
     if search_query:
         sq = search_query.strip().replace("Dr.", "").replace("Prof.", "").strip()

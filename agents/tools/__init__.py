@@ -1003,6 +1003,7 @@ QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
             "properties": {
                 "search_query": {"type": "string", "description": "Faculty name, ID, or specialization"},
                 "department_name": {"type": "string", "description": "Department filter"},
+                "section_name": {"type": "string", "description": "Section filter (e.g. AIDS-A)"},
             },
         },
         "allowed_roles": ["ADMIN", "SUPER_ADMIN"],
@@ -1727,6 +1728,7 @@ def execute_tool(
                 user=user,
                 search_query=tool_args.get("search_query"),
                 department_name=tool_args.get("department_name"),
+                section_name=tool_args.get("section_name"),
             )
 
         elif tool_name == "search_course_directory":

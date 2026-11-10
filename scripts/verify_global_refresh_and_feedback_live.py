@@ -17,8 +17,10 @@ import os
 import sys
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
-from playwright.sync_api import Locator, sync_playwright
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Locator
 
 
 # ── Configuration Validation & Types ─────────────────────────────────────────
@@ -111,6 +113,14 @@ def run_phase2_audit(config: Optional[BrowserAuditConfig] = None) -> List[Dict[s
 
     cfg = config or BrowserAuditConfig.load()
     results: List[Dict[str, Any]] = []
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        raise RuntimeError(
+            "Playwright is required to execute browser audit scenarios. "
+            "Install it via `pip install playwright && playwright install chromium`."
+        ) from exc
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
