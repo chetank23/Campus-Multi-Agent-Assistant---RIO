@@ -225,7 +225,7 @@ def setup_test_database():
             check=True,
         )
 
-        # 4. Reset sequences for test_schema
+        # 4. Reset sequences for test_schema after seed_database
         schema_engine = create_engine(schema_url)
         with schema_engine.begin() as conn:
             conn.execute(text("""
@@ -245,6 +245,22 @@ def setup_test_database():
                     END LOOP;
                 END $$;
             """))
+
+        # 3b. Provision Super Admin in test database
+        subprocess.run(
+            [
+                sys.executable,
+                "scripts/provision_super_admin.py",
+                "--email",
+                "superadmin@campus.edu",
+                "--name",
+                "Super Admin",
+                "--password",
+                "Test@1234",
+            ],
+            env=sub_env,
+            check=True,
+        )
 
         yield
     finally:

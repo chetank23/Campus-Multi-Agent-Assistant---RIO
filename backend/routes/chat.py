@@ -11,7 +11,8 @@ Enforces strict JWT identity verification, role boundaries, and conversation own
 from __future__ import annotations
 
 import datetime
-from typing import List, Optional
+import os
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -258,7 +259,27 @@ def chat_with_campus_assistant(
         db.add(conv)
         db.flush()
 
-    # 1. Record incoming user message
+    # 1. Fetch recent conversation history before adding the new message
+    recent_msgs = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.conversation_id == conv.id)
+        .order_by(ChatMessage.id.desc())
+        .limit(10)
+        .all()
+    )
+    conversation_history = [
+        {
+            "id": m.id,
+            "sender": m.sender,
+            "content": m.content,
+            "intent": m.intent,
+            "tool_calls": m.tool_calls or [],
+            "sources": m.sources or [],
+        }
+        for m in reversed(recent_msgs)
+    ]
+
+    # Record incoming user message
     user_msg_record = ChatMessage(
         conversation_id=conv.id,
         sender="user",
@@ -267,11 +288,13 @@ def chat_with_campus_assistant(
     db.add(user_msg_record)
     db.flush()
 
-    # 2. Execute Supervisor Agent
+    # 2. Execute Supervisor Agent with conversation context
     result = execute_supervisor(
         message=clean_message,
         user=current_user,
         db=db,
+        conversation_id=conv.id,
+        conversation_history=conversation_history,
     )
 
     # 3. Record assistant response
@@ -307,4 +330,34 @@ def chat_with_campus_assistant(
         success=result.get("success", True),
         error=result.get("error"),
         conversation_id=conv.id,
+        diagnostics=result.get("diagnostics"),
     )
+
+
+@router.get(
+    "/agents/diagnostics",
+    summary="Get AI Assistant and LLM provider diagnostics",
+)
+def get_assistant_diagnostics(
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Returns development-only operational status of the AI Assistant and NVIDIA LLM integration.
+    Never exposes API keys, tokens, or credentials.
+    """
+    from agents.llm.provider_interface import LLMProviderRegistry
+    from agents.llm.nvidia_provider import NvidiaNemotronProvider
+
+    provider = LLMProviderRegistry.get_provider()
+    is_avail = provider.is_available()
+    model_name = getattr(provider, "model", "N/A")
+    provider_name = "nvidia" if isinstance(provider, NvidiaNemotronProvider) else "deterministic"
+    llm_enabled = os.environ.get("RIO_CHAT_LLM_ENABLED", "false").strip().lower() in ("true", "1", "yes")
+
+    return {
+        "provider_configured": is_avail,
+        "llm_mode_enabled": llm_enabled,
+        "active_provider": provider_name,
+        "active_model": model_name,
+        "status": "ready" if is_avail else "offline",
+    }

@@ -9,9 +9,12 @@ and dispatch to the Query Agent or controlled polite termination for out-of-scop
 from __future__ import annotations
 
 import datetime
+import logging
 import os
 import re
 from typing import Any, Dict, List, Literal, Optional, Tuple, cast
+
+logger = logging.getLogger(__name__)
 from backend.config import SessionLocal
 from backend.models.workflow import AgentProposal
 from langgraph.graph import StateGraph, END
@@ -174,8 +177,10 @@ def classify_intent(message: str) -> str:
         if re.search(pat, msg):
             return "RESOURCE_BOOKING"
 
-    # 6. Unsupported domain operations (e.g., grades, fees, account deletion)
+    # 6. Unsupported domain operations (e.g., grades, fees, account deletion, security credential exfiltration)
     unsupported_patterns = [
+        (r"\b(?:password\s*hashes?|print\s*passwords?|show\s*passwords?|dump\s*passwords?|ignore\s*previous\s*instructions)\b", "security credential access"),
+        (r"\b(?:create|delete|drop|modify|update)\s+(?:all\s+)?(?:courses?|students?|faculty)\b", "database record modification via chat"),
         (r"\b(?:change|update|edit|modify|submit|enter|post)\b.*?\b(?:grade|grades|marks|gpa|cgpa)\b", "grade management"),
         (r"\b(?:pay|payment|refund|waive|process)\b.*?\b(?:fee|fees|tuition|dues)\b", "fee payment and refund processing"),
         (r"\b(?:delete|drop|remove)\b.*?\b(?:department|departments)\b", "department deletion"),
@@ -211,7 +216,7 @@ def classify_intent(message: str) -> str:
 
     # 9. Informational Queries supported by Query Agent
     query_patterns = [
-        "timetable", "schedule", "class", "classes", "lecture", "timing", "when is",
+        "timetable", "timetables", "published", "schedule", "schedules", "class", "classes", "lecture", "timing", "when is",
         "ongoing", "upcoming", "next class", "faculty", "professor", "professors", "teacher", "teachers",
         "teach", "teaching", "who is", "who teaches", "dr.", "dr ", "prof",
         "course", "courses", "subject", "subjects", "credits", "syllabus", "room", "rooms", "classroom", "classrooms", "lab", "labs",
@@ -220,7 +225,8 @@ def classify_intent(message: str) -> str:
         "workshop", "workshops", "webinar", "webinars", "hackathon", "hackathons", "cultural", "fest",
         "placement", "placements", "placement drive", "placement drives", "cdc", "recruitment", "eligible drives",
         "am i eligible", "eligibility", "job role", "package", "ctc", "internship", "hiring",
-        "department schedule", "calendar", "department", "section", "student", "students", "srn", "lunch", "break", "breaks", "semester", "announcement", "announcements", "notice", "notices", "broadcast"
+        "department schedule", "calendar", "department", "section", "student", "students", "srn", "usn", "lunch", "break", "breaks", "semester", "announcement", "announcements", "notice", "notices", "broadcast", "notification", "notifications", "request", "requests",
+        "institutional overview", "institution overview", "academic structure", "structural overview", "operational overview", "governance", "audit activity", "audit logs", "audit", "free period", "free periods", "what about", "how about", "who teaches the", "the second", "the first"
     ]
     for q in query_patterns:
         if " " in q or "." in q:
@@ -258,6 +264,17 @@ def supervisor_node(state: AgentState) -> AgentState:
                 "in RIO Campus Assistant. Please contact the academic administration or registrar office directly."
             ),
         }
+
+    # Check conversational follow-up
+    conv_hist = state.get("conversation_history") or []
+    if conv_hist:
+        from agents.common.context_resolver import extract_contextual_follow_up
+        follow_up = extract_contextual_follow_up(message, conv_hist, role)
+        if follow_up:
+            return {
+                "intent": "QUERY_AGENT",
+                "selected_agent": "query_agent",
+            }
 
     # Handle action registry help
     if intent == "ACTION_REGISTRY_HELP":
@@ -650,20 +667,73 @@ def build_supervisor_graph(db: Session, user: User):
 
 
 
+def _is_explicit_proposal_action(message: str) -> bool:
+    """Detects whether a message is an explicit proposal action token."""
+    msg = message.lower().strip()
+    if re.search(r"\b(?:confirm|execute|approve|proceed)\s+(?:op_prop_|res_prop_|disrupt_prop_|prop_)[a-zA-Z0-9_-]+\b", msg):
+        return True
+    if re.search(r"^(?:yes|confirm|proceed|confirm it|no|cancel|cancel that|discard|never mind|stop|abort)$", msg):
+        return True
+    return False
+
+
 def execute_supervisor(
     message: str,
     user: User,
     db: Session,
+    conversation_id: Optional[int] = None,
+    conversation_history: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     Main invocation entry point for the Supervisor.
-    Initializes request-scoped AgentState and executes the compiled LangGraph workflow.
+    If NVIDIA Nemotron (or active LLM provider) is available and the message is not an explicit
+    proposal confirmation/cancellation, delegates to real-time LLM reasoning with tool calling.
+    Otherwise, executes the compiled deterministic LangGraph workflow.
     """
+    # 1. Primary Open-Ended LLM Execution when Provider is Available
+    from agents.llm.provider_interface import LLMProviderRegistry
+    provider = LLMProviderRegistry.get_provider()
+
+    if provider.is_available() and not _is_explicit_proposal_action(message):
+        try:
+            llm_res = provider.generate_chat_response(
+                message=message,
+                user=user,
+                db=db,
+                conversation_history=conversation_history,
+            )
+            if llm_res.get("success") and llm_res.get("reply"):
+                return {
+                    "reply": sanitize_plain_english(llm_res["reply"]),
+                    "intent": llm_res.get("intent", "OPEN_ENDED_LLM_QUERY"),
+                    "selected_agent": llm_res.get("selected_agent", "nvidia_nemotron"),
+                    "tool_calls": llm_res.get("tool_calls", []),
+                    "sources": llm_res.get("sources", ["NVIDIA Nemotron", "RIO Grounded Database"]),
+                    "proposal": None,
+                    "action_type": None,
+                    "success": True,
+                    "error": None,
+                    "diagnostics": llm_res.get("diagnostics"),
+                }
+            else:
+                logger.warning(
+                    "LLM provider execution returned unsuccessful response: %s. Falling back to deterministic graph.",
+                    llm_res.get("error"),
+                )
+        except Exception as llm_exc:
+            logger.warning(
+                "LLM provider execution raised exception: %s. Falling back to deterministic graph.",
+                llm_exc,
+            )
+
+    # 2. Deterministic LangGraph Execution (Fallback & Proposals)
     initial_state: AgentState = {
         "user_id": user.id,
         "role": user.role,
         "department_id": user.department_id,
         "message": message,
+        "conversation_id": conversation_id,
+        "conversation_history": conversation_history or [],
         "intent": None,
         "selected_agent": None,
         "tool_calls": [],
@@ -690,6 +760,8 @@ def execute_supervisor(
         }
 
     except Exception as exc:
+        import traceback
+        traceback.print_exc()
         return {
             "reply": (
                 "The Campus Assistant encountered a temporary internal error while processing your request. "

@@ -64,6 +64,7 @@ export interface ChatMessageResponse {
   success: boolean;
   error?: string | null;
   conversation_id?: number;
+  diagnostics?: Record<string, unknown>;
 }
 
 export interface ChatHistoryMessage {

@@ -62,9 +62,9 @@ backend/node_modules/
 backend/package.json
 backend/package-lock.json
 
-
+run.local
 logindetails.html
-.
+
 # Uploads & Storage
 storage/curriculum_documents/*
 !storage/curriculum_documents/.gitkeep

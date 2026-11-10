@@ -36,6 +36,8 @@ class AgentState(TypedDict, total=False):
     action_type: Optional[str]
     error: Optional[str]
     sources: Optional[List[str]]
+    conversation_id: Optional[int]
+    conversation_history: Optional[List[Dict[str, Any]]]
 
 
 # ── Pydantic Schemas for API Contracts ────────────────────────────────────────
@@ -69,6 +71,7 @@ class ChatMessageResponse(BaseModel):
     success: bool = True
     error: Optional[str] = None
     conversation_id: Optional[int] = None
+    diagnostics: Optional[Dict[str, Any]] = None
 
 
 class ConversationCreateRequest(BaseModel):

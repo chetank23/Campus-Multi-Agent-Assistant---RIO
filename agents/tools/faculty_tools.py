@@ -20,6 +20,18 @@ from backend.models.space_time import Room, TimeSlot, FacultyAvailability
 from backend.models.timetable import TimetableEntry, TimetableVersion
 
 
+DAY_NAME_TO_CODE = {
+    "MONDAY": "MON",
+    "TUESDAY": "TUE",
+    "WEDNESDAY": "WED",
+    "THURSDAY": "THU",
+    "FRIDAY": "FRI",
+    "SATURDAY": "SAT",
+    "SUNDAY": "SUN",
+}
+DAY_CODE_TO_NAME = {v: k for k, v in DAY_NAME_TO_CODE.items()}
+
+
 def _normalize_day(day_input: Optional[str]) -> Optional[str]:
     if not day_input:
         return None
@@ -71,7 +83,7 @@ def get_faculty_schedule_data(
                 "entries": [],
             }
         faculty = own_fac
-    elif user.role == "ADMIN":
+    elif user.role in ("ADMIN", "SUPER_ADMIN"):
         if target_faculty_id:
             faculty = db.query(Faculty).filter(Faculty.id == target_faculty_id).first()
         elif target_faculty_name:
@@ -133,8 +145,9 @@ def get_faculty_schedule_data(
 
     norm_day = _normalize_day(day)
     if norm_day:
+        day_code = DAY_NAME_TO_CODE.get(norm_day, norm_day[:3])
         query = query.join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id).filter(
-            TimeSlot.day == norm_day
+            or_(TimeSlot.day == norm_day, TimeSlot.day == day_code)
         )
 
     entries = query.all()
@@ -432,20 +445,41 @@ def get_faculty_profile_and_classes_data(
 def get_section_students_data(
     db: Session,
     user: User,
-    section_name: Optional[str] = "AIDS-A",
+    section_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Retrieves student roster for a section.
     Accessible to Faculty (if class teacher or instructor) and Admin.
+    If section_name is omitted for faculty, automatically resolves their assigned section(s).
     """
-    if user.role not in ("FACULTY", "ADMIN"):
+    if user.role not in ("FACULTY", "ADMIN", "SUPER_ADMIN"):
         return {"error": "Access denied: Only faculty and administrators can view the student section roster."}
 
     from backend.models.academic import Section, Student
-    sec_name = (section_name or "AIDS-A").strip()
-    sec = db.query(Section).filter(Section.section_name.ilike(sec_name)).first()
+    from backend.models.courses import CourseAssignment
+    from backend.models.timetable import TimetableEntry
+
+    sec: Optional[Section] = None
+    if section_name:
+        sec = db.query(Section).filter(Section.section_name.ilike(section_name.strip())).first()
+        if not sec:
+            return {"error": f"Section '{section_name}' was not found.", "students": []}
+    elif user.role == "FACULTY":
+        fac = db.query(Faculty).filter(Faculty.user_id == user.id).first()
+        if fac:
+            ca_sec_ids = [ca[0] for ca in db.query(CourseAssignment.section_id).filter(CourseAssignment.faculty_id == fac.id).all() if ca[0]]
+            te_sec_ids = [te[0] for te in db.query(TimetableEntry.section_id).filter(TimetableEntry.faculty_id == fac.id).all() if te[0]]
+            ct_sec_ids = [s.id for s in db.query(Section).filter(Section.class_teacher_id == fac.id).all()]
+            all_sec_ids = list(set(ca_sec_ids + te_sec_ids + ct_sec_ids))
+            if all_sec_ids:
+                sec = db.query(Section).filter(Section.id == all_sec_ids[0]).first()
+        if not sec:
+            return {"message": "No assigned sections found for your faculty profile in the database.", "students": [], "total_students": 0}
+    else:
+        sec = db.query(Section).first()
+
     if not sec:
-        return {"error": f"Section '{sec_name}' was not found.", "students": []}
+        return {"error": "No sections found in the database.", "students": []}
 
     students = (
         db.query(Student)
@@ -465,9 +499,258 @@ def get_section_students_data(
 
     return {
         "section_name": sec.section_name,
-        "department_name": sec.department.name if sec.department else "AI & DS",
+        "department_name": sec.department.name if sec.department else "N/A",
         "total_students": len(roster),
         "students": roster,
+    }
+
+
+def get_my_students_data(
+    db: Session,
+    user: User,
+    section_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Retrieves students enrolled in the authenticated faculty member's authorized sections.
+    Grounds student relationships strictly in CourseAssignment, TimetableEntry, and Section records.
+    Never invents unassigned students or demo rosters.
+    """
+    if user.role not in ("FACULTY", "ADMIN", "SUPER_ADMIN"):
+        return {
+            "error": "Access denied: Only faculty members and administrators may query student rosters.",
+            "total_students": 0,
+            "students": [],
+        }
+
+    from backend.models.academic import Section, Student
+    from backend.models.courses import CourseAssignment
+    from backend.models.timetable import TimetableEntry
+
+    assigned_sections: List[Section] = []
+
+    if user.role == "FACULTY":
+        fac = db.query(Faculty).filter(Faculty.user_id == user.id).first()
+        if not fac:
+            return {
+                "error": "Faculty academic profile not found in database.",
+                "total_students": 0,
+                "sections": [],
+                "students": [],
+            }
+
+        ca_sec_ids = [ca[0] for ca in db.query(CourseAssignment.section_id).filter(CourseAssignment.faculty_id == fac.id).all() if ca[0]]
+        te_sec_ids = [te[0] for te in db.query(TimetableEntry.section_id).filter(TimetableEntry.faculty_id == fac.id).all() if te[0]]
+        ct_sec_ids = [sec.id for sec in db.query(Section).filter(Section.class_teacher_id == fac.id).all()]
+        all_sec_ids = list(set(ca_sec_ids + te_sec_ids + ct_sec_ids))
+
+        if not all_sec_ids:
+            return {
+                "success": True,
+                "faculty_name": user.name,
+                "total_students": 0,
+                "sections": [],
+                "students": [],
+                "message": (
+                    f"No teaching assignments, course allocations, or section assignments "
+                    f"were found for {user.name} in the database."
+                ),
+                "source": "PostgreSQL Faculty Allocation Registry",
+            }
+
+        sec_query = db.query(Section).filter(Section.id.in_(all_sec_ids))
+        if section_name:
+            sec_query = sec_query.filter(Section.section_name.ilike(section_name.strip()))
+        assigned_sections = sec_query.all()
+
+        if not assigned_sections and section_name:
+            return {
+                "error": f"Section '{section_name}' is not among your authorized teaching sections.",
+                "total_students": 0,
+                "students": [],
+            }
+    else:
+        # Admin / Super Admin
+        if section_name:
+            assigned_sections = db.query(Section).filter(Section.section_name.ilike(section_name.strip())).all()
+        else:
+            assigned_sections = db.query(Section).all()
+
+    sections_data = []
+    all_students_flat = []
+
+    for sec in assigned_sections:
+        students = (
+            db.query(Student)
+            .filter(Student.section_id == sec.id)
+            .order_by(Student.student_id.asc())
+            .all()
+        )
+        sec_roster = []
+        for s in students:
+            u = s.user
+            item = {
+                "srn": s.student_id,
+                "usn": s.student_id,
+                "name": u.name if (u and u.name) else "Unknown",
+                "email": u.email if u else "",
+                "section": sec.section_name,
+            }
+            sec_roster.append(item)
+            all_students_flat.append(item)
+
+        sections_data.append({
+            "section_id": sec.id,
+            "section_name": sec.section_name,
+            "department": sec.department.name if sec.department else "N/A",
+            "student_count": len(sec_roster),
+            "students": sec_roster,
+        })
+
+    return {
+        "success": True,
+        "faculty_name": user.name,
+        "total_assigned_sections": len(sections_data),
+        "total_students": len(all_students_flat),
+        "sections": sections_data,
+        "students": all_students_flat,
+        "retrieved_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "source": "Official PostgreSQL Student & Section Registry",
+    }
+
+
+def get_next_class_data(
+    db: Session,
+    user: User,
+    ref_datetime: Optional[datetime.datetime] = None,
+) -> Dict[str, Any]:
+    """
+    Evaluates and retrieves the single next applicable published timetable event
+    for the authenticated user (Faculty or Student) using the current institutional date and time.
+    Scans today's remaining slots, or the upcoming days in chronological order.
+    Returns:
+    - Subject (code & title)
+    - Date and weekday
+    - Start and end time
+    - Room
+    - Section
+    - Faculty
+    """
+    now_dt = ref_datetime or datetime.datetime.now()
+    now_date = now_dt.date()
+    now_time = now_dt.time()
+
+    published_version = (
+        db.query(TimetableVersion)
+        .filter(TimetableVersion.status == "PUBLISHED")
+        .order_by(TimetableVersion.published_at.desc())
+        .first()
+    )
+    if not published_version:
+        return {
+            "found": False,
+            "message": "No published timetable is currently active in the database.",
+        }
+
+    # Build base entry query for caller's role
+    query = (
+        db.query(TimetableEntry)
+        .join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id)
+        .filter(
+            TimetableEntry.version_id == published_version.id,
+            TimetableEntry.status != "CANCELLED",
+        )
+    )
+
+    if user.role == "FACULTY":
+        fac = db.query(Faculty).filter(Faculty.user_id == user.id).first()
+        if not fac:
+            return {"found": False, "message": "Faculty profile not found."}
+        query = query.filter(TimetableEntry.faculty_id == fac.id)
+    elif user.role == "STUDENT":
+        from backend.models.academic import Student
+        stu = db.query(Student).filter(Student.user_id == user.id).first()
+        if not stu or not stu.section_id:
+            return {"found": False, "message": "Student profile or section not found."}
+        query = query.filter(TimetableEntry.section_id == stu.section_id)
+        if stu.batch_id:
+            query = query.filter(or_(TimetableEntry.batch_id.is_(None), TimetableEntry.batch_id == stu.batch_id))
+        else:
+            query = query.filter(TimetableEntry.batch_id.is_(None))
+
+    all_entries = query.all()
+    if not all_entries:
+        return {
+            "found": False,
+            "message": "No scheduled classes found in the published timetable for your profile.",
+        }
+
+    # Group entries by day code
+    day_entries_map: Dict[str, List[TimetableEntry]] = {}
+    for entry in all_entries:
+        slot = entry.slot
+        if not slot or not slot.day:
+            continue
+        code = DAY_NAME_TO_CODE.get(slot.day.upper(), slot.day.upper()[:3])
+        day_entries_map.setdefault(code, []).append(entry)
+
+    # Sort each day's entries by start time
+    for code in day_entries_map:
+        day_entries_map[code].sort(key=lambda e: e.slot.start_time if (e.slot and e.slot.start_time) else datetime.time.min)
+
+    # 1. Check today's remaining classes (start_time > now_time)
+    today_code = now_dt.strftime("%a").upper()[:3]
+    if today_code in day_entries_map:
+        for entry in day_entries_map[today_code]:
+            slot = entry.slot
+            if slot and slot.start_time and slot.start_time > now_time:
+                c = entry.course
+                r = entry.room
+                sec = entry.section
+                fac_name = entry.faculty.user.name if (entry.faculty and entry.faculty.user) else "Faculty"
+                return {
+                    "found": True,
+                    "subject_code": c.course_code if c else "N/A",
+                    "subject_name": c.course_name if c else "N/A",
+                    "date": now_date.isoformat(),
+                    "weekday": now_dt.strftime("%A"),
+                    "start_time": slot.start_time.strftime("%H:%M"),
+                    "end_time": slot.end_time.strftime("%H:%M") if slot.end_time else "",
+                    "room": r.room_number if r else "N/A",
+                    "section": sec.section_name if sec else "N/A",
+                    "faculty": fac_name,
+                    "is_today": True,
+                    "source": "Official Published Timetable",
+                }
+
+    # 2. Check subsequent days in chronological order (+1 to +7 days)
+    for offset in range(1, 8):
+        next_dt = now_dt + datetime.timedelta(days=offset)
+        next_code = next_dt.strftime("%a").upper()[:3]
+        if next_code in day_entries_map and day_entries_map[next_code]:
+            entry = day_entries_map[next_code][0]
+            slot = entry.slot
+            c = entry.course
+            r = entry.room
+            sec = entry.section
+            fac_name = entry.faculty.user.name if (entry.faculty and entry.faculty.user) else "Faculty"
+            return {
+                "found": True,
+                "subject_code": c.course_code if c else "N/A",
+                "subject_name": c.course_name if c else "N/A",
+                "date": next_dt.date().isoformat(),
+                "weekday": next_dt.strftime("%A"),
+                "start_time": slot.start_time.strftime("%H:%M") if (slot and slot.start_time) else "",
+                "end_time": slot.end_time.strftime("%H:%M") if (slot and slot.end_time) else "",
+                "room": r.room_number if r else "N/A",
+                "section": sec.section_name if sec else "N/A",
+                "faculty": fac_name,
+                "is_today": False,
+                "source": "Official Published Timetable",
+            }
+
+    return {
+        "found": False,
+        "message": "No upcoming classes found in the active published schedule.",
     }
 
 

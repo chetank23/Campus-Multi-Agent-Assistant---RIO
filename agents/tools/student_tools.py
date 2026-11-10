@@ -9,12 +9,25 @@ from __future__ import annotations
 
 import datetime
 from typing import Any, Dict, List, Optional
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from backend.models.academic import Batch, Section, Student
 from backend.models.identity import User
 from backend.models.space_time import TimeSlot
 from backend.models.timetable import TimetableEntry, TimetableVersion
+
+
+DAY_NAME_TO_CODE = {
+    "MONDAY": "MON",
+    "TUESDAY": "TUE",
+    "WEDNESDAY": "WED",
+    "THURSDAY": "THU",
+    "FRIDAY": "FRI",
+    "SATURDAY": "SAT",
+    "SUNDAY": "SUN",
+}
+DAY_CODE_TO_NAME = {v: k for k, v in DAY_NAME_TO_CODE.items()}
 
 
 def _normalize_day_input(day_input: Optional[str]) -> Optional[str]:
@@ -128,8 +141,9 @@ def get_student_timetable_data(
 
     normalized_day = _normalize_day_input(day)
     if normalized_day:
+        day_code = DAY_NAME_TO_CODE.get(normalized_day, normalized_day[:3])
         query = query.join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id).filter(
-            TimeSlot.day == normalized_day
+            or_(TimeSlot.day == normalized_day, TimeSlot.day == day_code)
         )
 
     entries = query.all()
@@ -223,6 +237,7 @@ def get_class_status_data(
     now_date = ref_date or datetime.date.today()
     now_time = ref_time or datetime.datetime.now().time()
     today_day = now_date.strftime("%A").upper()
+    today_code = DAY_NAME_TO_CODE.get(today_day, today_day[:3])
 
     # 1. Fetch relevant timetable entries for today
     if user.role == "STUDENT":
@@ -245,7 +260,7 @@ def get_class_status_data(
             .filter(
                 TimetableEntry.version_id == published_version.id,
                 TimetableEntry.section_id == student.section_id,
-                TimeSlot.day == today_day,
+                or_(TimeSlot.day == today_day, TimeSlot.day == today_code),
             )
         )
         if student.batch_id:
@@ -274,7 +289,7 @@ def get_class_status_data(
             .filter(
                 TimetableEntry.version_id == published_version.id,
                 TimetableEntry.faculty_id == faculty.id,
-                TimeSlot.day == today_day,
+                or_(TimeSlot.day == today_day, TimeSlot.day == today_code),
             )
         )
     else:
@@ -293,7 +308,7 @@ def get_class_status_data(
             .join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id)
             .filter(
                 TimetableEntry.version_id == published_version.id,
-                TimeSlot.day == today_day,
+                or_(TimeSlot.day == today_day, TimeSlot.day == today_code),
             )
         )
 
@@ -336,6 +351,7 @@ def get_class_status_data(
             "course_code": course.course_code if course else "N/A",
             "course_title": course.course_name if course else "N/A",
             "room": room.room_number if room else "N/A",
+            "section": e.section.section_name if e.section else "N/A",
             "faculty": effective_faculty,
             "start_time": slot.start_time.strftime("%H:%M"),
             "end_time": slot.end_time.strftime("%H:%M"),
@@ -387,6 +403,25 @@ def get_class_status_data(
     ongoing = next((c for c in results if c["class_status"] == "ONGOING"), None)
     next_up = next((c for c in results if c["class_status"] == "UPCOMING"), None)
 
+    # If no upcoming class today, find the next scheduled event across upcoming days
+    if not next_up:
+        from agents.tools.faculty_tools import get_next_class_data
+        future_next = get_next_class_data(db, user, ref_datetime=datetime.datetime.combine(now_date, now_time))
+        if future_next.get("found"):
+            next_up = {
+                "course_code": future_next.get("subject_code"),
+                "course_title": future_next.get("subject_name"),
+                "room": future_next.get("room"),
+                "section": future_next.get("section"),
+                "faculty": future_next.get("faculty"),
+                "date": future_next.get("date"),
+                "weekday": future_next.get("weekday"),
+                "start_time": future_next.get("start_time"),
+                "end_time": future_next.get("end_time"),
+                "class_status": "UPCOMING",
+                "is_today": future_next.get("is_today", False),
+            }
+
     return {
         "date": str(now_date),
         "day": today_day,
@@ -408,14 +443,22 @@ def get_student_academic_profile_data(
     Batch, and Class Teacher details.
     """
     if user.role == "STUDENT":
-        stu = db.query(Student).filter(Student.user_id == user.id).first()
-    elif user.role in ("ADMIN", "FACULTY"):
+        own_stu = db.query(Student).filter(Student.user_id == user.id).first()
+        if target_srn and own_stu:
+            req_clean = target_srn.strip().upper()
+            own_clean = (own_stu.student_id or "").strip().upper()
+            if req_clean and req_clean != own_clean:
+                return {
+                    "error": "Access denied: Students are not authorized to view other students' private academic profiles. You may only view your own profile."
+                }
+        stu = own_stu
+    elif user.role in ("ADMIN", "SUPER_ADMIN", "FACULTY"):
         if target_srn:
             stu = db.query(Student).filter(Student.student_id.ilike(target_srn.strip())).first()
         else:
             stu = db.query(Student).first()
     else:
-        return {"error": "Access denied."}
+        return {"error": "Access denied: Caller is not authorized to query student academic profiles."}
 
     if not stu:
         return {"error": "Student profile not found."}
@@ -467,7 +510,7 @@ def get_student_enrolled_subjects_data(
         if not stu or not stu.section_id:
             return {"error": "Student profile or section not found.", "subjects": []}
         section_id = stu.section_id
-    elif user.role in ("ADMIN", "FACULTY"):
+    elif user.role in ("ADMIN", "SUPER_ADMIN", "FACULTY"):
         sec = db.query(Section).filter(Section.section_name == "AIDS-A").first()
         section_id = sec.id if sec else None
     else:

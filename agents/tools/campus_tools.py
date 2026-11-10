@@ -417,7 +417,7 @@ def get_published_timetable_status_data(
     - Admin: can see all versions, draft/published statuses, total entries.
     - Faculty/Student: only sees the active PUBLISHED timetable version. Draft versions remain confidential.
     """
-    if user.role == "ADMIN":
+    if user.role in ("ADMIN", "SUPER_ADMIN"):
         versions = db.query(TimetableVersion).order_by(TimetableVersion.id.desc()).all()
         version_list = []
         for v in versions:
@@ -507,7 +507,7 @@ def get_recent_timetable_changes_data(
 
     # 2. For Admin, also include recent audit log changes to timetable
     audit_items = []
-    if user.role == "ADMIN":
+    if user.role in ("ADMIN", "SUPER_ADMIN"):
         logs = (
             db.query(AuditLog)
             .filter(

@@ -266,3 +266,4 @@ def test_get_timetable_settings_handles_corrupted_db_value():
         assert reset.working_days == "MON_SAT"
         assert reset.max_consecutive_faculty_lectures == 3
         assert reset.enable_soft_lab_preference is True
+

@@ -27,6 +27,8 @@ from agents.tools.faculty_tools import (
     get_faculty_profile_and_classes_data,
     get_section_students_data,
     get_course_faculty_data,
+    get_my_students_data,
+    get_next_class_data,
 )
 from agents.tools.campus_tools import (
     get_course_details_data,
@@ -88,6 +90,24 @@ from agents.tools.placement_tools import (
     get_drive_deadlines_and_schedule_data,
     get_student_drive_eligibility_data,
     list_my_eligible_drives_data,
+)
+from agents.tools.super_admin_tools import (
+    get_institutional_overview_data,
+    get_academic_structure_overview_data,
+    get_operational_overview_data,
+    get_governance_system_status_data,
+)
+from agents.tools.admin_tools import (
+    search_student_directory_data,
+    search_faculty_directory_data,
+    search_course_directory_data,
+    get_infrastructure_inventory_data,
+    get_section_timetable_data,
+)
+from agents.tools.user_query_tools import (
+    get_user_notifications_data,
+    get_user_requests_status_data,
+    get_faculty_free_periods_data,
 )
 
 # Tool registry with documentation for LLM tool binding
@@ -857,12 +877,29 @@ QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         "allowed_roles": ["FACULTY", "ADMIN"],
     },
     {
+        "name": "get_next_class",
+        "description": "Retrieves the single next scheduled upcoming class or academic timetable event for the authenticated user (Faculty or Student) based on current institutional date and time. Returns subject, date, weekday, start and end time, room, section, and faculty.",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+    },
+    {
+        "name": "get_my_students",
+        "description": "Retrieves the official student roster for the authenticated faculty member's authorized sections. Groups records by assigned section and lists student USN/SRN, full name, email, and section.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "section_name": {"type": "string", "description": "Optional section name to filter e.g. 'AIDS-A'. If omitted, returns all students across all assigned sections."}
+            },
+        },
+        "allowed_roles": ["FACULTY", "ADMIN"],
+    },
+    {
         "name": "get_section_students",
         "description": "Retrieves the official student roster for a section.",
         "parameters": {
             "type": "object",
             "properties": {
-                "section_name": {"type": "string", "description": "Section name e.g. 'AIDS-A'"}
+                "section_name": {"type": "string", "description": "Optional section name e.g. 'AIDS-A'. If omitted for faculty, uses their assigned sections."}
             },
         },
         "allowed_roles": ["FACULTY", "ADMIN"],
@@ -913,6 +950,210 @@ QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         },
         "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
     },
+    # ── SUPER_ADMIN Institutional & Governance Tools ──────────────────────
+    {
+        "name": "get_institutional_overview",
+        "description": "Produces complete institutional metrics: students, faculty, departments, programs, courses, buildings, rooms, labs, and published timetables.",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["SUPER_ADMIN"],
+    },
+    {
+        "name": "get_academic_structure_overview",
+        "description": "Returns full structural mapping of configured academic hierarchy: academic years, semesters, departments, programs, sections, and batches.",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["SUPER_ADMIN"],
+    },
+    {
+        "name": "get_operational_overview",
+        "description": "Returns operational scheduling status: published timetables, preview drafts, resource bookings, pending requests, and recent scheduling activities.",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["SUPER_ADMIN"],
+    },
+    {
+        "name": "get_governance_system_status",
+        "description": "Returns recent audit activity, configuration status, and health flags.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Maximum number of audit logs to retrieve"}
+            },
+        },
+        "allowed_roles": ["SUPER_ADMIN"],
+    },
+    # ── ADMIN & SUPER_ADMIN Operational Tools ────────────────────────────
+    {
+        "name": "search_student_directory",
+        "description": "Searches enrolled students by USN, student name, section, batch, or semester.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "search_query": {"type": "string", "description": "USN (student_id), name, or email"},
+                "section_name": {"type": "string", "description": "Section filter e.g. AIDS-A"},
+                "batch_name": {"type": "string", "description": "Batch filter"},
+                "semester_number": {"type": "integer", "description": "Semester filter"},
+            },
+        },
+        "allowed_roles": ["ADMIN", "SUPER_ADMIN"],
+    },
+    {
+        "name": "search_faculty_directory",
+        "description": "Searches faculty members by name, employee ID, specialization, or department.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "search_query": {"type": "string", "description": "Faculty name, ID, or specialization"},
+                "department_name": {"type": "string", "description": "Department filter"},
+            },
+        },
+        "allowed_roles": ["ADMIN", "SUPER_ADMIN"],
+    },
+    {
+        "name": "search_course_directory",
+        "description": "Searches courses by department, semester, or course code/title.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "department_name": {"type": "string", "description": "Department filter"},
+                "semester_number": {"type": "integer", "description": "Semester number"},
+                "course_query": {"type": "string", "description": "Course code or title"},
+            },
+        },
+        "allowed_roles": ["ADMIN", "SUPER_ADMIN"],
+    },
+    {
+        "name": "get_infrastructure_inventory",
+        "description": "Lists campus infrastructure including buildings, floors, rooms, labs, and capacities.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "building_name_or_code": {"type": "string", "description": "Building code or name"},
+                "room_type": {"type": "string", "description": "Room type filter ('CLASSROOM', 'LAB', 'SEMINAR_HALL')"},
+                "floor_number": {"type": "integer", "description": "Floor number filter"},
+            },
+        },
+        "allowed_roles": ["ADMIN", "SUPER_ADMIN"],
+    },
+    {
+        "name": "get_section_timetable",
+        "description": "Retrieves the active published timetable for any specified section.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "section_name": {"type": "string", "description": "Section name e.g. AIDS-A"},
+                "day": {"type": "string", "description": "Optional day filter (MONDAY..SATURDAY)"},
+            },
+        },
+        "allowed_roles": ["ADMIN", "SUPER_ADMIN", "FACULTY"],
+    },
+    # ── Personalized User Notifications, Requests & Workload ────────────
+    {
+        "name": "get_user_notifications",
+        "description": "Retrieves personalized notifications for the authenticated user.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "unread_only": {"type": "boolean", "description": "Filter for unread notifications only"}
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN", "SUPER_ADMIN"],
+    },
+    {
+        "name": "get_user_requests_status",
+        "description": "Retrieves the status of requests submitted by or assigned to the authenticated user.",
+        "parameters": {"type": "object", "properties": {}},
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN", "SUPER_ADMIN"],
+    },
+    {
+        "name": "get_faculty_free_periods",
+        "description": "Calculates free periods and teaching gaps for the authenticated faculty member.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "day": {"type": "string", "description": "Day of the week (e.g. 'MONDAY', 'TODAY')"}
+            },
+        },
+        "allowed_roles": ["FACULTY"],
+    },
+    {
+        "name": "execute_semantic_query",
+        "description": (
+            "Executes a validated, structured semantic query plan against the PostgreSQL campus database. "
+            "Allows querying entities (students, faculty, departments, programs, sections, batches, courses, "
+            "buildings, rooms, timetables, timetable_entries, notifications, audit_logs) with aggregations "
+            "(COUNT, SUM, AVG, MIN, MAX, DISTINCT), filters (==, !=, >, >=, <, <=, like, ilike, in), "
+            "group_by, order_by, and limits. Strict role-based security is enforced by the server."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "entity": {
+                    "type": "string",
+                    "description": "Target entity to query (e.g. 'students', 'faculty', 'departments', 'sections', 'courses', 'rooms', 'timetables', 'timetable_entries', 'buildings', 'notifications', 'audit_logs').",
+                    "enum": [
+                        "students", "faculty", "departments", "programs", "sections", "batches",
+                        "courses", "course_assignments", "buildings", "rooms", "time_slots",
+                        "faculty_availability", "timetables", "timetable_entries", "academic_years",
+                        "semesters", "notifications", "audit_logs"
+                    ]
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Specific field names to select, or empty for default allowed fields."
+                },
+                "aggregations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "func": {"type": "string", "enum": ["COUNT", "SUM", "AVG", "MIN", "MAX", "DISTINCT"]},
+                            "field": {"type": "string", "description": "Field to aggregate, or '*' for COUNT(*)"},
+                            "alias": {"type": "string", "description": "Output alias for the aggregated value"}
+                        },
+                        "required": ["func", "field"]
+                    },
+                    "description": "Optional list of aggregate functions to compute."
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "field": {"type": "string", "description": "Field name to filter on"},
+                            "op": {"type": "string", "enum": ["==", "!=", ">", ">=", "<", "<=", "like", "ilike", "in"]},
+                            "value": {"description": "Value to compare against"}
+                        },
+                        "required": ["field", "op", "value"]
+                    },
+                    "description": "Optional list of filter criteria."
+                },
+                "group_by": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Fields to group results by."
+                },
+                "order_by": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "field": {"type": "string"},
+                            "direction": {"type": "string", "enum": ["ASC", "DESC"]}
+                        },
+                        "required": ["field"]
+                    },
+                    "description": "Optional ordering specification."
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of rows to return (default 25, max 100).",
+                    "default": 25
+                }
+            },
+            "required": ["entity"]
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN", "SUPER_ADMIN"],
+    },
 ]
 
 
@@ -931,7 +1172,10 @@ def execute_tool(
         return {"error": f"Tool '{tool_name}' is not recognized or permitted."}
 
     # 2. Server-side role check (never trust LLM authorization decisions)
-    if user.role not in definition["allowed_roles"]:
+    allowed = set(definition["allowed_roles"])
+    if "ADMIN" in allowed and user.role == "SUPER_ADMIN":
+        pass  # Super Admin has administrative access to Admin query tools
+    elif user.role not in allowed:
         return {
             "error": f"Role '{user.role}' is not authorized to use tool '{tool_name}'."
         }
@@ -1403,11 +1647,21 @@ def execute_tool(
         elif tool_name == "get_faculty_profile_and_classes":
             return get_faculty_profile_and_classes_data(db=db, user=user)
 
+        elif tool_name == "get_next_class":
+            return get_next_class_data(db=db, user=user)
+
+        elif tool_name in ("get_my_students", "get_faculty_assigned_students"):
+            return get_my_students_data(
+                db=db,
+                user=user,
+                section_name=tool_args.get("section_name"),
+            )
+
         elif tool_name == "get_section_students":
             return get_section_students_data(
                 db=db,
                 user=user,
-                section_name=tool_args.get("section_name", "AIDS-A"),
+                section_name=tool_args.get("section_name"),
             )
 
         elif tool_name == "get_course_faculty":
@@ -1437,6 +1691,100 @@ def execute_tool(
                 user=user,
                 building_name_or_code=tool_args.get("building_name_or_code", "SMV-BLK-01"),
                 room_type=tool_args.get("room_type"),
+            )
+
+        # ── New Super Admin & Governance Tools ─────────────────────────
+        elif tool_name == "get_institutional_overview":
+            return get_institutional_overview_data(db=db, user=user)
+
+        elif tool_name == "get_academic_structure_overview":
+            return get_academic_structure_overview_data(db=db, user=user)
+
+        elif tool_name == "get_operational_overview":
+            return get_operational_overview_data(db=db, user=user)
+
+        elif tool_name == "get_governance_system_status":
+            return get_governance_system_status_data(
+                db=db,
+                user=user,
+                limit=tool_args.get("limit", 15),
+            )
+
+        # ── New Administrative Search Tools ───────────────────────────
+        elif tool_name == "search_student_directory":
+            return search_student_directory_data(
+                db=db,
+                user=user,
+                search_query=tool_args.get("search_query"),
+                section_name=tool_args.get("section_name"),
+                batch_name=tool_args.get("batch_name"),
+                semester_number=tool_args.get("semester_number"),
+            )
+
+        elif tool_name == "search_faculty_directory":
+            return search_faculty_directory_data(
+                db=db,
+                user=user,
+                search_query=tool_args.get("search_query"),
+                department_name=tool_args.get("department_name"),
+            )
+
+        elif tool_name == "search_course_directory":
+            return search_course_directory_data(
+                db=db,
+                user=user,
+                department_name=tool_args.get("department_name"),
+                semester_number=tool_args.get("semester_number"),
+                course_query=tool_args.get("course_query"),
+            )
+
+        elif tool_name == "get_infrastructure_inventory":
+            return get_infrastructure_inventory_data(
+                db=db,
+                user=user,
+                building_name_or_code=tool_args.get("building_name_or_code"),
+                room_type=tool_args.get("room_type"),
+                floor_number=tool_args.get("floor_number"),
+            )
+
+        elif tool_name == "get_section_timetable":
+            return get_section_timetable_data(
+                db=db,
+                user=user,
+                section_name=tool_args.get("section_name"),
+                day=tool_args.get("day"),
+            )
+
+        # ── New Personalized User Tools ───────────────────────────────
+        elif tool_name == "get_user_notifications":
+            return get_user_notifications_data(
+                db=db,
+                user=user,
+                unread_only=tool_args.get("unread_only", False),
+            )
+
+        elif tool_name == "get_user_requests_status":
+            return get_user_requests_status_data(db=db, user=user)
+
+        elif tool_name == "get_faculty_free_periods":
+            return get_faculty_free_periods_data(
+                db=db,
+                user=user,
+                day=tool_args.get("day"),
+            )
+
+        elif tool_name == "execute_semantic_query":
+            from agents.tools.semantic_query_planner import execute_semantic_query_plan
+            return execute_semantic_query_plan(
+                db=db,
+                user=user,
+                entity=tool_args.get("entity", ""),
+                fields=tool_args.get("fields"),
+                aggregations=tool_args.get("aggregations"),
+                filters=tool_args.get("filters"),
+                group_by=tool_args.get("group_by"),
+                order_by=tool_args.get("order_by"),
+                limit=tool_args.get("limit", 25),
             )
 
         else:

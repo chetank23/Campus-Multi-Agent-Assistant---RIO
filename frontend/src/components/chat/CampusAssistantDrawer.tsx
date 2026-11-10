@@ -24,19 +24,15 @@ import {
   Calendar,
   Building2,
   CheckCircle2,
-  AlertTriangle,
   AlertCircle,
   Database,
-  HelpCircle,
   Paperclip,
-  Clock,
   MessageSquare,
   Plus,
   Trash2,
   ChevronDown,
   ArrowRight,
   RefreshCw,
-  Bell,
   BookOpen,
   Briefcase,
 } from 'lucide-react';
@@ -73,7 +69,9 @@ export const CampusAssistantDrawer: React.FC = () => {
     {
       id: 'welcome',
       sender: 'assistant',
-      content: user ? `Hello **${user.name}**! How can I assist you with your campus schedule or academic queries today?` : 'How can I assist you today?',
+      content: user
+        ? `Hello **${user.name}**! I am your RIO Campus Assistant. You can ask me any question about campus academics, schedules, departments, courses, rooms, or institutional operations.`
+        : 'Hello! I am your RIO Campus Assistant. How can I help you today?',
       timestamp: new Date(),
       sources: ['RIO Knowledge Engine'],
     },
@@ -265,47 +263,6 @@ export const CampusAssistantDrawer: React.FC = () => {
       loadConversations();
     } catch {
       // Handled silently
-    }
-  };
-
-  // Role-specific suggestions based on authenticated role and supported capabilities
-  const getSuggestions = (): { label: string; prompt: string; icon: React.ReactNode }[] => {
-    if (user.role === 'STUDENT') {
-      return [
-        { label: 'What is my timetable today?', prompt: 'What is my timetable today?', icon: <Calendar size={13} /> },
-        { label: 'Campus placement drives', prompt: 'Show active placement drives and check my eligibility', icon: <Briefcase size={13} /> },
-        { label: 'Ongoing campus events', prompt: 'What events are currently ongoing?', icon: <Sparkles size={13} /> },
-        { label: 'Upcoming workshops & fests', prompt: 'Show upcoming campus events and workshops', icon: <Sparkles size={13} /> },
-        { label: 'Where is my next class?', prompt: 'Where is my next class?', icon: <HelpCircle size={13} /> },
-        { label: 'Has my timetable changed?', prompt: 'Has my timetable changed?', icon: <AlertCircle size={13} /> },
-        { label: 'Campus announcements', prompt: 'Are there any relevant campus announcements?', icon: <Bell size={13} /> },
-        { label: 'My booking status', prompt: 'What is the status of my resource booking?', icon: <Clock size={13} /> },
-      ];
-    } else if (user.role === 'FACULTY') {
-      return [
-        { label: 'My teaching schedule today', prompt: 'What is my teaching schedule today?', icon: <Calendar size={13} /> },
-        { label: 'My assigned clubs', prompt: 'Show my clubs', icon: <Sparkles size={13} /> },
-        { label: 'Ongoing campus events', prompt: 'What events are happening now?', icon: <Sparkles size={13} /> },
-        { label: 'Classes tomorrow', prompt: 'Which classes do I have tomorrow?', icon: <Clock size={13} /> },
-        { label: 'Which rooms are assigned to me?', prompt: 'Which rooms are assigned to me?', icon: <Building2 size={13} /> },
-        { label: 'Find free labs', prompt: 'Which available labs match a requested time slot?', icon: <Building2 size={13} /> },
-        { label: 'My bookings status', prompt: 'What is the status of my own resource booking?', icon: <Clock size={13} /> },
-      ];
-    } else if (user.role === 'ADMIN') {
-      return [
-        { label: 'Department timetable', prompt: 'Show today timetable for department', icon: <Calendar size={13} /> },
-        { label: 'CDC placement drives', prompt: 'List all placement drives and statistics', icon: <Briefcase size={13} /> },
-        { label: 'Active campus events', prompt: 'List all visible campus events', icon: <Sparkles size={13} /> },
-        { label: 'Find available rooms', prompt: 'Find available rooms for a time slot', icon: <Building2 size={13} /> },
-        { label: 'Timetable publication status', prompt: 'Check timetable publication status', icon: <CheckCircle2 size={13} /> },
-        { label: 'Review pending bookings', prompt: 'Review pending resource bookings', icon: <Clock size={13} /> },
-        { label: 'Timetable disruptions', prompt: 'Summarize recent timetable disruptions', icon: <AlertTriangle size={13} /> },
-      ];
-    } else {
-      return [
-        { label: 'Find a seminar hall', prompt: 'Find a seminar hall', icon: <Building2 size={13} /> },
-        { label: 'Show my bookings', prompt: 'Show my bookings', icon: <Clock size={13} /> },
-      ];
     }
   };
 
@@ -534,27 +491,6 @@ export const CampusAssistantDrawer: React.FC = () => {
               </div>
             </div>
 
-            {/* Suggestions Chips Row */}
-            <div className="px-5 py-2.5 bg-white border-b border-slate-100 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
-                Suggested:
-              </span>
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-                {getSuggestions().map((s, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleSendMessage(s.prompt)}
-                    disabled={isLoading}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-700 border border-slate-200 hover:border-blue-300 whitespace-nowrap transition-all shadow-2xs shrink-0 active:scale-95 disabled:opacity-50 cursor-pointer"
-                  >
-                    <span className="text-slate-500">{s.icon}</span>
-                    <span>{s.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Scrollable Message History */}
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 bg-[#F8FAFC]">
               {history.map((msg) => {
@@ -749,7 +685,7 @@ export const CampusAssistantDrawer: React.FC = () => {
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyDown={handleKeyDown}
                   disabled={isLoading}
-                  placeholder={`Ask RIO as ${user.role} (e.g. classes today, room availability, announcements)...`}
+                  placeholder="Ask RIO anything about campus operations, schedules, academics, or records..."
                   className="flex-1 min-w-0 text-[13.5px] text-slate-800 placeholder-slate-400 bg-transparent border-0 border-none outline-none ring-0 shadow-none focus:outline-none focus:ring-0 focus:border-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
                   style={{
                     border: 'none',

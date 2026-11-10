@@ -25,6 +25,7 @@ import { useAuth } from '@/auth/useAuth';
 import { apiGetMe } from '@/api/auth';
 import { SignOutConfirmDialog } from '@/components/common';
 import { NotificationBellDropdown } from '@/components/notifications/NotificationBellDropdown';
+import { CampusAssistantDrawer } from '@/components/chat';
 
 interface NavItem {
   label: string;
@@ -206,6 +207,9 @@ export const SuperAdminLayout: React.FC = () => {
         onConfirm={handleSignOut}
         isProcessing={isLoggingOut}
       />
+
+      {/* RIO AI Assistant Drawer */}
+      <CampusAssistantDrawer />
     </div>
   );
 };

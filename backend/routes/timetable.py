@@ -232,7 +232,7 @@ from typing import List, Optional
 @router.get("/versions", response_model=List[TimetableVersionResponse])
 def get_versions(
     academic_year_id: Optional[int] = None,
-    response: Response = None,
+    response: Response = Response(),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("ADMIN"))
 ):

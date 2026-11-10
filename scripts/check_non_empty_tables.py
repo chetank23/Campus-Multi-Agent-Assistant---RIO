@@ -8,7 +8,7 @@ tables = [row[0] for row in db.execute(text(query)).fetchall()]
 print(f"Total tables: {len(tables)}")
 for t in tables:
     cnt = db.execute(text(f'SELECT count(*) FROM test_schema."{t}"')).scalar()
-    if cnt > 0:
+    if cnt is not None and cnt > 0:
         print(f"  {t:35}: {cnt}")
 db.close()
 

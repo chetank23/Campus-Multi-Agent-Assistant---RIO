@@ -238,7 +238,7 @@ def _get_student_my_timetable_handler(
 def get_student_my_timetable_plural(
     academic_year_id: Optional[int] = None,
     date: Optional[datetime.date] = None,
-    response: Response = None,
+    response: Response = Response(),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("STUDENT")),
 ):
@@ -249,7 +249,7 @@ def get_student_my_timetable_plural(
 def get_student_my_timetable_singular(
     academic_year_id: Optional[int] = None,
     date: Optional[datetime.date] = None,
-    response: Response = None,
+    response: Response = Response(),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("STUDENT")),
 ):

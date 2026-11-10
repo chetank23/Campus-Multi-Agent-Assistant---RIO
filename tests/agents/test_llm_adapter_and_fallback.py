@@ -24,8 +24,8 @@ from agents.query_agent.agent import run_query_agent, _extract_intent_and_tool_c
 
 
 def test_offline_deterministic_fallback():
-    """Verify that when ANTHROPIC_API_KEY is empty, the system falls back 100% to deterministic tool extraction."""
-    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}):
+    """Verify that when ANTHROPIC_API_KEY and NVIDIA_API_KEY are empty, the system falls back 100% to deterministic tool extraction."""
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "", "NVIDIA_API_KEY": ""}):
         with Session(engine) as db:
             user = db.query(User).filter(User.role == "STUDENT").first()
             assert user is not None
@@ -34,8 +34,6 @@ def test_offline_deterministic_fallback():
                 "message": "What is my SRN?",
                 "user_id": user.id,
                 "role": user.role,
-                "session_id": "test-session-offline",
-                "intermediate_steps": [],
                 "tool_calls": [],
                 "tool_results": [],
             }
@@ -50,7 +48,7 @@ def test_offline_deterministic_fallback():
 
 def test_llm_api_exception_fallback():
     """Verify that when Anthropic API raises an exception (e.g. timeout, rate limit), fallback handles it cleanly."""
-    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant-api03-validlookingkeyforunitmocking"}):
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant-api03-validlookingkeyforunitmocking", "NVIDIA_API_KEY": ""}):
         with patch("anthropic.Anthropic") as mock_anthropic:
             mock_client = MagicMock()
             mock_client.messages.create.side_effect = TimeoutError("Connection to Anthropic timed out after 10.0s")
@@ -64,8 +62,6 @@ def test_llm_api_exception_fallback():
                     "message": "Who is my class teacher?",
                     "user_id": user.id,
                     "role": user.role,
-                    "session_id": "test-session-timeout",
-                    "intermediate_steps": [],
                     "tool_calls": [],
                     "tool_results": [],
                 }
@@ -80,7 +76,7 @@ def test_llm_api_exception_fallback():
 
 def test_llm_tool_use_success():
     """Verify that when Anthropic returns a tool_use block, the agent calls the specified tool."""
-    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant-api03-validlookingkeyforunitmocking"}):
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant-api03-validlookingkeyforunitmocking", "NVIDIA_API_KEY": ""}):
         with patch("anthropic.Anthropic") as mock_anthropic:
             mock_client = MagicMock()
             
@@ -103,8 +99,6 @@ def test_llm_tool_use_success():
                     "message": "When is lunch break?",
                     "user_id": user.id,
                     "role": user.role,
-                    "session_id": "test-session-llm-tool",
-                    "intermediate_steps": [],
                     "tool_calls": [],
                     "tool_results": [],
                 }
@@ -132,13 +126,11 @@ def test_student_isolation_in_tools():
                 "message": "What is my SRN?",
                 "user_id": s1.id,
                 "role": s1.role,
-                "session_id": "test-isolation-1",
-                "intermediate_steps": [],
                 "tool_calls": [],
                 "tool_results": [],
             }
             res1 = run_query_agent(state1, db, s1)
             # Response must reflect s1, not s2
-            assert str(s1.email) in res1["final_response"] or (s1.student_profile and s1.student_profile.student_id in res1["final_response"])
+            assert s1.email in res1["final_response"] or (s1.student_profile and s1.student_profile.student_id in res1["final_response"])
             if s2.student_profile and s2.student_profile.student_id:
                 assert s2.student_profile.student_id not in res1["final_response"]

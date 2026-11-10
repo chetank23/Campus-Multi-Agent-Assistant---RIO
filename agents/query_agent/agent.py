@@ -20,11 +20,30 @@ from agents.tools import QUERY_TOOL_DEFINITIONS, execute_tool
 from agents.common.formatter import sanitize_plain_english
 
 
-def _extract_intent_and_tool_call(message: str, user: User) -> Tuple[str, Dict[str, Any]]:
+def _extract_intent_and_tool_call(
+    message: str,
+    user: User,
+    conversation_history: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[str, Dict[str, Any]]:
     """
     Deterministically extracts the most appropriate tool call from natural language.
     Supports local/offline execution and fallback when no live LLM API key is present.
     """
+    # 1. Multi-turn follow-up resolution
+    if conversation_history:
+        from agents.common.context_resolver import extract_contextual_follow_up
+        follow_up = extract_contextual_follow_up(message, conversation_history, user.role)
+        if follow_up:
+            return follow_up
+
+    # 2. Structured intent catalog evaluation
+    from agents.intent.intent_catalog import match_intent
+    im = match_intent(message, user, conversation_history)
+    if im.is_ambiguous and im.clarification_prompt:
+        return "ambiguous_clarification", {"prompt": im.clarification_prompt}
+    if im.tool_name:
+        return im.tool_name, im.tool_args
+
     msg = message.lower().strip()
 
     # Priority A. Identity & Profile: "who am i", "what is my srn", "my srn"
@@ -329,6 +348,20 @@ def format_grounded_response(
     Renders structured, grounded natural-language responses strictly from tool results.
     Never invents campus facts.
     """
+    if tool_name == "ambiguous_clarification":
+        return tool_args.get("prompt", "Could you please clarify your request?"), ["RIO Intent Clarification"]
+
+    from agents.common.response_formatter import format_grounded_answer
+    ans, ans_sources = format_grounded_answer(
+        tool_name=tool_name,
+        tool_args=tool_args,
+        tool_result=tool_result,
+        user_role=user.role,
+        user_name=user.name or "User",
+    )
+    if ans:
+        return ans, ans_sources
+
     sources: List[str] = []
 
     if "error" in tool_result:
@@ -1070,25 +1103,46 @@ def run_query_agent(
     Selects authorized tools, queries PostgreSQL, and produces grounded responses.
     """
     message = state.get("message", "")
+    conversation_history = state.get("conversation_history") or []
 
-    # 1. Check if ANTHROPIC_API_KEY is configured for LLM tool calling
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    # 1. Check if an active LLM provider (e.g. NVIDIA Nemotron) is available
+    from agents.llm.provider_interface import LLMProviderRegistry
+    provider = LLMProviderRegistry.get_provider()
     tool_name = None
     tool_args: Dict[str, Any] = {}
 
-    if api_key and not api_key.startswith("mock-") and not api_key.startswith("test-"):
+    if provider.is_available():
+        try:
+            llm_result = provider.generate_chat_response(
+                message=message,
+                user=user,
+                db=db,
+                conversation_history=conversation_history,
+            )
+            if llm_result.get("success") and llm_result.get("reply"):
+                return {
+                    "final_response": llm_result["reply"],
+                    "tool_calls": state.get("tool_calls", []) + llm_result.get("tool_calls", []),
+                    "tool_results": state.get("tool_results", []),
+                    "sources": llm_result.get("sources", ["NVIDIA Nemotron", "RIO Grounded Database"]),
+                }
+        except Exception:
+            tool_name = None
+
+    # 2. Check legacy Anthropic key if configured
+    anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if anthropic_api_key and not anthropic_api_key.startswith("mock-") and not anthropic_api_key.startswith("test-"):
         try:
             import anthropic
             client = anthropic.Anthropic(
-                api_key=api_key,
+                api_key=anthropic_api_key,
                 timeout=10.0,
                 max_retries=2,
             )
-
             from anthropic.types import ToolParam
 
             allowed_tools = [
-                t for t in QUERY_TOOL_DEFINITIONS if user.role in t["allowed_roles"]
+                t for t in QUERY_TOOL_DEFINITIONS if user.role in t.get("allowed_roles", [])
             ]
             anthropic_tools: list[ToolParam] = [
                 {
@@ -1105,8 +1159,7 @@ def run_query_agent(
                 system=(
                     f"You are the RIO-MJP Campus Assistant Query Agent. You answer campus questions strictly "
                     f"by invoking available database tools. Caller identity: User ID {user.id}, Role {user.role}. "
-                    f"Never invent campus information. Always call a tool if the user is asking about schedules, "
-                    f"faculty, courses, rooms, or calendar events."
+                    f"Never invent campus information."
                 ),
                 messages=[{"role": "user", "content": message}],
                 tools=anthropic_tools,
@@ -1117,13 +1170,20 @@ def run_query_agent(
                     tool_name = block.name
                     tool_args = block.input
                     break
-
         except Exception:
             tool_name = None
 
     # Fallback / Deterministic extractor
     if not tool_name:
-        tool_name, tool_args = _extract_intent_and_tool_call(message, user)
+        tool_name, tool_args = _extract_intent_and_tool_call(message, user, conversation_history)
+
+    if tool_name == "ambiguous_clarification":
+        return {
+            "final_response": tool_args.get("prompt", "Could you please clarify your request?"),
+            "tool_calls": [],
+            "tool_results": [],
+            "sources": ["RIO Knowledge Engine"],
+        }
 
     # 2. Execute tool against database
     tool_result = execute_tool(
