@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     One-command startup script for RIO-MJP (PostgreSQL, Backend, and Frontend).
 #>
@@ -13,30 +13,39 @@ Write-Host "==========================================================" -Foregro
 Write-Host ""
 
 # 1. Verify / Start PostgreSQL
-Write-Host "[1/3] Checking PostgreSQL database service..." -ForegroundColor Yellow
-$pgService = Get-Service -Name "postgresql-x64-18" -ErrorAction SilentlyContinue
+Write-Host "[1/3] Checking PostgreSQL database service (port 5433)..." -ForegroundColor Yellow
+$pgData = "$ProjectRoot\test_pg_5433"
+$pgCtl = "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe"
 
-if ($null -eq $pgService) {
-    Write-Host "WARNING: Service 'postgresql-x64-18' not found. Checking port 5432 directly..." -ForegroundColor DarkYellow
-} elseif ($pgService.Status -ne "Running") {
-    Write-Host "Starting Windows Service 'postgresql-x64-18'..." -ForegroundColor Yellow
-    try {
-        Start-Service -Name "postgresql-x64-18"
-        Write-Host "PostgreSQL service started successfully." -ForegroundColor Green
-    } catch {
-        Write-Host "Could not start PostgreSQL service automatically (Administrator privileges may be required)." -ForegroundColor Red
-        Write-Host "Please start it manually or run PowerShell as Administrator." -ForegroundColor Red
+$isListening = $false
+try {
+    $tcp = Test-NetConnection -Port 5433 -ComputerName 127.0.0.1 -WarningAction SilentlyContinue -InformationLevel Quiet
+    if ($tcp) { $isListening = $true }
+}
+catch {}
+
+if ($isListening) {
+    Write-Host "PostgreSQL is running and listening on port 5433." -ForegroundColor Green
+}
+else {
+    Write-Host "Starting PostgreSQL cluster on port 5433..." -ForegroundColor Yellow
+    if (Test-Path $pgCtl) {
+        & $pgCtl start -D $pgData -l "$pgData\postgres.log"
+        Start-Sleep -Seconds 2
     }
-} else {
-    Write-Host "PostgreSQL service is running." -ForegroundColor Green
+    else {
+        Start-Process "C:\Program Files\PostgreSQL\18\bin\postgres.exe" -ArgumentList "-D", "`"$pgData`"" -WindowStyle Hidden
+        Start-Sleep -Seconds 2
+    }
 }
 
 # Quick non-destructive connectivity check
 try {
-    & "$ProjectRoot\venv\Scripts\python.exe" -c "from backend.config import engine; from sqlalchemy import text; c = engine.connect(); c.execute(text('SELECT 1')); c.close()" 2>$null
+    & "$ProjectRoot\venv\Scripts\python.exe" -c "import psycopg; conn = psycopg.connect('postgresql://campus_user:@127.0.0.1:5433/campus_ai_test?options=-csearch_path%3Dtest_schema'); cur = conn.cursor(); cur.execute('SELECT 1'); conn.close()" 2>$null
     Write-Host "PostgreSQL database connection verified." -ForegroundColor Green
-} catch {
-    Write-Host "Warning: Could not connect to database. Ensure PostgreSQL is listening on port 5432." -ForegroundColor DarkYellow
+}
+catch {
+    Write-Host "Warning: Could not connect to database on port 5433. Check $pgData\postgres.log." -ForegroundColor DarkYellow
 }
 
 # 2. Launch Backend in a dedicated window
