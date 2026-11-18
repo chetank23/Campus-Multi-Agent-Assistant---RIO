@@ -226,6 +226,7 @@ def get_faculty_profile_data(
     faculties = (
         db.query(Faculty)
         .join(User, Faculty.user_id == User.id)
+        .outerjoin(Department, Faculty.department_id == Department.id)
         .filter(
             or_(
                 User.name.ilike(pattern),
@@ -233,9 +234,11 @@ def get_faculty_profile_data(
                 Faculty.designation.ilike(pattern),
                 Faculty.specialization.ilike(pattern),
                 Faculty.areas_of_interest.ilike(pattern),
+                Department.name.ilike(pattern),
+                Department.department_code.ilike(pattern),
             )
         )
-        .limit(5)
+        .limit(25)
         .all()
     )
 

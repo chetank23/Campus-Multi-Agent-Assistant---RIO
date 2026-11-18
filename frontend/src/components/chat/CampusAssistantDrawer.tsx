@@ -173,6 +173,7 @@ export const CampusAssistantDrawer: React.FC = () => {
         proposal: res.proposal,
         action_type: res.action_type,
         conversation_id: res.conversation_id,
+        user_query: textToSend,
       };
       setHistory((prev) => [...prev, assistantMsg]);
     } catch (err: unknown) {
@@ -278,48 +279,117 @@ export const CampusAssistantDrawer: React.FC = () => {
     return <Database size={11} className="text-emerald-700 shrink-0" />;
   };
 
-  // Quick action links based on content context and role
-  const getContextualLinks = (text: string) => {
-    const t = text.toLowerCase();
+  // Detects whether the user's inquiry was an explicit navigation request
+  const isExplicitNavigationRequest = (query?: string): boolean => {
+    if (!query) return false;
+    const q = query.toLowerCase().trim();
+    const explicitPatterns = [
+      /\b(?:navigate\s+to|take\s+me\s+to|go\s+to|redirect\s+to)\b/i,
+      /\b(?:open|show|view|find)\s+(?:the\s+)?(?:page|portal|screen|dashboard|section|panel|workspace|tab)\b/i,
+      /\b(?:where\s+can\s+i\s+(?:find|access|see)\s+the\s+page)\b/i,
+      /\b(?:direct\s+link|page\s+link|portal\s+link)\b/i,
+      /\b(?:open\s+(?:my\s+)?timetable|open\s+(?:my\s+)?courses|open\s+(?:the\s+)?events|open\s+placements?)\b/i,
+    ];
+    return explicitPatterns.some((pattern) => pattern.test(q));
+  };
+
+  // Actionable navigation links based strictly on explicit navigation intent and authorized role
+  const getRelevantNavigationLinks = (
+    msg: ChatHistoryMessage,
+    role: string
+  ): { label: string; to: string; icon: React.ReactNode }[] => {
+    const isNavAction = msg.action_type === 'NAVIGATE' || msg.intent === 'NAVIGATE';
+    const isExplicit = isExplicitNavigationRequest(msg.user_query);
+
+    // Strictly avoid attaching links unless explicitly requested by user or structured action
+    if (!isNavAction && !isExplicit) {
+      return [];
+    }
+
+    const queryText = (msg.user_query || msg.content).toLowerCase();
     const links: { label: string; to: string; icon: React.ReactNode }[] = [];
 
-    if (t.includes('timetable') || t.includes('schedule') || t.includes('class')) {
-      if (user.role === 'STUDENT') {
+    // 1. Timetable / Schedule
+    if (queryText.includes('timetable') || queryText.includes('schedule') || queryText.includes('class')) {
+      if (role === 'STUDENT') {
         links.push({ label: 'Open Student Timetable', to: '/student/timetable', icon: <Calendar size={12} /> });
-      } else if (user.role === 'FACULTY') {
+      } else if (role === 'FACULTY') {
         links.push({ label: 'Open Faculty Timetable', to: '/faculty/timetable', icon: <Calendar size={12} /> });
-      } else if (user.role === 'ADMIN') {
+      } else if (role === 'ADMIN') {
         links.push({ label: 'Open Timetable Engine', to: '/admin/timetable', icon: <Calendar size={12} /> });
+      } else if (role === 'SUPER_ADMIN') {
+        links.push({ label: 'Curriculum & Structure', to: '/super-admin/curriculum', icon: <Calendar size={12} /> });
       }
     }
 
-    if (t.includes('booking') || t.includes('facility') || t.includes('room') || t.includes('lab')) {
-      if (user.role === 'FACULTY') {
+    // 2. Facilities / Resources / Bookings
+    if (
+      queryText.includes('booking') ||
+      queryText.includes('facility') ||
+      queryText.includes('room') ||
+      queryText.includes('lab') ||
+      queryText.includes('resource')
+    ) {
+      if (role === 'FACULTY') {
         links.push({ label: 'Campus Resources', to: '/faculty/resources', icon: <Building2 size={12} /> });
-      } else if (user.role === 'ADMIN') {
+      } else if (role === 'ADMIN') {
         links.push({ label: 'Manage Resources', to: '/admin/resources', icon: <Building2 size={12} /> });
+      } else if (role === 'SUPER_ADMIN') {
+        links.push({ label: 'Institutional Dashboard', to: '/super-admin', icon: <Building2 size={12} /> });
       }
     }
 
-    if (t.includes('course') && user.role === 'STUDENT') {
-      links.push({ label: 'My Enrolled Courses', to: '/student/courses', icon: <BookOpen size={12} /> });
+    // 3. Courses / Curriculum
+    if (queryText.includes('course') || queryText.includes('curriculum')) {
+      if (role === 'STUDENT') {
+        links.push({ label: 'My Enrolled Courses', to: '/student/courses', icon: <BookOpen size={12} /> });
+      } else if (role === 'ADMIN') {
+        links.push({ label: 'Course Directory', to: '/admin/courses', icon: <BookOpen size={12} /> });
+      } else if (role === 'SUPER_ADMIN') {
+        links.push({ label: 'Curriculum Versions', to: '/super-admin/curriculum', icon: <BookOpen size={12} /> });
+      }
     }
 
-    if (t.includes('event') || t.includes('club') || t.includes('activity') || t.includes('workshop')) {
-      if (user.role === 'STUDENT') {
+    // 4. Events & Clubs
+    if (
+      queryText.includes('event') ||
+      queryText.includes('club') ||
+      queryText.includes('activity') ||
+      queryText.includes('workshop')
+    ) {
+      if (role === 'STUDENT') {
         links.push({ label: 'Campus Events Dashboard', to: '/student/events', icon: <Sparkles size={12} /> });
-      } else if (user.role === 'FACULTY') {
+      } else if (role === 'FACULTY') {
         links.push({ label: 'Clubs & Events Management', to: '/faculty/events', icon: <Sparkles size={12} /> });
-      } else if (user.role === 'ADMIN') {
+      } else if (role === 'ADMIN') {
         links.push({ label: 'Events & Club Coordination', to: '/admin/events', icon: <Sparkles size={12} /> });
       }
     }
 
-    if (t.includes('placement') || t.includes('job') || t.includes('internship') || t.includes('drive') || t.includes('cdc') || t.includes('hiring')) {
-      if (user.role === 'STUDENT') {
+    // 5. Placements
+    if (
+      queryText.includes('placement') ||
+      queryText.includes('job') ||
+      queryText.includes('internship') ||
+      queryText.includes('drive') ||
+      queryText.includes('cdc') ||
+      queryText.includes('hiring')
+    ) {
+      if (role === 'STUDENT') {
         links.push({ label: 'Campus Placements Portal', to: '/student/placements', icon: <Briefcase size={12} /> });
-      } else if (user.role === 'ADMIN') {
+      } else if (role === 'ADMIN') {
         links.push({ label: 'CDC Placements Workspace', to: '/admin/placements', icon: <Briefcase size={12} /> });
+      }
+    }
+
+    // 6. Institutional Audit (Super Admin)
+    if (role === 'SUPER_ADMIN' && (queryText.includes('audit') || queryText.includes('regulation') || queryText.includes('cohort'))) {
+      if (queryText.includes('audit')) {
+        links.push({ label: 'Institutional Audit History', to: '/super-admin/audit', icon: <Database size={12} /> });
+      } else if (queryText.includes('regulation')) {
+        links.push({ label: 'Academic Regulations', to: '/super-admin/regulations', icon: <BookOpen size={12} /> });
+      } else if (queryText.includes('cohort')) {
+        links.push({ label: 'Student Cohorts', to: '/super-admin/cohorts', icon: <BookOpen size={12} /> });
       }
     }
 
@@ -497,7 +567,7 @@ export const CampusAssistantDrawer: React.FC = () => {
                 const isUser = msg.sender === 'user';
                 const isErr = isErrorMessage(msg);
                 const timeStr = msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const contextLinks = !isUser ? getContextualLinks(msg.content) : [];
+                const contextLinks = !isUser ? getRelevantNavigationLinks(msg, user.role) : [];
 
                 if (isUser) {
                   return (

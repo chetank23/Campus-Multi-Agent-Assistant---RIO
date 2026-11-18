@@ -78,6 +78,7 @@ export interface ChatHistoryMessage {
   action_type?: string | null;
   error?: string | null;
   conversation_id?: number;
+  user_query?: string;
 }
 
 export interface ConversationItem {

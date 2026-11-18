@@ -983,11 +983,13 @@ QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     # ── ADMIN & SUPER_ADMIN Operational Tools ────────────────────────────
     {
         "name": "search_student_directory",
-        "description": "Searches enrolled students by USN, student name, section, batch, or semester.",
+        "description": "Searches enrolled students by USN, student name, section, batch, semester, or department.",
         "parameters": {
             "type": "object",
             "properties": {
                 "search_query": {"type": "string", "description": "USN (student_id), name, or email"},
+                "department_name": {"type": "string", "description": "Academic department name or code (e.g. 'Computer Science', 'CSE', 'AIDS')"},
+                "department_id": {"type": "integer", "description": "Specific academic department ID"},
                 "section_name": {"type": "string", "description": "Section filter e.g. AIDS-A"},
                 "batch_name": {"type": "string", "description": "Batch filter"},
                 "semester_number": {"type": "integer", "description": "Semester filter"},
@@ -1720,6 +1722,8 @@ def execute_tool(
                 section_name=tool_args.get("section_name"),
                 batch_name=tool_args.get("batch_name"),
                 semester_number=tool_args.get("semester_number"),
+                department_name=tool_args.get("department_name"),
+                department_id=tool_args.get("department_id"),
             )
 
         elif tool_name == "search_faculty_directory":

@@ -37,11 +37,14 @@ def search_student_directory_data(
     section_name: Optional[str] = None,
     batch_name: Optional[str] = None,
     semester_number: Optional[int] = None,
+    department_name: Optional[str] = None,
+    department_id: Optional[int] = None,
     limit: int = 50,
 ) -> Dict[str, Any]:
     """
-    Finds students matching USN (student_id), name, section, batch, or semester.
+    Finds students matching USN (student_id), name, section, batch, semester, or department.
     Admin scoped to authorized department if user has department_id set.
+    Super Admin has institutional, cross-department query access.
     """
     auth_err = _verify_admin_access(user)
     if auth_err:
@@ -52,6 +55,42 @@ def search_student_directory_data(
     # Department scope enforcement if non-superadmin
     if user.role == "ADMIN" and user.department_id:
         query = query.filter(Student.department_id == user.department_id)
+
+    # Caller-specified department ID
+    if department_id is not None:
+        if user.role == "ADMIN" and user.department_id and user.department_id != department_id:
+            return {
+                "error": "Access denied: Administrative scope restricted to assigned department.",
+                "total_count": 0,
+                "students": [],
+            }
+        query = query.filter(Student.department_id == department_id)
+
+    # Caller-specified department name
+    if department_name:
+        dn_clean = department_name.strip()
+        matched_dept = db.query(Department).filter(
+            or_(
+                Department.name.ilike(f"%{dn_clean}%"),
+                Department.department_code.ilike(f"%{dn_clean}%"),
+            )
+        ).first()
+        if not matched_dept:
+            return {
+                "success": True,
+                "total_count": 0,
+                "returned_count": 0,
+                "students": [],
+                "message": f"No department found matching '{department_name}'.",
+                "source": "Student Academic Master Registry",
+            }
+        if user.role == "ADMIN" and user.department_id and user.department_id != matched_dept.id:
+            return {
+                "error": "Access denied: Administrative scope restricted to assigned department.",
+                "total_count": 0,
+                "students": [],
+            }
+        query = query.filter(Student.department_id == matched_dept.id)
 
     if search_query:
         sq = search_query.strip()

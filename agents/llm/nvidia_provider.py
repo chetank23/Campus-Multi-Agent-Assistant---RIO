@@ -76,6 +76,384 @@ def strip_thinking(text: Optional[str]) -> str:
     return cleaned.strip()
 
 
+def is_unusable_response(text: Optional[str]) -> bool:
+    """
+    Evaluates whether the model's text response is empty, whitespace-only,
+    or generic placeholder trace output that lacks actual data synthesis.
+    """
+    if not text or not text.strip():
+        return True
+    t_lower = text.lower().strip()
+    # Check for empty or generic fallback trace
+    if "executed tool" in t_lower and len(text.splitlines()) <= 5:
+        return True
+    if "tool 1 executed successfully" in t_lower:
+        return True
+    if t_lower.startswith("here are the database records matching your inquiry") and "- executed tool" in t_lower:
+        return True
+    return False
+
+
+def synthesize_single_tool_result(
+    tool_name: str,
+    tool_args: Dict[str, Any],
+    tool_result: Any,
+    user: User,
+) -> str:
+    """
+    Deterministically synthesizes a single tool execution result into a natural,
+    database-grounded Markdown response without exposing internal tool names or traces.
+    """
+    if not isinstance(tool_result, dict):
+        if tool_result is None:
+            return "No records were returned by the campus database."
+        return str(tool_result)
+
+    # 1. Check for errors or access restrictions
+    if "error" in tool_result and tool_result["error"]:
+        err_msg = str(tool_result["error"])
+        if "access denied" in err_msg.lower() or "not authorized" in err_msg.lower() or "forbidden" in err_msg.lower():
+            return f"Access Denied: {err_msg}"
+        return f"Unable to retrieve the requested information: {err_msg}"
+
+    # 2. Timetable & Schedule Tools
+    if tool_name in ("get_my_timetable", "get_student_timetable", "get_faculty_timetable", "get_faculty_schedule", "get_section_timetable"):
+        entries = tool_result.get("entries") or tool_result.get("classes") or []
+        if not entries:
+            msg = tool_result.get("message")
+            if msg:
+                return msg
+            day = tool_args.get("day") or "the requested schedule"
+            return f"No scheduled classes were found for {day}."
+
+        lines = [f"### Timetable Schedule ({len(entries)} scheduled classes)\n"]
+        for e in entries[:25]:
+            day = e.get("day", "")
+            st = e.get("start_time", "")
+            et = e.get("end_time", "")
+            time_str = f"{st} - {et}".strip(" -")
+            c_name = e.get("course_name") or e.get("course_title") or e.get("course_code") or "Class"
+            c_code = e.get("course_code", "")
+            code_str = f" ({c_code})" if c_code and c_code != c_name else ""
+            room = e.get("room_number") or e.get("room") or "TBD"
+            fac = e.get("faculty_name") or e.get("instructor")
+            fac_str = f" | Instructor: {fac}" if fac else ""
+            lines.append(f"- **{day} {time_str}**: {c_name}{code_str} in Room **{room}**{fac_str}")
+        if len(entries) > 25:
+            lines.append(f"- ... and {len(entries) - 25} more scheduled classes.")
+        return "\n".join(lines)
+
+    if tool_name == "get_next_class":
+        if tool_result.get("has_class"):
+            c_name = tool_result.get("course_name", "Class")
+            c_code = tool_result.get("course_code", "")
+            st = tool_result.get("start_time", "")
+            et = tool_result.get("end_time", "")
+            room = tool_result.get("room_number", "TBD")
+            fac = tool_result.get("faculty_name")
+            fac_str = f" taught by **{fac}**" if fac else ""
+            return f"Your next scheduled class is **{c_name}** ({c_code}) from **{st}** to **{et}** in **Room {room}**{fac_str}."
+        return tool_result.get("message") or "You have no upcoming classes scheduled for the remainder of today."
+
+    if tool_name == "get_first_class_tomorrow":
+        if tool_result.get("has_class"):
+            c_name = tool_result.get("course_name", "Class")
+            c_code = tool_result.get("course_code", "")
+            st = tool_result.get("start_time", "")
+            room = tool_result.get("room_number", "TBD")
+            return f"Your first class tomorrow is **{c_name}** ({c_code}) starting at **{st}** in **Room {room}**."
+        return tool_result.get("message") or "No classes scheduled for tomorrow."
+
+    if tool_name == "get_class_status":
+        if tool_result.get("has_class"):
+            status = tool_result.get("status", "SCHEDULED")
+            c_name = tool_result.get("course_name", "")
+            c_code = tool_result.get("course_code", "")
+            st = tool_result.get("start_time", "")
+            et = tool_result.get("end_time", "")
+            room = tool_result.get("room_number", "TBD")
+            return f"Current schedule status is **{status}**: **{c_name}** ({c_code}) in **Room {room}** ({st} - {et})."
+        return tool_result.get("message") or "No classes currently in session."
+
+    if tool_name == "get_department_timetable":
+        entries = tool_result.get("entries", [])
+        dept_name = tool_result.get("department_name", "the requested Department")
+        if not entries:
+            return tool_result.get("message") or f"No published timetable entries found for {dept_name}."
+        lines = [f"### Timetable for {dept_name} ({len(entries)} entries)\n"]
+        for e in entries[:25]:
+            day = e.get("day", "")
+            st = e.get("start_time", "")
+            et = e.get("end_time", "")
+            c_name = e.get("course_name", "Course")
+            c_code = e.get("course_code", "")
+            room = e.get("room_number", "TBD")
+            sec = e.get("section_name", "")
+            sec_str = f" | Section: {sec}" if sec else ""
+            lines.append(f"- **{day} {st}-{et}**: {c_name} ({c_code}) in Room **{room}**{sec_str}")
+        if len(entries) > 25:
+            lines.append(f"- ... and {len(entries) - 25} more entries.")
+        return "\n".join(lines)
+
+    if tool_name == "get_published_timetable_status":
+        if tool_result.get("has_published_timetable") is False:
+            return tool_result.get("message") or "No published timetable is currently active for this semester."
+
+        active_pub = tool_result.get("active_published_version")
+        lines: List[str] = []
+        if active_pub:
+            v_num = active_pub.get("version_number", 1)
+            acad_yr = active_pub.get("academic_year", "Current Year")
+            entries_cnt = active_pub.get("total_entries", 0)
+            lines.append(f"The active published timetable is **Version {v_num}** ({acad_yr}) with **{entries_cnt}** scheduled entries.")
+        elif tool_result.get("has_published_timetable"):
+            v_num = tool_result.get("version_number", 1)
+            acad_yr = tool_result.get("academic_year", "Current Year")
+            entries_cnt = tool_result.get("total_active_entries", 0)
+            lines.append(f"The active published timetable is **Version {v_num}** ({acad_yr}) with **{entries_cnt}** scheduled entries.")
+        else:
+            tot_v = tool_result.get("total_versions", 0)
+            lines.append(f"There are **{tot_v}** timetable version(s) recorded in the database, but none are currently published.")
+
+        depts = (
+            (active_pub and active_pub.get("departments_with_timetables"))
+            or tool_result.get("departments_with_timetables")
+            or []
+        )
+        if depts:
+            lines.append("\nDepartments with currently generated timetables:\n" + "\n".join(f"- **{d}**" for d in depts))
+        elif active_pub and active_pub.get("total_entries", 0) > 0:
+            lines.append("\nTimetable entries have been generated for scheduled academic departments.")
+        else:
+            lines.append("\nNo departments currently have generated timetables.")
+        return "\n".join(lines)
+
+    # 3. People & Directory Tools
+    if tool_name == "search_student_directory":
+        students = tool_result.get("students", [])
+        total = tool_result.get("total_count", len(students))
+        if total == 0 or not students:
+            return tool_result.get("message") or "No registered students found matching your criteria in the campus directory."
+        lines = [f"Found **{total}** registered student(s):\n"]
+        for s in students[:20]:
+            name = s.get("name", "Student")
+            usn = s.get("usn", "N/A")
+            dept = s.get("department", "N/A")
+            sec = s.get("section", "N/A")
+            sem = s.get("semester")
+            sem_str = f", Semester: {sem}" if sem else ""
+            lines.append(f"- **{name}** (USN: `{usn}`) — Department: {dept}, Section: {sec}{sem_str}")
+        if total > 20:
+            lines.append(f"- ... and {total - 20} more student records.")
+        return "\n".join(lines)
+
+    if tool_name in ("search_faculty_directory", "get_faculty_profile", "get_faculty_information"):
+        faculty_list = tool_result.get("faculty") or tool_result.get("results") or []
+        total = tool_result.get("total_count", len(faculty_list))
+        if total == 0 or not faculty_list:
+            return tool_result.get("message") or "No faculty members found matching your query."
+        lines = [f"Found **{total}** faculty member(s):\n"]
+        for f in faculty_list[:20]:
+            name = f.get("name", "Faculty Member")
+            desig = f.get("designation", "Faculty")
+            dept = f.get("department", "Academic Department")
+            spec = f.get("specialization") or f.get("areas_of_interest")
+            spec_str = f", Specialization: {spec}" if spec and spec != "N/A" else ""
+            courses = f.get("assigned_courses") or f.get("courses_taught") or []
+            c_str = f" | Courses: {', '.join(courses[:2])}" if courses else ""
+            lines.append(f"- **{name}** ({desig}) — Department: {dept}{spec_str}{c_str}")
+        if total > 20:
+            lines.append(f"- ... and {total - 20} more faculty members.")
+        return "\n".join(lines)
+
+    # 4. Courses & Curriculum Tools
+    if tool_name in ("search_course_directory", "get_semester_courses", "get_course_details", "get_course_information"):
+        courses = tool_result.get("courses") or tool_result.get("results") or []
+        total = tool_result.get("total_courses") or tool_result.get("total_count") or len(courses)
+        if total == 0 or not courses:
+            return tool_result.get("message") or "No courses found matching the requested criteria."
+        sem = tool_result.get("semester_number")
+        heading = f"Curriculum Courses for Semester {sem}" if sem else "Curriculum Courses"
+        lines = [f"### {heading} ({total} courses)\n"]
+        for c in courses[:25]:
+            code = c.get("course_code", "N/A")
+            title = c.get("course_name") or c.get("course_title") or "Course"
+            credits = c.get("credits")
+            c_type = c.get("course_type")
+            details = []
+            if credits:
+                details.append(f"{credits} Credits")
+            if c_type:
+                details.append(c_type)
+            det_str = f" ({', '.join(details)})" if details else ""
+            lines.append(f"- **{code}**: {title}{det_str}")
+        if total > 25:
+            lines.append(f"- ... and {total - 25} more courses.")
+        return "\n".join(lines)
+
+    # 5. Rooms, Labs & Infrastructure Tools
+    if tool_name in ("get_room_availability", "get_lab_availability"):
+        avail = tool_result.get("available_rooms") or tool_result.get("rooms") or []
+        occ = tool_result.get("occupied_rooms") or []
+        if not avail and not occ:
+            return tool_result.get("message") or "No active room records found for the specified parameters."
+        lines = [f"Found **{len(avail)}** available room(s):\n"]
+        for r in avail[:25]:
+            r_num = r.get("room_number", "Room")
+            bldg = r.get("building", "Main Campus")
+            r_type = r.get("room_type", "Classroom")
+            cap = r.get("capacity")
+            cap_str = f", Capacity: {cap}" if cap else ""
+            lines.append(f"- **Room {r_num}** ({bldg}) — Type: {r_type}{cap_str}")
+        if len(avail) > 25:
+            lines.append(f"- ... and {len(avail) - 25} other available rooms.")
+        if occ:
+            lines.append(f"\nCurrently occupied: **{len(occ)}** room(s).")
+        return "\n".join(lines)
+
+    if tool_name in ("get_building_rooms_and_labs_inventory", "get_infrastructure_inventory", "get_campus_room_inventory"):
+        b_name = tool_result.get("building_name") or tool_result.get("building_code") or "Campus Infrastructure"
+        lines = [f"### Infrastructure Inventory: {b_name}\n"]
+        tot_r = tool_result.get("total_rooms", 0)
+        tot_c = tool_result.get("total_classrooms", 0)
+        tot_l = tool_result.get("total_labs", 0)
+        tot_s = tool_result.get("total_seminar_halls", 0)
+        lines.append(f"- Total Rooms: **{tot_r}** (Classrooms: {tot_c}, Labs: {tot_l}, Seminar Halls: {tot_s})")
+        return "\n".join(lines)
+
+    # 6. Bookings & Resources Tools
+    if tool_name in ("get_user_bookings", "get_resource_booking_status"):
+        bookings = tool_result.get("bookings", [])
+        if not bookings:
+            return "No resource bookings were found matching your criteria."
+        lines = [f"Found **{len(bookings)}** resource booking(s):\n"]
+        for b in bookings[:20]:
+            r_name = b.get("resource_name", "Resource")
+            date_str = b.get("date", "")
+            st = b.get("start_time", "")
+            et = b.get("end_time", "")
+            status = b.get("status", "PENDING")
+            purpose = b.get("purpose", "Academic use")
+            req_by = b.get("requester_name")
+            req_str = f" | Requester: {req_by}" if req_by else ""
+            lines.append(f"- **{r_name}** on **{date_str}** ({st} - {et}) — Purpose: {purpose} | Status: **{status}**{req_str}")
+        if len(bookings) > 20:
+            lines.append(f"- ... and {len(bookings) - 20} more bookings.")
+        return "\n".join(lines)
+
+    # 7. Semantic Query Planner
+    if tool_name == "execute_semantic_query":
+        records = tool_result.get("records", [])
+        entity = tool_result.get("entity", "records")
+        if not records:
+            return f"No matching records found in **{entity}**."
+
+        # Check for aggregate result (e.g. single row with count)
+        if len(records) == 1:
+            row = records[0]
+            count_keys = [k for k in row.keys() if "count" in k.lower()]
+            if count_keys:
+                return f"Total count of **{entity}**: **{row[count_keys[0]]}**."
+
+        lines = [f"Query results for **{entity}** ({len(records)} records returned):\n"]
+        for r in records[:15]:
+            parts = [f"**{k}**: {v}" for k, v in r.items() if v is not None and not k.startswith("_")]
+            lines.append(f"- " + ", ".join(parts))
+        if len(records) > 15:
+            lines.append(f"- ... and {len(records) - 15} more records.")
+        return "\n".join(lines)
+
+    # 8. Super Admin & Institutional Governance
+    if tool_name == "get_institutional_overview":
+        return (
+            "### Institutional Governance Overview\n\n"
+            f"- Academic Departments: **{tool_result.get('total_departments', 0)}**\n"
+            f"- Degree Programs: **{tool_result.get('total_programs', 0)}**\n"
+            f"- Total Enrolled Students: **{tool_result.get('total_students', 0)}**\n"
+            f"- Active Faculty: **{tool_result.get('total_faculty', 0)}**\n"
+            f"- Curriculum Courses: **{tool_result.get('total_courses', 0)}**\n"
+            f"- Published Timetable: **{tool_result.get('timetable_status', 'None active')}**"
+        )
+
+    if tool_name == "get_academic_structure_overview":
+        return (
+            "### Campus Academic Structure\n\n"
+            f"- Departments: **{tool_result.get('total_departments', 0)}**\n"
+            f"- Programs: **{tool_result.get('total_programs', 0)}**\n"
+            f"- Active Batches: **{tool_result.get('total_batches', 0)}**\n"
+            f"- Academic Sections: **{tool_result.get('total_sections', 0)}**"
+        )
+
+    # 9. Generic Structured Dict Fallback
+    summary_parts = []
+    for k, v in tool_result.items():
+        if k in ("source", "retrieved_at", "success") or k.startswith("_"):
+            continue
+        if isinstance(v, (str, int, float, bool)):
+            summary_parts.append(f"- **{k.replace('_', ' ').capitalize()}**: {v}")
+        elif isinstance(v, list) and v:
+            summary_parts.append(f"- **{k.replace('_', ' ').capitalize()}**: {len(v)} item(s)")
+
+    if summary_parts:
+        return "### Verified Campus Records\n\n" + "\n".join(summary_parts)
+
+    return "The campus database query completed, but no detailed record fields were returned."
+
+
+def synthesize_tool_results_answer(
+    user: User,
+    user_message: str,
+    executed_tool_records: List[Dict[str, Any]],
+) -> str:
+    """
+    Synthesizes the overall user-facing answer from multiple executed tool records.
+    Provides natural language transitions, highlights verified details,
+    and cleanly distinguishes partial failures without leaking internal tool traces.
+    """
+    if not executed_tool_records:
+        return "I processed your inquiry against the campus database, but no matching records were found."
+
+    # If only one tool was executed, return its synthesized response directly
+    if len(executed_tool_records) == 1:
+        rec = executed_tool_records[0]
+        return synthesize_single_tool_result(
+            tool_name=rec["tool"],
+            tool_args=rec.get("args", {}),
+            tool_result=rec.get("result"),
+            user=user,
+        )
+
+    # Multi-tool execution
+    success_sections: List[str] = []
+    failure_notices: List[str] = []
+
+    for rec in executed_tool_records:
+        t_name = rec["tool"]
+        t_args = rec.get("args", {})
+        t_res = rec.get("result")
+        err = rec.get("error")
+
+        if err or (isinstance(t_res, dict) and t_res.get("error")):
+            failure_notices.append(f"Unable to retrieve records for {t_name.replace('_', ' ')}: {err or t_res.get('error')}")
+        else:
+            section_text = synthesize_single_tool_result(
+                tool_name=t_name,
+                tool_args=t_args,
+                tool_result=t_res,
+                user=user,
+            )
+            success_sections.append(section_text)
+
+    output_parts: List[str] = []
+    if success_sections:
+        output_parts.append("\n\n---\n\n".join(success_sections))
+    if failure_notices:
+        notice_block = "\n".join(f"*Notice: {n}*" for n in failure_notices)
+        output_parts.append(notice_block)
+
+    return "\n\n".join(output_parts) if output_parts else "No records could be retrieved from the campus database."
+
+
 class NvidiaNemotronProvider(BaseLLMProvider):
     """
     NVIDIA Nemotron Provider implementation connecting to NVIDIA NIM API.
@@ -252,6 +630,7 @@ CORE OPERATING MANDATES:
         trace.mark_nvidia_start(self.model)
 
         executed_tool_calls: List[Dict[str, Any]] = []
+        executed_tool_records: List[Dict[str, Any]] = []
         sources: List[str] = ["NVIDIA Nemotron", "RIO Database Grounding"]
 
         max_iterations = 5
@@ -363,6 +742,13 @@ CORE OPERATING MANDATES:
                         )
 
                         executed_tool_calls.append({"tool": tool_name, "args": tool_args})
+                        executed_tool_records.append({
+                            "tool": tool_name,
+                            "args": tool_args,
+                            "result": tool_result,
+                            "records_count": rec_count,
+                            "error": tool_err,
+                        })
                         if isinstance(tool_result, dict) and "source" in tool_result:
                             sources.append(tool_result["source"])
 
@@ -381,16 +767,18 @@ CORE OPERATING MANDATES:
                 final_text = strip_thinking(raw_content)
                 break
 
-            # If final_text is still empty after stripping thinking, provide direct summary
-            if not final_text and executed_tool_calls:
-                final_text = "Here are the database records matching your inquiry:\n\n"
-                for tc in executed_tool_calls:
-                    final_text += f"- Executed tool `{tc['tool']}` successfully.\n"
-
-            if not final_text:
-                final_text = (
-                    "I processed your inquiry against the campus database, but no matching records were found."
-                )
+            # If final_text is empty or generic trace, synthesize from executed tool data
+            if is_unusable_response(final_text):
+                if executed_tool_records:
+                    final_text = synthesize_tool_results_answer(
+                        user=user,
+                        user_message=message,
+                        executed_tool_records=executed_tool_records,
+                    )
+                else:
+                    final_text = (
+                        "I processed your inquiry against the campus database, but no matching records were found."
+                    )
 
             trace.mark_nvidia_received()
             diagnostics_summary = trace.finalize(success=True)
@@ -411,6 +799,29 @@ CORE OPERATING MANDATES:
         except Exception as exc:
             safe_exc_msg = sanitize_log_message(str(exc))
             logger.error("NVIDIA Nemotron API call failed: %s", safe_exc_msg, exc_info=True)
+            if executed_tool_records:
+                logger.info(
+                    "Synthesizing deterministic answer from %d executed tools despite LLM error",
+                    len(executed_tool_records),
+                )
+                final_text = synthesize_tool_results_answer(
+                    user=user,
+                    user_message=message,
+                    executed_tool_records=executed_tool_records,
+                )
+                diagnostics_summary = trace.finalize(success=True)
+                return {
+                    "reply": final_text,
+                    "intent": "OPEN_ENDED_LLM_QUERY",
+                    "selected_agent": "nvidia_nemotron",
+                    "tool_calls": executed_tool_calls,
+                    "sources": list(dict.fromkeys(sources)),
+                    "proposal": None,
+                    "action_type": None,
+                    "success": True,
+                    "error": None,
+                    "diagnostics": diagnostics_summary,
+                }
             diagnostics_summary = trace.finalize(success=False, error=safe_exc_msg)
             return {
                 "reply": "",

@@ -422,6 +422,15 @@ def get_published_timetable_status_data(
         version_list = []
         for v in versions:
             entries_count = db.query(TimetableEntry).filter(TimetableEntry.version_id == v.id).count()
+            dept_rows = (
+                db.query(Department.name, func.count(TimetableEntry.id))
+                .join(TimetableEntry, TimetableEntry.department_id == Department.id)
+                .filter(TimetableEntry.version_id == v.id)
+                .group_by(Department.name)
+                .order_by(Department.name.asc())
+                .all()
+            )
+            depts_with_tt = [r[0] for r in dept_rows]
             version_list.append({
                 "version_id": v.id,
                 "version_number": v.version_number,
@@ -431,12 +440,15 @@ def get_published_timetable_status_data(
                 "created_at": v.created_at.strftime("%Y-%m-%d %H:%M") if v.created_at else None,
                 "published_at": v.published_at.strftime("%Y-%m-%d %H:%M") if v.published_at else None,
                 "total_entries": entries_count,
+                "departments_with_timetables": depts_with_tt,
             })
         active_pub = next((v for v in version_list if v["status"] == "PUBLISHED"), None)
+        active_depts = active_pub["departments_with_timetables"] if active_pub else []
         return {
             "role": user.role,
             "is_admin": True,
             "active_published_version": active_pub,
+            "departments_with_timetables": active_depts,
             "total_versions": len(version_list),
             "versions": version_list,
         }
@@ -452,10 +464,20 @@ def get_published_timetable_status_data(
             return {
                 "role": user.role,
                 "has_published_timetable": False,
+                "departments_with_timetables": [],
                 "message": "No published timetable is currently active for this semester.",
             }
 
         entries_count = db.query(TimetableEntry).filter(TimetableEntry.version_id == pub_v.id).count()
+        dept_rows = (
+            db.query(Department.name, func.count(TimetableEntry.id))
+            .join(TimetableEntry, TimetableEntry.department_id == Department.id)
+            .filter(TimetableEntry.version_id == pub_v.id)
+            .group_by(Department.name)
+            .order_by(Department.name.asc())
+            .all()
+        )
+        depts_with_tt = [r[0] for r in dept_rows]
         return {
             "role": user.role,
             "has_published_timetable": True,
@@ -464,6 +486,7 @@ def get_published_timetable_status_data(
             "published_at": pub_v.published_at.strftime("%Y-%m-%d") if pub_v.published_at else None,
             "status": "PUBLISHED",
             "total_active_entries": entries_count,
+            "departments_with_timetables": depts_with_tt,
         }
 
 
@@ -653,22 +676,73 @@ def get_semester_courses_data(
     semester_number: int = 7,
 ) -> Dict[str, Any]:
     """
-    Retrieves all curriculum courses for a semester.
+    Retrieves curriculum courses assigned to a specific semester.
+    Enforces department scoping for authorized roles.
     """
-    from backend.models.courses import Course
+    from backend.models.academic import Semester, Section
+    from backend.models.courses import Course, CourseAssignment, ElectiveGroup, ElectiveGroupCourse
 
-    courses = db.query(Course).all()
+    try:
+        sem_num = int(semester_number)
+    except (ValueError, TypeError):
+        sem_num = 7
+
+    # 1. Section course assignments for this semester
+    sec_q = (
+        db.query(CourseAssignment.course_id)
+        .join(Section, CourseAssignment.section_id == Section.id)
+        .join(Semester, Section.semester_id == Semester.id)
+        .filter(Semester.semester_number == sem_num)
+        .distinct()
+        .all()
+    )
+    # 2. Timetable entries for this semester
+    tt_q = (
+        db.query(TimetableEntry.course_id)
+        .join(Semester, TimetableEntry.semester_id == Semester.id)
+        .filter(Semester.semester_number == sem_num)
+        .distinct()
+        .all()
+    )
+    # 3. Elective groups for this semester
+    eg_q = (
+        db.query(ElectiveGroupCourse.course_id)
+        .join(ElectiveGroup, ElectiveGroupCourse.group_id == ElectiveGroup.id)
+        .join(Semester, ElectiveGroup.semester_id == Semester.id)
+        .filter(Semester.semester_number == sem_num)
+        .distinct()
+        .all()
+    )
+
+    matched_ids = {r[0] for r in sec_q + tt_q + eg_q if r[0]}
+
+    query = db.query(Course)
+    if matched_ids:
+        query = query.filter(Course.id.in_(matched_ids))
+    else:
+        # Fallback to course code containing semester number if relations not populated
+        query = query.filter(Course.course_code.ilike(f"%{sem_num}%"))
+
+    # Department scope restriction if non-superadmin
+    if user.role in ("ADMIN", "FACULTY") and user.department_id:
+        query = query.filter(Course.department_id == user.department_id)
+
+    courses = query.order_by(Course.course_code.asc()).all()
+
     course_list = []
     for c in courses:
+        dept = c.department.name if c.department else "Academic Department"
         course_list.append({
-            "course_code": c.course_code,
-            "course_title": c.course_name,
+            "course_id": c.id,
+            "course_code": c.course_code or "N/A",
+            "course_title": c.course_name or "Course",
             "course_type": c.course_type or "Core",
             "credits": c.credits or 3,
+            "department": dept,
         })
 
     return {
-        "semester_number": semester_number,
+        "semester_number": sem_num,
         "total_courses": len(course_list),
         "courses": course_list,
     }

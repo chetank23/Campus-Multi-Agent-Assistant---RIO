@@ -185,7 +185,7 @@ def get_user_bookings_data(
     """
     query = db.query(ResourceBooking)
 
-    if user.role != "ADMIN":
+    if user.role not in ("ADMIN", "SUPER_ADMIN"):
         query = query.filter(ResourceBooking.requested_by == user.id)
 
     if status_filter:
@@ -249,7 +249,7 @@ def get_booking_details_data(
         return {"error": f"Booking request #{booking_id} was not found."}
 
     # Privacy guard
-    if user.role != "ADMIN" and booking.requested_by != user.id and booking.status != "APPROVED":
+    if user.role not in ("ADMIN", "SUPER_ADMIN") and booking.requested_by != user.id and booking.status != "APPROVED":
         return {"error": f"Access denied: You do not have permission to view booking #{booking_id}."}
 
     res = db.query(Resource).filter(Resource.id == booking.resource_id).first()
@@ -257,7 +257,7 @@ def get_booking_details_data(
     approver = db.query(User).filter(User.id == booking.approved_by).first() if booking.approved_by else None
 
     # Mask requester email for non-admin viewers who are not the requester
-    can_see_email = (user.role == "ADMIN" or user.id == booking.requested_by)
+    can_see_email = (user.role in ("ADMIN", "SUPER_ADMIN") or user.id == booking.requested_by)
     requester_email = requester.email if (requester and can_see_email) else None
 
     return {
@@ -371,7 +371,7 @@ def execute_approve_booking_data(
     Executes authoritative booking approval through backend.services.resource_booking_service.
     Enforces ADMIN role check, parent resource row lock, conflict revalidation, and persistence verification.
     """
-    if user.role != "ADMIN":
+    if user.role not in ("ADMIN", "SUPER_ADMIN"):
         return {
             "success": False,
             "error": "Access denied: Only university Administrators possess the authority to approve resource bookings.",
@@ -425,7 +425,7 @@ def execute_reject_booking_data(
     Executes authoritative booking rejection through backend.services.resource_booking_service.
     Enforces ADMIN role check, status validation, and persistence verification.
     """
-    if user.role != "ADMIN":
+    if user.role not in ("ADMIN", "SUPER_ADMIN"):
         return {
             "success": False,
             "error": "Access denied: Only university Administrators possess the authority to reject resource bookings.",
@@ -476,7 +476,7 @@ def execute_update_room_data(
     Executes authoritative room metadata updates in space_time inventory.
     Enforces ADMIN role check, attribute validation, audit logging, and persistence verification.
     """
-    if user.role != "ADMIN":
+    if user.role not in ("ADMIN", "SUPER_ADMIN"):
         return {
             "success": False,
             "error": "Access denied: Only university Administrators possess the authority to update classroom or room metadata.",
