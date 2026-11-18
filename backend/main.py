@@ -1,5 +1,6 @@
 import email_validator
 setattr(email_validator, "TEST_ENVIRONMENT", True)
+import logging
 import os
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -44,6 +45,8 @@ from backend.routes import (
     users,
 )
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Campus AI System")
 
 @app.get("/health", tags=["system"])
@@ -53,12 +56,19 @@ def health_check():
 
 @app.exception_handler(IntegrityError)
 async def sqlalchemy_integrity_error_handler(request: Request, exc: IntegrityError):
+    # Keep database/driver details in server-side logs only. Never expose SQL,
+    # constraint names, table names, or submitted values through the API.
+    logger.error(
+        "Database integrity violation on %s %s (%s)",
+        request.method,
+        request.url.path,
+        type(exc).__name__,
+    )
     return JSONResponse(
         status_code=422,
         content={
-            "detail": "Database integrity error: check constraint or foreign key violation.",
-            "error": str(exc.orig) if hasattr(exc, "orig") else str(exc)
-        }
+            "detail": "Database integrity error: check constraint or foreign key violation."
+        },
     )
 
 # Determine CORS allowed origins:
