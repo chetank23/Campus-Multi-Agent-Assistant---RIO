@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from typing_extensions import LiteralString
 import psycopg
 from playwright.sync_api import sync_playwright
 
@@ -21,7 +22,7 @@ SCREENSHOT_DIR = os.path.join(os.path.dirname(__file__), "..", "reports", "scree
 os.makedirs(SCREENSHOT_DIR, exist_ok=True)
 
 
-def check_db(query: str, params: tuple = ()) -> list:
+def check_db(query: LiteralString, params: tuple = ()) -> list:
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
             cur.execute(query, params)
