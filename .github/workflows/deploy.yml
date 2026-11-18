@@ -84,21 +84,21 @@ jobs:
           cat release-dist/deployment-manifest.json
 
       - name: Upload Frontend Production Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-production-build
           path: frontend/dist/
           retention-days: 30
 
       - name: Upload Backend Release Bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-release-bundle
           path: release-dist/rio-backend-release.tar.gz
           retention-days: 30
 
       - name: Upload Deployment Manifest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deployment-manifest
           path: release-dist/deployment-manifest.json
