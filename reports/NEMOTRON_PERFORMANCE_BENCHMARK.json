@@ -1,0 +1,117 @@
+{
+  "benchmark_timestamp": "2026-11-18T09:05:59Z",
+  "total_queries_evaluated": 7,
+  "non_streaming_total_latency": {
+    "p50_ms": 10965.92,
+    "p95_ms": 32053.12,
+    "mean_ms": 15659.12,
+    "min_ms": 6867.84,
+    "max_ms": 32053.12
+  },
+  "streaming_ttft": {
+    "p50_ms": 10485.89,
+    "p95_ms": 37505.63,
+    "mean_ms": 12909.48,
+    "min_ms": 3098.98,
+    "max_ms": 37505.63
+  },
+  "streaming_total_duration": {
+    "p50_ms": 15719.15,
+    "p95_ms": 37505.72,
+    "mean_ms": 18528.48,
+    "min_ms": 4546.92,
+    "max_ms": 37505.72
+  },
+  "detailed_results": [
+    {
+      "id": "Q1",
+      "role": "ADMIN",
+      "query": "Which departments currently have generated timetables?",
+      "tools_called": [
+        "execute_semantic_query",
+        "execute_semantic_query",
+        "execute_semantic_query",
+        "execute_semantic_query",
+        "execute_semantic_query"
+      ],
+      "sync_duration_ms": 20071.74,
+      "stream_total_ms": 37505.72,
+      "ttft_ms": 37505.63,
+      "stream_tokens": 80
+    },
+    {
+      "id": "Q2",
+      "role": "ADMIN",
+      "query": "How many students are registered in the Computer Science department?",
+      "tools_called": [
+        "execute_semantic_query",
+        "search_student_directory",
+        "search_student_directory",
+        "execute_semantic_query",
+        "execute_semantic_query"
+      ],
+      "sync_duration_ms": 10965.92,
+      "stream_total_ms": 15719.15,
+      "ttft_ms": 15719.06,
+      "stream_tokens": 56
+    },
+    {
+      "id": "Q3",
+      "role": "ADMIN",
+      "query": "Which faculty members belong to the department?",
+      "tools_called": [],
+      "sync_duration_ms": 6867.84,
+      "stream_total_ms": 27538.11,
+      "ttft_ms": 12634.03,
+      "stream_tokens": 153
+    },
+    {
+      "id": "Q4",
+      "role": "FACULTY",
+      "query": "What courses are assigned to semester 5?",
+      "tools_called": [
+        "get_semester_courses"
+      ],
+      "sync_duration_ms": 7259.58,
+      "stream_total_ms": 4546.92,
+      "ttft_ms": 3098.98,
+      "stream_tokens": 27
+    },
+    {
+      "id": "Q5",
+      "role": "FACULTY",
+      "query": "Which rooms are available for bookings?",
+      "tools_called": [
+        "get_campus_room_inventory"
+      ],
+      "sync_duration_ms": 24800.66,
+      "stream_total_ms": 10845.11,
+      "ttft_ms": 5734.05,
+      "stream_tokens": 63
+    },
+    {
+      "id": "Q6",
+      "role": "STUDENT",
+      "query": "Show my timetable schedule.",
+      "tools_called": [
+        "get_my_timetable"
+      ],
+      "sync_duration_ms": 32053.12,
+      "stream_total_ms": 27597.6,
+      "ttft_ms": 10485.89,
+      "stream_tokens": 216
+    },
+    {
+      "id": "Q7",
+      "role": "ADMIN",
+      "query": "Which campus resources are currently booked?",
+      "tools_called": [
+        "get_resource_booking_status"
+      ],
+      "sync_duration_ms": 7594.96,
+      "stream_total_ms": 5946.75,
+      "ttft_ms": 5188.75,
+      "stream_tokens": 20
+    }
+  ]
+}

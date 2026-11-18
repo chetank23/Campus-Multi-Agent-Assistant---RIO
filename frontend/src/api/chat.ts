@@ -5,7 +5,7 @@
  * Provides conversation persistence, history listing, session creation, and message exchange.
  */
 
-import { apiClient } from './client';
+import { apiClient, getAccessToken, getApiBaseUrl } from './client';
 
 export interface ChatMessageRequest {
   message: string;
@@ -110,6 +110,25 @@ export interface ConversationDetail {
   messages: ChatMessageDetail[];
 }
 
+export interface StreamStatusData {
+  status: string;
+  message: string;
+}
+
+export interface StreamToolData {
+  tool: string;
+  records_count?: number;
+}
+
+export interface StreamCallbacks {
+  onToken?: (token: string) => void;
+  onStatus?: (status: StreamStatusData) => void;
+  onToolStart?: (data: StreamToolData) => void;
+  onToolDone?: (data: StreamToolData) => void;
+  onDone?: (res: ChatMessageResponse) => void;
+  onError?: (err: string) => void;
+}
+
 /**
  * Sends a message to the authenticated AI Agent Supervisor endpoint.
  */
@@ -125,6 +144,107 @@ export async function sendChatMessage(
   }
   const response = await apiClient.post<ChatMessageResponse>('/agents/chat', payload);
   return response.data;
+}
+
+/**
+ * Streams real-time model tokens, tool execution phases, and completion events via SSE.
+ */
+export async function streamChatMessage(
+  message: string,
+  conversationId: number | undefined,
+  callbacks: StreamCallbacks,
+  signal?: AbortSignal
+): Promise<void> {
+  const baseUrl = getApiBaseUrl();
+  const token = getAccessToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${baseUrl}/agents/chat/stream`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      message: message.trim(),
+      conversation_id: conversationId,
+    }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    let errDetail = errText;
+    try {
+      const errJson = JSON.parse(errText);
+      errDetail = errJson.detail || errText;
+    } catch {
+      // raw string
+    }
+    throw new Error(errDetail || `Server returned status ${response.status}`);
+  }
+
+  if (!response.body) {
+    throw new Error('Streaming response body is unavailable.');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let boundary = buffer.indexOf('\n\n');
+      while (boundary !== -1) {
+        const frame = buffer.slice(0, boundary).trim();
+        buffer = buffer.slice(boundary + 2);
+        boundary = buffer.indexOf('\n\n');
+
+        if (!frame) continue;
+
+        let eventType = 'message';
+        let dataStr = '';
+
+        const lines = frame.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('event:')) {
+            eventType = line.slice(6).trim();
+          } else if (line.startsWith('data:')) {
+            dataStr = line.slice(5).trim();
+          }
+        }
+
+        if (!dataStr) continue;
+
+        try {
+          const parsedData = JSON.parse(dataStr);
+          if (eventType === 'status') {
+            callbacks.onStatus?.(parsedData);
+          } else if (eventType === 'tool_start') {
+            callbacks.onToolStart?.(parsedData);
+          } else if (eventType === 'tool_done') {
+            callbacks.onToolDone?.(parsedData);
+          } else if (eventType === 'token') {
+            callbacks.onToken?.(parsedData.token || '');
+          } else if (eventType === 'done') {
+            callbacks.onDone?.(parsedData as ChatMessageResponse);
+          } else if (eventType === 'error') {
+            callbacks.onError?.(parsedData.error || 'Streaming error occurred.');
+          }
+        } catch {
+          // ignore malformed frame
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 /**

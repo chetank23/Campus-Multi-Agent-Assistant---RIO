@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from typing import Any, Dict, Iterator, List, Optional, Protocol, runtime_checkable
 
 
 @dataclass
@@ -113,6 +113,35 @@ class BaseLLMProvider(abc.ABC):
             "success": False,
             "error": "Not implemented in base provider",
         }
+
+    def stream_chat_response(
+        self,
+        message: str,
+        user: Any,
+        db: Any,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """
+        Streams real-time grounded conversational response as SSE event dictionaries:
+        - {"event": "status", "data": {"status": str, "message": str}}
+        - {"event": "tool_start", "data": {"tool": str}}
+        - {"event": "tool_done", "data": {"tool": str, "records_count": int}}
+        - {"event": "token", "data": {"token": str}}
+        - {"event": "done", "data": Dict[str, Any]}
+        - {"event": "error", "data": {"error": str}}
+        """
+        res = self.generate_chat_response(message, user, db, conversation_history)
+        reply = res.get("reply", "")
+        yield {"event": "status", "data": {"status": "processing", "message": "Analyzing campus query..."}}
+        for tc in res.get("tool_calls", []):
+            t_name = tc.get("tool", "campus_tool")
+            yield {"event": "tool_start", "data": {"tool": t_name}}
+            yield {"event": "tool_done", "data": {"tool": t_name, "records_count": 1}}
+        words = reply.split(" ")
+        for i, w in enumerate(words):
+            chunk = w + (" " if i < len(words) - 1 else "")
+            yield {"event": "token", "data": {"token": chunk}}
+        yield {"event": "done", "data": res}
 
 
 class DeterministicLLMProvider(BaseLLMProvider):

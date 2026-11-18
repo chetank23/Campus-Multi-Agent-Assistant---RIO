@@ -11,9 +11,11 @@ Enforces strict JWT identity verification, role boundaries, and conversation own
 from __future__ import annotations
 
 import datetime
+import json
 import os
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -29,7 +31,7 @@ from agents.state.state import (
     ConversationDetailResponse,
     ConversationItemResponse,
 )
-from agents.supervisor.agent import execute_supervisor
+from agents.supervisor.agent import execute_supervisor, stream_supervisor
 
 router = APIRouter(tags=["AI Agents"])
 
@@ -331,6 +333,144 @@ def chat_with_campus_assistant(
         error=result.get("error"),
         conversation_id=conv.id,
         diagnostics=result.get("diagnostics"),
+    )
+
+
+@router.post(
+    "/agents/chat/stream",
+    summary="Stream query response from RIO Campus Assistant via Server-Sent Events (SSE)",
+)
+@router.post(
+    "/chat/stream",
+    include_in_schema=False,
+)
+def stream_chat_with_campus_assistant(
+    payload: ChatMessageRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Genuine end-to-end SSE streaming response.
+    Streams model-generated tokens incrementally, tool execution status,
+    and completion metadata.
+    """
+    clean_message = payload.message.strip()
+    if not clean_message:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Message cannot be empty or whitespace only.",
+        )
+
+    conv: Optional[ChatConversation] = None
+    if payload.conversation_id:
+        conv = db.query(ChatConversation).filter(ChatConversation.id == payload.conversation_id).first()
+        if not conv:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Conversation #{payload.conversation_id} was not found.",
+            )
+        if conv.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: You do not have permission to post to this conversation.",
+            )
+    else:
+        title_snippet = clean_message[:35].strip()
+        if len(clean_message) > 35:
+            title_snippet += "..."
+        conv = ChatConversation(
+            user_id=current_user.id,
+            role=current_user.role,
+            title=title_snippet or "New Conversation",
+        )
+        db.add(conv)
+        db.flush()
+
+    recent_msgs = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.conversation_id == conv.id)
+        .order_by(ChatMessage.id.desc())
+        .limit(10)
+        .all()
+    )
+    conversation_history = [
+        {
+            "id": m.id,
+            "sender": m.sender,
+            "content": m.content,
+            "intent": m.intent,
+            "tool_calls": m.tool_calls or [],
+            "sources": m.sources or [],
+        }
+        for m in reversed(recent_msgs)
+    ]
+
+    # Save user message immediately so history is consistent
+    user_msg_record = ChatMessage(
+        conversation_id=conv.id,
+        sender="user",
+        content=clean_message,
+    )
+    db.add(user_msg_record)
+    db.commit()
+
+    conv_id = conv.id
+
+    def event_generator():
+        from backend.config import SessionLocal
+        stream_db = SessionLocal()
+        try:
+            for item in stream_supervisor(
+                message=clean_message,
+                user=current_user,
+                db=stream_db,
+                conversation_id=conv_id,
+                conversation_history=conversation_history,
+            ):
+                event_name = item.get("event", "message")
+                data_obj = item.get("data", {})
+
+                # If done event, persist assistant message
+                if event_name == "done":
+                    reply_text = data_obj.get("reply", "")
+                    meta_payload = {}
+                    if data_obj.get("proposal"):
+                        meta_payload["proposal"] = data_obj["proposal"]
+                    if data_obj.get("action_type"):
+                        meta_payload["action_type"] = data_obj["action_type"]
+
+                    asst_msg = ChatMessage(
+                        conversation_id=conv_id,
+                        sender="assistant",
+                        content=reply_text,
+                        intent=data_obj.get("intent"),
+                        tool_calls=data_obj.get("tool_calls", []),
+                        sources=data_obj.get("sources", []),
+                        extra_metadata=meta_payload if meta_payload else None,
+                    )
+                    stream_db.add(asst_msg)
+                    c = stream_db.query(ChatConversation).filter(ChatConversation.id == conv_id).first()
+                    if c:
+                        c.updated_at = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+                    stream_db.commit()
+                    data_obj["conversation_id"] = conv_id
+
+                payload_str = json.dumps(data_obj, default=str)
+                yield f"event: {event_name}\ndata: {payload_str}\n\n"
+        except Exception as exc:
+            err_msg = str(exc)
+            yield f"event: error\ndata: {json.dumps({'error': err_msg})}\n\n"
+        finally:
+            stream_db.close()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

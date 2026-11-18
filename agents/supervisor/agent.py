@@ -12,7 +12,7 @@ import datetime
 import logging
 import os
 import re
-from typing import Any, Dict, List, Literal, Optional, Tuple, cast
+from typing import Any, Dict, Iterator, List, Literal, Optional, Tuple, cast
 
 logger = logging.getLogger(__name__)
 from backend.config import SessionLocal
@@ -692,10 +692,14 @@ def execute_supervisor(
     Otherwise, executes the compiled deterministic LangGraph workflow.
     """
     # 1. Primary Open-Ended LLM Execution when Provider is Available
-    from agents.llm.provider_interface import LLMProviderRegistry
+    from agents.llm.provider_interface import LLMProviderRegistry, DeterministicLLMProvider
     provider = LLMProviderRegistry.get_provider()
 
-    if provider.is_available() and not _is_explicit_proposal_action(message):
+    if (
+        provider.is_available()
+        and not isinstance(provider, DeterministicLLMProvider)
+        and not _is_explicit_proposal_action(message)
+    ):
         try:
             llm_res = provider.generate_chat_response(
                 message=message,
@@ -777,3 +781,60 @@ def execute_supervisor(
             "success": False,
             "error": str(exc),
         }
+
+
+def stream_supervisor(
+    message: str,
+    user: User,
+    db: Session,
+    conversation_id: Optional[int] = None,
+    conversation_history: Optional[List[Dict[str, Any]]] = None,
+) -> Iterator[Dict[str, Any]]:
+    """
+    Streams supervisor responses using either the configured LLM provider or
+    the deterministic graph with incremental SSE event yielding.
+    """
+    from agents.llm.provider_interface import LLMProviderRegistry, DeterministicLLMProvider
+    provider = LLMProviderRegistry.get_provider()
+
+    if (
+        provider.is_available()
+        and not isinstance(provider, DeterministicLLMProvider)
+        and not _is_explicit_proposal_action(message)
+    ):
+        try:
+            yield from provider.stream_chat_response(
+                message=message,
+                user=user,
+                db=db,
+                conversation_history=conversation_history,
+            )
+            return
+        except Exception as llm_exc:
+            exc_clean = sanitize_log_message(str(llm_exc))
+            logger.warning(
+                "Streaming LLM provider raised exception: %s. Falling back to deterministic stream.",
+                exc_clean,
+            )
+
+    # Fallback / proposal confirmation: execute synchronous supervisor and stream tokens
+    res = execute_supervisor(
+        message=message,
+        user=user,
+        db=db,
+        conversation_id=conversation_id,
+        conversation_history=conversation_history,
+    )
+    yield {"event": "status", "data": {"status": "processing", "message": "Evaluating campus query..."}}
+    for tc in res.get("tool_calls", []):
+        t_name = tc.get("tool", "campus_tool")
+        yield {"event": "tool_start", "data": {"tool": t_name}}
+        yield {"event": "tool_done", "data": {"tool": t_name, "records_count": 1}}
+
+    reply = res.get("reply", "")
+    words = reply.split(" ")
+    for i, w in enumerate(words):
+        chunk = w + (" " if i < len(words) - 1 else "")
+        yield {"event": "token", "data": {"token": chunk}}
+
+    yield {"event": "done", "data": res}

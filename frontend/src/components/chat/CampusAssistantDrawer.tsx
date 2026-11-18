@@ -35,10 +35,11 @@ import {
   RefreshCw,
   BookOpen,
   Briefcase,
+  Square,
 } from 'lucide-react';
 import { useAuth } from '@/auth/useAuth';
 import {
-  sendChatMessage,
+  streamChatMessage,
   getConversations,
   getConversation,
   deleteConversation,
@@ -79,6 +80,8 @@ export const CampusAssistantDrawer: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
 
   // Load conversation list when assistant opens or user changes
   const loadConversations = useCallback(async () => {
@@ -148,51 +151,129 @@ export const CampusAssistantDrawer: React.FC = () => {
       conversation_id: activeConversationId ?? undefined,
     };
 
-    setHistory((prev) => [...prev, userMsg]);
+    const assistantMsgId = nextMsgId('assistant');
+    const placeholderAssistantMsg: ChatHistoryMessage = {
+      id: assistantMsgId,
+      sender: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      conversation_id: activeConversationId ?? undefined,
+      user_query: textToSend,
+    };
+
+    setHistory((prev) => [...prev, userMsg, placeholderAssistantMsg]);
     setInputMessage('');
     setIsLoading(true);
+    setStreamingStatus('Connecting to Campus Assistant...');
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    let accumulatedText = '';
 
     try {
-      const res = await sendChatMessage(textToSend, activeConversationId ?? undefined);
-
-      if (res.conversation_id && res.conversation_id !== activeConversationId) {
-        setActiveConversationId(res.conversation_id);
-        const snippet = textToSend.slice(0, 30) + (textToSend.length > 30 ? '...' : '');
-        setActiveTitle(snippet);
-        loadConversations();
-      }
-
-      const assistantMsg: ChatHistoryMessage = {
-        id: nextMsgId('assistant'),
-        sender: 'assistant',
-        content: res.reply,
-        timestamp: new Date(),
-        intent: res.intent,
-        sources: res.sources,
-        error: res.error,
-        proposal: res.proposal,
-        action_type: res.action_type,
-        conversation_id: res.conversation_id,
-        user_query: textToSend,
-      };
-      setHistory((prev) => [...prev, assistantMsg]);
+      await streamChatMessage(
+        textToSend,
+        activeConversationId ?? undefined,
+        {
+          onToken: (token: string) => {
+            accumulatedText += token;
+            setHistory((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMsgId ? { ...msg, content: accumulatedText } : msg
+              )
+            );
+          },
+          onStatus: (st) => {
+            setStreamingStatus(st.message);
+          },
+          onToolStart: (toolData) => {
+            setStreamingStatus(`Querying campus records (${toolData.tool})...`);
+          },
+          onToolDone: (toolData) => {
+            setStreamingStatus(`Processed ${toolData.tool} records.`);
+          },
+          onDone: (res) => {
+            setStreamingStatus(null);
+            if (res.conversation_id && res.conversation_id !== activeConversationId) {
+              setActiveConversationId(res.conversation_id);
+              const snippet = textToSend.slice(0, 30) + (textToSend.length > 30 ? '...' : '');
+              setActiveTitle(snippet);
+              loadConversations();
+            }
+            setHistory((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMsgId
+                  ? {
+                    ...msg,
+                    content: res.reply || accumulatedText,
+                    intent: res.intent,
+                    sources: res.sources,
+                    error: res.error,
+                    proposal: res.proposal,
+                    action_type: res.action_type,
+                    conversation_id: res.conversation_id,
+                  }
+                  : msg
+              )
+            );
+          },
+          onError: (errMsg) => {
+            setStreamingStatus(null);
+            setHistory((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMsgId
+                  ? {
+                    ...msg,
+                    content: accumulatedText ? `${accumulatedText}\n\n*Error: ${errMsg}*` : `Error: ${errMsg}`,
+                    error: errMsg,
+                  }
+                  : msg
+              )
+            );
+          },
+        },
+        controller.signal
+      );
     } catch (err: unknown) {
-      const errorObj = err as { response?: { data?: { detail?: unknown } }; message?: string };
-      const errorDetail = errorObj.response?.data?.detail || errorObj.message || 'Unable to connect to the Assistant service.';
-      const cleanError = typeof errorDetail === 'object'
-        ? JSON.stringify(errorDetail)
-        : String(errorDetail);
+      if (controller.signal.aborted) {
+        setHistory((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId
+              ? {
+                ...msg,
+                content: accumulatedText ? `${accumulatedText}\n\n*(Generation stopped)*` : '*(Generation stopped)*',
+              }
+              : msg
+          )
+        );
+      } else {
+        const errorObj = err as { response?: { data?: { detail?: unknown } }; message?: string };
+        const errorDetail = errorObj.response?.data?.detail || errorObj.message || 'Unable to connect to the Assistant service.';
+        const cleanError = typeof errorDetail === 'object' ? JSON.stringify(errorDetail) : String(errorDetail);
 
-      const errorMsg: ChatHistoryMessage = {
-        id: nextMsgId('err'),
-        sender: 'assistant',
-        content: `Error: ${cleanError}`,
-        timestamp: new Date(),
-        error: cleanError,
-      };
-      setHistory((prev) => [...prev, errorMsg]);
+        setHistory((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId
+              ? {
+                ...msg,
+                content: accumulatedText ? `${accumulatedText}\n\n*Error: ${cleanError}*` : `Error: ${cleanError}`,
+                error: cleanError,
+              }
+              : msg
+          )
+        );
+      }
     } finally {
       setIsLoading(false);
+      setStreamingStatus(null);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleStopStreaming = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
   };
 
@@ -516,11 +597,10 @@ export const CampusAssistantDrawer: React.FC = () => {
                               <div
                                 key={c.id}
                                 onClick={() => switchConversation(c)}
-                                className={`flex items-center justify-between px-2.5 py-2 text-xs rounded-lg cursor-pointer transition-colors ${
-                                  c.id === activeConversationId
-                                    ? 'bg-blue-50 text-blue-700 font-semibold'
-                                    : 'text-slate-700 hover:bg-slate-50'
-                                }`}
+                                className={`flex items-center justify-between px-2.5 py-2 text-xs rounded-lg cursor-pointer transition-colors ${c.id === activeConversationId
+                                  ? 'bg-blue-50 text-blue-700 font-semibold'
+                                  : 'text-slate-700 hover:bg-slate-50'
+                                  }`}
                               >
                                 <span className="truncate flex-1 pr-2">{c.title}</span>
                                 <button
@@ -592,11 +672,10 @@ export const CampusAssistantDrawer: React.FC = () => {
 
                     <div className="flex flex-col items-start max-w-[85%]">
                       <div
-                        className={`text-[13.5px] leading-relaxed px-4 py-3 rounded-2xl shadow-2xs space-y-3 w-full ${
-                          isErr
-                            ? 'bg-rose-50 border border-rose-200 text-rose-900'
-                            : 'bg-white border border-slate-200/90 text-slate-800'
-                        }`}
+                        className={`text-[13.5px] leading-relaxed px-4 py-3 rounded-2xl shadow-2xs space-y-3 w-full ${isErr
+                          ? 'bg-rose-50 border border-rose-200 text-rose-900'
+                          : 'bg-white border border-slate-200/90 text-slate-800'
+                          }`}
                       >
                         {isErr && (
                           <div className="flex items-center gap-1.5 font-bold text-xs text-rose-700">
@@ -727,7 +806,7 @@ export const CampusAssistantDrawer: React.FC = () => {
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '150ms' }} />
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '300ms' }} />
                       </span>
-                      <span>Consulting verified campus records&hellip;</span>
+                      <span>{streamingStatus || 'Consulting verified campus records\u2026'}</span>
                     </div>
                   </div>
                 </div>
@@ -738,6 +817,12 @@ export const CampusAssistantDrawer: React.FC = () => {
 
             {/* Input Bar */}
             <div className="p-4 bg-white border-t border-slate-100 shrink-0">
+              {streamingStatus && (
+                <div className="mb-2 px-1 flex items-center gap-2 text-[11.5px] text-blue-600 font-medium">
+                  <RefreshCw size={11} className="animate-spin" />
+                  <span>{streamingStatus}</span>
+                </div>
+              )}
               <div className="bg-white border border-slate-200/90 rounded-full pl-3.5 pr-1.5 py-1.5 flex items-center gap-2 shadow-2xs focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
                 <button
                   type="button"
@@ -754,7 +839,6 @@ export const CampusAssistantDrawer: React.FC = () => {
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  disabled={isLoading}
                   placeholder="Ask RIO anything about campus operations, schedules, academics, or records..."
                   className="flex-1 min-w-0 text-[13.5px] text-slate-800 placeholder-slate-400 bg-transparent border-0 border-none outline-none ring-0 shadow-none focus:outline-none focus:ring-0 focus:border-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
                   style={{
@@ -764,16 +848,28 @@ export const CampusAssistantDrawer: React.FC = () => {
                     background: 'transparent',
                   }}
                 />
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage()}
-                  disabled={!inputMessage.trim() || isLoading}
-                  className="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center shadow-sm shrink-0 transition-all active:scale-95 cursor-pointer focus:outline-none"
-                  title="Send Message"
-                  aria-label="Send message"
-                >
-                  <Send size={15} className="translate-x-[-0.5px]" />
-                </button>
+                {isLoading ? (
+                  <button
+                    type="button"
+                    onClick={handleStopStreaming}
+                    className="w-9 h-9 rounded-full bg-slate-700 hover:bg-slate-800 text-white flex items-center justify-center shadow-sm shrink-0 transition-all active:scale-95 cursor-pointer focus:outline-none"
+                    title="Stop Generation"
+                    aria-label="Stop generation"
+                  >
+                    <Square size={13} className="fill-current" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSendMessage()}
+                    disabled={!inputMessage.trim()}
+                    className="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center shadow-sm shrink-0 transition-all active:scale-95 cursor-pointer focus:outline-none"
+                    title="Send Message"
+                    aria-label="Send message"
+                  >
+                    <Send size={15} className="translate-x-[-0.5px]" />
+                  </button>
+                )}
               </div>
 
               {showAttachNotice && (

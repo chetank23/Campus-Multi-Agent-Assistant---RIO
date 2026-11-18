@@ -1,5 +1,6 @@
 import email_validator
 setattr(email_validator, "TEST_ENVIRONMENT", True)
+from contextlib import asynccontextmanager
 import logging
 import os
 import uuid
@@ -48,7 +49,25 @@ from backend.routes import (
     users,
 )
 
-app = FastAPI(title="Campus AI System")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Initializing RIO-MJP backend services...")
+    try:
+        from agents.llm.nvidia_provider import NvidiaNemotronProvider
+        NvidiaNemotronProvider.initialize_client()
+    except Exception as exc:
+        logger.warning("NvidiaNemotronProvider initialization skipped: %s", exc)
+    yield
+    logger.info("Shutting down RIO-MJP backend services...")
+    try:
+        from agents.llm.nvidia_provider import NvidiaNemotronProvider
+        NvidiaNemotronProvider.close_client()
+    except Exception as exc:
+        logger.warning("NvidiaNemotronProvider cleanup error: %s", exc)
+
+
+app = FastAPI(title="Campus AI System", lifespan=lifespan)
 
 
 @app.middleware("http")

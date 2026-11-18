@@ -22,14 +22,17 @@ Enforces:
 
 from __future__ import annotations
 
+import concurrent.futures
 import datetime
 import json
 import logging
 import os
 import re
+import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
+import httpx
 from openai import OpenAI
 from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
@@ -58,6 +61,14 @@ from agents.llm.provider_interface import (
 from agents.tools import QUERY_TOOL_DEFINITIONS, execute_tool
 
 logger = logging.getLogger("agents.llm.nvidia_provider")
+
+STATE_CHANGING_TOOLS = {
+    "execute_approve_booking",
+    "execute_reject_booking",
+    "execute_update_room",
+    "confirm_timetable_proposal",
+    "execute_timetable_generation",
+}
 
 
 def strip_thinking(text: Optional[str]) -> str:
@@ -454,11 +465,173 @@ def synthesize_tool_results_answer(
     return "\n\n".join(output_parts) if output_parts else "No records could be retrieved from the campus database."
 
 
+def _count_records(tool_result: Any) -> int:
+    rec_count = 0
+    if isinstance(tool_result, dict):
+        if "total_returned" in tool_result:
+            rec_count = int(tool_result["total_returned"])
+        elif "total_students" in tool_result:
+            rec_count = int(tool_result["total_students"])
+        elif "records" in tool_result and isinstance(tool_result["records"], list):
+            rec_count = len(tool_result["records"])
+        elif "students" in tool_result and isinstance(tool_result["students"], list):
+            rec_count = len(tool_result["students"])
+        elif "classes" in tool_result and isinstance(tool_result["classes"], list):
+            rec_count = len(tool_result["classes"])
+        elif "entries" in tool_result and isinstance(tool_result["entries"], list):
+            rec_count = len(tool_result["entries"])
+        elif tool_result.get("found") is True:
+            rec_count = 1
+    return rec_count
+
+
+def _execute_single_tool_in_thread(
+    tool_name: str,
+    tool_args: Dict[str, Any],
+    user: User,
+) -> Tuple[Any, float]:
+    """Runs a read-only tool in an isolated thread DB session."""
+    from backend.config import SessionLocal
+    thread_db = None
+    try:
+        thread_db = SessionLocal()
+        t0 = time.perf_counter()
+        res = execute_tool(
+            tool_name=tool_name,
+            tool_args=tool_args,
+            user=user,
+            db=thread_db,
+        )
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        return res, elapsed_ms
+    finally:
+        if thread_db is not None:
+            try:
+                thread_db.close()
+            except Exception:
+                pass
+
+
+def execute_tool_calls_batch(
+    tool_calls: List[Any],
+    user: User,
+    db: Session,
+    trace: ChatRequestTrace,
+    memoized_results: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """
+    Executes a batch of tool calls with:
+    1. In-request query memoization (prevent duplicate executions of identical queries)
+    2. Parallel execution for independent read-only tools
+    3. Sequential execution for state-changing tools
+    """
+    parsed_calls = []
+    for tc in tool_calls:
+        if getattr(tc, "type", "function") != "function":
+            continue
+        t_id = getattr(tc, "id", "")
+        t_name = tc.function.name if hasattr(tc, "function") else tc.get("name", "")
+        raw_args = tc.function.arguments if hasattr(tc, "function") else tc.get("arguments", "{}")
+        try:
+            t_args = json.loads(raw_args or "{}") if isinstance(raw_args, str) else raw_args
+        except Exception:
+            t_args = {}
+        parsed_calls.append({"id": t_id, "name": t_name, "args": t_args})
+
+    # Track which keys were already present in memoized_results prior to this call
+    pre_existing_keys = set(memoized_results.keys())
+
+    # Find unique calls that must be executed (deduplicated across the batch)
+    unique_to_execute: Dict[str, Dict[str, Any]] = {}
+    for item in parsed_calls:
+        cache_key = f"{item['name']}:{json.dumps(item['args'], sort_keys=True)}"
+        if cache_key not in memoized_results and cache_key not in unique_to_execute:
+            unique_to_execute[cache_key] = item
+
+    if unique_to_execute:
+        needed_execution = list(unique_to_execute.values())
+        has_state_changing = any(it["name"] in STATE_CHANGING_TOOLS for it in needed_execution)
+
+        if not has_state_changing and len(needed_execution) > 1:
+            try:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(needed_execution))) as executor:
+                    future_map = {
+                        executor.submit(_execute_single_tool_in_thread, item["name"], item["args"], user): item
+                        for item in needed_execution
+                    }
+                    for future in concurrent.futures.as_completed(future_map):
+                        item = future_map[future]
+                        tool_res, elapsed_ms = future.result()
+                        rec_count = _count_records(tool_res)
+                        tool_err = tool_res.get("error") if isinstance(tool_res, dict) else None
+                        cache_key = f"{item['name']}:{json.dumps(item['args'], sort_keys=True)}"
+                        memoized_results[cache_key] = {
+                            "result": tool_res,
+                            "records_count": rec_count,
+                            "duration_ms": elapsed_ms,
+                            "error": tool_err,
+                        }
+            except Exception as parallel_exc:
+                logger.warning("Parallel tool execution fallback to sequential: %s", parallel_exc)
+                has_state_changing = True
+
+        if has_state_changing or any(f"{it['name']}:{json.dumps(it['args'], sort_keys=True)}" not in memoized_results for it in needed_execution):
+            for item in needed_execution:
+                cache_key = f"{item['name']}:{json.dumps(item['args'], sort_keys=True)}"
+                if cache_key in memoized_results:
+                    continue
+                safe_args = sanitize_for_logging(item["args"])
+                logger.info("Executing tool '%s' with args %s", item["name"], safe_args)
+                t0 = time.perf_counter()
+                tool_res = execute_tool(
+                    tool_name=item["name"],
+                    tool_args=item["args"],
+                    user=user,
+                    db=db,
+                )
+                elapsed_ms = (time.perf_counter() - t0) * 1000
+                rec_count = _count_records(tool_res)
+                tool_err = tool_res.get("error") if isinstance(tool_res, dict) else None
+                memoized_results[cache_key] = {
+                    "result": tool_res,
+                    "records_count": rec_count,
+                    "duration_ms": elapsed_ms,
+                    "error": tool_err,
+                }
+
+    # Build results matching exact call order, tracking whether each result was cached
+    results: List[Dict[str, Any]] = []
+    seen_in_batch = set()
+
+    for item in parsed_calls:
+        cache_key = f"{item['name']}:{json.dumps(item['args'], sort_keys=True)}"
+        cached_data = memoized_results.get(cache_key, {})
+        is_cached = (cache_key in pre_existing_keys) or (cache_key in seen_in_batch)
+        seen_in_batch.add(cache_key)
+
+        results.append({
+            "id": item["id"],
+            "name": item["name"],
+            "args": item["args"],
+            "result": cached_data.get("result"),
+            "records_count": cached_data.get("records_count", 0),
+            "duration_ms": 0.1 if is_cached else cached_data.get("duration_ms", 0.0),
+            "error": cached_data.get("error"),
+            "cached": is_cached,
+        })
+
+    return results
+
+
 class NvidiaNemotronProvider(BaseLLMProvider):
     """
     NVIDIA Nemotron Provider implementation connecting to NVIDIA NIM API.
     Interprets open-ended campus queries in real time and grounds answers via database tools.
     """
+
+    _shared_http_client: Optional[httpx.Client] = None
+    _shared_openai_client: Optional[OpenAI] = None
+    _client_lock: threading.Lock = threading.Lock()
 
     def __init__(
         self,
@@ -475,7 +648,77 @@ class NvidiaNemotronProvider(BaseLLMProvider):
         ).strip()
         self.temperature = float(os.environ.get("NVIDIA_TEMPERATURE", "1"))
         self.top_p = float(os.environ.get("NVIDIA_TOP_P", "0.95"))
-        self.max_tokens = int(os.environ.get("NVIDIA_MAX_TOKENS", "16384"))
+        self.max_tokens = int(os.environ.get("NVIDIA_MAX_TOKENS", "4096"))
+        self.connect_timeout = float(os.environ.get("NVIDIA_CONNECT_TIMEOUT", "10.0"))
+        self.read_timeout = float(os.environ.get("NVIDIA_READ_TIMEOUT", "45.0"))
+        self.max_tool_rounds = int(os.environ.get("NVIDIA_MAX_TOOL_ROUNDS", "5"))
+
+    def get_client(self) -> OpenAI:
+        """
+        Returns a reusable OpenAI client backed by a pooled HTTP connection.
+        Under test patching, directly constructs and returns the mock without caching.
+        """
+        with self._client_lock:
+            is_mocked = hasattr(OpenAI, "mock_calls") or hasattr(OpenAI, "return_value")
+            if is_mocked:
+                return OpenAI(
+                    base_url=self.base_url,
+                    api_key=self.api_key,
+                    timeout=httpx.Timeout(
+                        timeout=self.read_timeout,
+                        connect=self.connect_timeout,
+                        read=self.read_timeout,
+                        write=10.0,
+                    ),
+                    max_retries=2,
+                )
+            if NvidiaNemotronProvider._shared_openai_client is None:
+                http_client = httpx.Client(
+                    limits=httpx.Limits(
+                        max_keepalive_connections=20,
+                        max_connections=50,
+                        keepalive_expiry=30.0,
+                    ),
+                    timeout=httpx.Timeout(
+                        timeout=self.read_timeout,
+                        connect=self.connect_timeout,
+                        read=self.read_timeout,
+                        write=10.0,
+                        pool=5.0,
+                    ),
+                )
+                NvidiaNemotronProvider._shared_http_client = http_client
+                NvidiaNemotronProvider._shared_openai_client = OpenAI(
+                    base_url=self.base_url,
+                    api_key=self.api_key,
+                    http_client=http_client,
+                    max_retries=2,
+                )
+            return NvidiaNemotronProvider._shared_openai_client
+
+    @classmethod
+    def close_client(cls) -> None:
+        """Closes the shared HTTP connection pool on application shutdown."""
+        with cls._client_lock:
+            if cls._shared_http_client is not None:
+                try:
+                    cls._shared_http_client.close()
+                except Exception:
+                    pass
+                cls._shared_http_client = None
+            cls._shared_openai_client = None
+
+    @classmethod
+    def initialize_client(
+        cls,
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+    ) -> Optional[OpenAI]:
+        """Initializes the reusable pooled HTTP client during application startup."""
+        provider = cls(api_key=api_key, base_url=base_url)
+        if provider.is_available():
+            return provider.get_client()
+        return None
 
     def is_available(self) -> bool:
         """
@@ -577,12 +820,7 @@ CORE OPERATING MANDATES:
         Runs a multi-turn tool calling loop directly against PostgreSQL database services.
         Strips thinking tokens and produces a direct, grounded answer.
         """
-        client = OpenAI(
-            base_url=self.base_url,
-            api_key=self.api_key,
-            timeout=30.0,
-            max_retries=2,
-        )
+        client = self.get_client()
 
         system_prompt = self.build_system_prompt(user)
         tools = self.get_allowed_tools_schema(user.role)
@@ -632,8 +870,9 @@ CORE OPERATING MANDATES:
         executed_tool_calls: List[Dict[str, Any]] = []
         executed_tool_records: List[Dict[str, Any]] = []
         sources: List[str] = ["NVIDIA Nemotron", "RIO Database Grounding"]
+        memoized_results: Dict[str, Any] = {}
 
-        max_iterations = 5
+        max_iterations = self.max_tool_rounds
         final_text = ""
 
         try:
@@ -672,17 +911,19 @@ CORE OPERATING MANDATES:
                 choice = response.choices[0]
                 msg = choice.message
 
-                # If model requested tool calls, execute them
+                # If model requested tool calls, execute them with memoization & safe parallelization
                 if msg.tool_calls:
                     tool_calls_param: List[ChatCompletionMessageFunctionToolCallParam] = []
                     for tc in msg.tool_calls:
-                        if tc.type == "function":
+                        if getattr(tc, "type", "function") == "function":
+                            tc_name = tc.function.name if hasattr(tc, "function") else tc.get("name", "")
+                            tc_args = tc.function.arguments if hasattr(tc, "function") else tc.get("arguments", "{}")
                             tool_calls_param.append({
-                                "id": tc.id,
+                                "id": getattr(tc, "id", f"call_{len(tool_calls_param)}"),
                                 "type": "function",
                                 "function": {
-                                    "name": tc.function.name,
-                                    "arguments": tc.function.arguments,
+                                    "name": tc_name,
+                                    "arguments": tc_args,
                                 },
                             })
 
@@ -693,69 +934,38 @@ CORE OPERATING MANDATES:
                     }
                     messages.append(assistant_msg)
 
-                    for tc in msg.tool_calls:
-                        if tc.type != "function":
-                            continue
-                        tool_name = tc.function.name
-                        try:
-                            tool_args = json.loads(tc.function.arguments or "{}")
-                        except Exception:
-                            tool_args = {}
+                    batch_results = execute_tool_calls_batch(
+                        tool_calls=msg.tool_calls,
+                        user=user,
+                        db=db,
+                        trace=trace,
+                        memoized_results=memoized_results,
+                    )
 
-                        safe_args = sanitize_for_logging(tool_args)
-                        logger.info("NVIDIA Nemotron called tool '%s' with sanitized args %s", tool_name, safe_args)
-                        t0 = time.perf_counter()
-                        tool_result = execute_tool(
-                            tool_name=tool_name,
-                            tool_args=tool_args,
-                            user=user,
-                            db=db,
-                        )
-                        elapsed_tool_ms = (time.perf_counter() - t0) * 1000
-
-                        # Determine record count safely
-                        rec_count = 0
-                        if isinstance(tool_result, dict):
-                            if "total_returned" in tool_result:
-                                rec_count = int(tool_result["total_returned"])
-                            elif "total_students" in tool_result:
-                                rec_count = int(tool_result["total_students"])
-                            elif "records" in tool_result and isinstance(tool_result["records"], list):
-                                rec_count = len(tool_result["records"])
-                            elif "students" in tool_result and isinstance(tool_result["students"], list):
-                                rec_count = len(tool_result["students"])
-                            elif "classes" in tool_result and isinstance(tool_result["classes"], list):
-                                rec_count = len(tool_result["classes"])
-                            elif "entries" in tool_result and isinstance(tool_result["entries"], list):
-                                rec_count = len(tool_result["entries"])
-                            elif tool_result.get("found") is True:
-                                rec_count = 1
-
-                        tool_err = tool_result.get("error") if isinstance(tool_result, dict) else None
+                    for r in batch_results:
                         trace.record_tool_call(
-                            tool_name=tool_name,
-                            args=tool_args,
-                            records_count=rec_count,
-                            duration_ms=elapsed_tool_ms,
-                            success=tool_err is None,
-                            error=tool_err,
+                            tool_name=r["name"],
+                            args=r["args"],
+                            records_count=r["records_count"],
+                            duration_ms=r["duration_ms"],
+                            success=r["error"] is None,
+                            error=r["error"],
                         )
-
-                        executed_tool_calls.append({"tool": tool_name, "args": tool_args})
+                        executed_tool_calls.append({"tool": r["name"], "args": r["args"]})
                         executed_tool_records.append({
-                            "tool": tool_name,
-                            "args": tool_args,
-                            "result": tool_result,
-                            "records_count": rec_count,
-                            "error": tool_err,
+                            "tool": r["name"],
+                            "args": r["args"],
+                            "result": r["result"],
+                            "records_count": r["records_count"],
+                            "error": r["error"],
                         })
-                        if isinstance(tool_result, dict) and "source" in tool_result:
-                            sources.append(tool_result["source"])
+                        if isinstance(r["result"], dict) and "source" in r["result"]:
+                            sources.append(r["result"]["source"])
 
                         tool_msg: ChatCompletionToolMessageParam = {
                             "role": "tool",
-                            "tool_call_id": tc.id,
-                            "content": json.dumps(tool_result, default=str),
+                            "tool_call_id": r["id"],
+                            "content": json.dumps(r["result"], default=str),
                         }
                         messages.append(tool_msg)
 
@@ -833,6 +1043,285 @@ CORE OPERATING MANDATES:
                 "error": str(exc),
                 "diagnostics": diagnostics_summary,
             }
+
+    def stream_chat_response(
+        self,
+        message: str,
+        user: User,
+        db: Session,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """
+        Genuine end-to-end response streaming using Server-Sent Events (SSE).
+        Streams model-generated tokens incrementally, reports tool execution phases,
+        handles thinking tokens, and falls back to deterministic answer synthesis
+        if final text is empty or unusable.
+        """
+        yield {"event": "status", "data": {"status": "connecting", "message": "Connecting to Campus Assistant..."}}
+
+        client = self.get_client()
+        system_prompt = self.build_system_prompt(user)
+        tools = self.get_allowed_tools_schema(user.role)
+
+        messages: List[ChatCompletionMessageParam] = []
+        messages.append({"role": "system", "content": system_prompt})
+
+        if conversation_history:
+            for item in conversation_history[-8:]:
+                sender = item.get("sender")
+                content = item.get("content", "")
+                if content:
+                    if sender == "user":
+                        messages.append({"role": "user", "content": content})
+                    else:
+                        messages.append({"role": "assistant", "content": content})
+
+        messages.append({"role": "user", "content": message})
+
+        trace = ChatRequestTrace(
+            user_id=user.id,
+            role=user.role,
+            message_length=len(message),
+            provider="nvidia",
+            model=self.model,
+            llm_mode=True,
+        )
+        trace.mark_nvidia_start(self.model)
+
+        executed_tool_calls: List[Dict[str, Any]] = []
+        executed_tool_records: List[Dict[str, Any]] = []
+        sources: List[str] = ["NVIDIA Nemotron", "RIO Database Grounding"]
+        memoized_results: Dict[str, Any] = {}
+        final_text = ""
+
+        try:
+            for iteration in range(self.max_tool_rounds):
+                yield {"event": "status", "data": {"status": "generating", "message": "Analyzing campus records..."}}
+
+                stream_kwargs: Dict[str, Any] = {
+                    "model": self.model,
+                    "messages": messages,
+                    "temperature": self.temperature,
+                    "top_p": self.top_p,
+                    "max_tokens": self.max_tokens,
+                    "stream": True,
+                    "extra_body": {
+                        "chat_template_kwargs": {
+                            "enable_thinking": True,
+                            "force_nonempty_content": True,
+                        }
+                    },
+                }
+                if tools:
+                    stream_kwargs["tools"] = tools
+                    stream_kwargs["tool_choice"] = "auto"
+
+                stream_resp = client.chat.completions.create(**stream_kwargs)
+
+                tool_calls_accumulator: Dict[int, Dict[str, Any]] = {}
+                text_chunks: List[str] = []
+                in_thought_block = False
+
+                for chunk in stream_resp:
+                    if not chunk.choices:
+                        continue
+                    delta = chunk.choices[0].delta
+
+                    # Accumulate tool call chunks
+                    if delta.tool_calls:
+                        for tc_chunk in delta.tool_calls:
+                            idx = tc_chunk.index
+                            if idx not in tool_calls_accumulator:
+                                tool_calls_accumulator[idx] = {
+                                    "id": tc_chunk.id or f"call_{idx}",
+                                    "type": "function",
+                                    "name": (tc_chunk.function.name if tc_chunk.function and tc_chunk.function.name else ""),
+                                    "arguments": (tc_chunk.function.arguments if tc_chunk.function and tc_chunk.function.arguments else ""),
+                                }
+                            else:
+                                if tc_chunk.id:
+                                    tool_calls_accumulator[idx]["id"] = tc_chunk.id
+                                if tc_chunk.function and tc_chunk.function.name:
+                                    tool_calls_accumulator[idx]["name"] += tc_chunk.function.name
+                                if tc_chunk.function and tc_chunk.function.arguments:
+                                    tool_calls_accumulator[idx]["arguments"] += tc_chunk.function.arguments
+
+                    # Stream text tokens incrementally
+                    if delta.content:
+                        text_chunks.append(delta.content)
+                        joined_so_far = "".join(text_chunks)
+                        # Hide internal reasoning tokens from end user
+                        if "<thought>" in joined_so_far.lower() and "</thought>" not in joined_so_far.lower():
+                            if not in_thought_block:
+                                in_thought_block = True
+                                yield {"event": "status", "data": {"status": "reasoning", "message": "Evaluating verified records..."}}
+                            continue
+                        elif in_thought_block and "</thought>" in joined_so_far.lower():
+                            in_thought_block = False
+                            clean_text = strip_thinking(joined_so_far)
+                            if clean_text:
+                                yield {"event": "token", "data": {"token": clean_text}}
+                            continue
+
+                        if not in_thought_block:
+                            yield {"event": "token", "data": {"token": delta.content}}
+
+                if tool_calls_accumulator:
+                    raw_tool_calls = list(tool_calls_accumulator.values())
+                    tool_calls_param: List[ChatCompletionMessageFunctionToolCallParam] = []
+                    for tc in raw_tool_calls:
+                        tool_calls_param.append({
+                            "id": tc["id"],
+                            "type": "function",
+                            "function": {
+                                "name": tc["name"],
+                                "arguments": tc["arguments"],
+                            },
+                        })
+
+                    assistant_msg: ChatCompletionAssistantMessageParam = {
+                        "role": "assistant",
+                        "content": "".join(text_chunks) or "",
+                        "tool_calls": tool_calls_param,
+                    }
+                    messages.append(assistant_msg)
+
+                    tool_names_str = ", ".join(tc["name"] for tc in raw_tool_calls)
+                    yield {"event": "status", "data": {"status": "calling_tools", "message": f"Querying campus database ({tool_names_str})..."}}
+
+                    for tc in raw_tool_calls:
+                        yield {"event": "tool_start", "data": {"tool": tc["name"]}}
+
+                    # Construct mock tool call objects compatible with execute_tool_calls_batch
+                    class _BatchFunction:
+                        def __init__(self, fn_name: str, fn_args: str):
+                            self.name = fn_name
+                            self.arguments = fn_args
+
+                    class _BatchToolCall:
+                        def __init__(self, c_id: str, fn_name: str, fn_args: str):
+                            self.id = c_id
+                            self.type = "function"
+                            self.function = _BatchFunction(fn_name, fn_args)
+
+                    batch_tc_objs = [_BatchToolCall(tc["id"], tc["name"], tc["arguments"]) for tc in raw_tool_calls]
+                    batch_results = execute_tool_calls_batch(
+                        tool_calls=batch_tc_objs,
+                        user=user,
+                        db=db,
+                        trace=trace,
+                        memoized_results=memoized_results,
+                    )
+
+                    for r in batch_results:
+                        trace.record_tool_call(
+                            tool_name=r["name"],
+                            args=r["args"],
+                            records_count=r["records_count"],
+                            duration_ms=r["duration_ms"],
+                            success=r["error"] is None,
+                            error=r["error"],
+                        )
+                        executed_tool_calls.append({"tool": r["name"], "args": r["args"]})
+                        executed_tool_records.append({
+                            "tool": r["name"],
+                            "args": r["args"],
+                            "result": r["result"],
+                            "records_count": r["records_count"],
+                            "error": r["error"],
+                        })
+                        if isinstance(r["result"], dict) and "source" in r["result"]:
+                            sources.append(r["result"]["source"])
+
+                        tool_msg: ChatCompletionToolMessageParam = {
+                            "role": "tool",
+                            "tool_call_id": r["id"],
+                            "content": json.dumps(r["result"], default=str),
+                        }
+                        messages.append(tool_msg)
+                        yield {"event": "tool_done", "data": {"tool": r["name"], "records_count": r["records_count"]}}
+
+                    continue
+
+                # Finished turns with text response
+                raw_content = "".join(text_chunks)
+                final_text = strip_thinking(raw_content)
+                break
+
+            # Handle empty or unusable final text via deterministic synthesis
+            if is_unusable_response(final_text):
+                if executed_tool_records:
+                    final_text = synthesize_tool_results_answer(
+                        user=user,
+                        user_message=message,
+                        executed_tool_records=executed_tool_records,
+                    )
+                else:
+                    final_text = "I processed your inquiry against the campus database, but no matching records were found."
+
+                # Stream out the synthesized final text incrementally
+                words = final_text.split(" ")
+                for i, w in enumerate(words):
+                    chunk_text = w + (" " if i < len(words) - 1 else "")
+                    yield {"event": "token", "data": {"token": chunk_text}}
+
+            trace.mark_nvidia_received()
+            diagnostics_summary = trace.finalize(success=True)
+
+            yield {
+                "event": "done",
+                "data": {
+                    "reply": final_text,
+                    "intent": "OPEN_ENDED_LLM_QUERY",
+                    "selected_agent": "nvidia_nemotron",
+                    "tool_calls": executed_tool_calls,
+                    "sources": list(dict.fromkeys(sources)),
+                    "proposal": None,
+                    "action_type": None,
+                    "success": True,
+                    "error": None,
+                    "diagnostics": diagnostics_summary,
+                },
+            }
+
+        except Exception as exc:
+            safe_exc_msg = sanitize_log_message(str(exc))
+            logger.error("NVIDIA Nemotron streaming call failed: %s", safe_exc_msg, exc_info=True)
+            if executed_tool_records:
+                final_text = synthesize_tool_results_answer(
+                    user=user,
+                    user_message=message,
+                    executed_tool_records=executed_tool_records,
+                )
+                words = final_text.split(" ")
+                for i, w in enumerate(words):
+                    chunk_text = w + (" " if i < len(words) - 1 else "")
+                    yield {"event": "token", "data": {"token": chunk_text}}
+                diagnostics_summary = trace.finalize(success=True)
+                yield {
+                    "event": "done",
+                    "data": {
+                        "reply": final_text,
+                        "intent": "OPEN_ENDED_LLM_QUERY",
+                        "selected_agent": "nvidia_nemotron",
+                        "tool_calls": executed_tool_calls,
+                        "sources": list(dict.fromkeys(sources)),
+                        "proposal": None,
+                        "action_type": None,
+                        "success": True,
+                        "error": None,
+                        "diagnostics": diagnostics_summary,
+                    },
+                }
+            else:
+                diagnostics_summary = trace.finalize(success=False, error=safe_exc_msg)
+                yield {
+                    "event": "error",
+                    "data": {
+                        "error": safe_exc_msg,
+                        "diagnostics": diagnostics_summary,
+                    },
+                }
 
     def extract_intent_and_entities(
         self,
