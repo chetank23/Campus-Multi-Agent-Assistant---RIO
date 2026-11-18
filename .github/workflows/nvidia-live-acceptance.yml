@@ -41,7 +41,7 @@ jobs:
       RIO_CHAT_LLM_PROVIDER: "nvidia"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Verify NVIDIA Credentials and Model Configuration
         id: auth_check

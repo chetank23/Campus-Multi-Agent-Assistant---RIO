@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
@@ -114,7 +114,7 @@ jobs:
       url: ${{ steps.deploy_frontend.outputs.deploy_url || 'https://rio-mjp.netlify.app' }}
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || github.event.inputs.target_env == 'production'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download Frontend Production Artifact
         uses: actions/download-artifact@v4
