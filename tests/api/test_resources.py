@@ -31,6 +31,23 @@ from backend.models.workflow import AuditLog
 client = TestClient(app)
 
 
+# ── Date Helpers ──────────────────────────────────────────────────────────────
+
+def get_future_booking_date(days_ahead: int = 7, weekday_only: bool = True) -> str:
+    """
+    Returns a valid future booking date string in YYYY-MM-DD format.
+    Dynamically offsets from today so tests never become stale.
+    Ensures the target falls on a valid working weekday (Mon-Fri) if weekday_only is True.
+    """
+    target = datetime.date.today() + datetime.timedelta(days=days_ahead)
+    if weekday_only:
+        if target.weekday() == 5:  # Saturday -> Monday
+            target += datetime.timedelta(days=2)
+        elif target.weekday() == 6:  # Sunday -> Monday
+            target += datetime.timedelta(days=1)
+    return target.isoformat()
+
+
 # ── Auth Fixtures ─────────────────────────────────────────────────────────────
 
 @pytest.fixture(scope="module")
@@ -156,12 +173,13 @@ def test_safe_deactivation_when_bookings_exist(admin_token, faculty_token):
     res_id = res_resp.json()["id"]
 
     # Create a booking on it
+    booking_date = get_future_booking_date(7)
     book_resp = client.post(
         "/resources/bookings",
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-10",
+            "date": booking_date,
             "start_time": "10:00:00",
             "end_time": "12:00:00",
             "purpose": "Guest Lecture on Distributed Systems",
@@ -191,13 +209,31 @@ def test_booking_creation_and_requester_integrity(faculty_token, admin_token):
     )
     res_id = res_resp.json()["id"]
 
+    booking_date = get_future_booking_date(7)
+
+    # Faculty submits request with a past date -> 422 Unprocessable Entity
+    past_date = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    past_resp = client.post(
+        "/resources/bookings",
+        headers={"Authorization": f"Bearer {faculty_token}"},
+        json={
+            "resource_id": res_id,
+            "date": past_date,
+            "start_time": "14:00:00",
+            "end_time": "16:00:00",
+            "purpose": "Past Meeting",
+        },
+    )
+    assert past_resp.status_code == 422
+    assert "Booking date cannot be in the past" in past_resp.text
+
     # Faculty submits request with an invalid interval (end before start)
     invalid_resp = client.post(
         "/resources/bookings",
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-15",
+            "date": booking_date,
             "start_time": "14:00:00",
             "end_time": "13:00:00",
             "purpose": "Time Travel Meeting",
@@ -211,7 +247,7 @@ def test_booking_creation_and_requester_integrity(faculty_token, admin_token):
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-15",
+            "date": booking_date,
             "start_time": "14:00:00",
             "end_time": "16:00:00",
             "purpose": "Department Faculty Colloquium",
@@ -234,12 +270,13 @@ def test_booking_approval_lifecycle_and_audit(faculty_token, admin_token):
     res_id = res_resp.json()["id"]
 
     # Submit request
+    booking_date = get_future_booking_date(7)
     book_resp = client.post(
         "/resources/bookings",
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-16",
+            "date": booking_date,
             "start_time": "09:00:00",
             "end_time": "11:00:00",
             "purpose": "Microcontroller Workshop",
@@ -304,17 +341,19 @@ def test_booking_rejection_lifecycle(faculty_token, admin_token):
     )
     res_id = res_resp.json()["id"]
 
+    booking_date = get_future_booking_date(7)
     book_resp = client.post(
         "/resources/bookings",
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-17",
+            "date": booking_date,
             "start_time": "11:00:00",
             "end_time": "12:00:00",
             "purpose": "Classroom presentation",
         },
     )
+    assert book_resp.status_code == 201
     booking_id = book_resp.json()["id"]
 
     # Admin rejects with reason
@@ -343,17 +382,19 @@ def test_booking_cancellation_permissions(faculty_token, faculty2_token, admin_t
     res_id = res_resp.json()["id"]
 
     # Faculty 1 books
+    booking_date = get_future_booking_date(7)
     book_resp = client.post(
         "/resources/bookings",
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-18",
+            "date": booking_date,
             "start_time": "10:00:00",
             "end_time": "13:00:00",
             "purpose": "Tech Symposium",
         },
     )
+    assert book_resp.status_code == 201
     booking_id = book_resp.json()["id"]
 
     # Faculty 2 tries to cancel Faculty 1's booking -> 403 Forbidden!
@@ -383,13 +424,15 @@ def test_conflict_detection_approved_booking_overlap(faculty_token, admin_token)
     )
     res_id = res_resp.json()["id"]
 
+    test_date = get_future_booking_date(7)
+
     # 1. First booking: 10:00 to 12:00, approved
     b1 = client.post(
         "/resources/bookings",
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-20",
+            "date": test_date,
             "start_time": "10:00:00",
             "end_time": "12:00:00",
             "purpose": "Deep Learning Practicum",
@@ -407,7 +450,7 @@ def test_conflict_detection_approved_booking_overlap(faculty_token, admin_token)
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-20",
+            "date": test_date,
             "start_time": "11:00:00",
             "end_time": "13:00:00",
             "purpose": "Overlapping request A",
@@ -422,7 +465,7 @@ def test_conflict_detection_approved_booking_overlap(faculty_token, admin_token)
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-20",
+            "date": test_date,
             "start_time": "09:00:00",
             "end_time": "10:30:00",
             "purpose": "Overlapping request B",
@@ -436,7 +479,7 @@ def test_conflict_detection_approved_booking_overlap(faculty_token, admin_token)
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-20",
+            "date": test_date,
             "start_time": "09:00:00",
             "end_time": "13:00:00",
             "purpose": "Overlapping request C",
@@ -450,7 +493,7 @@ def test_conflict_detection_approved_booking_overlap(faculty_token, admin_token)
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-20",
+            "date": test_date,
             "start_time": "10:30:00",
             "end_time": "11:30:00",
             "purpose": "Overlapping request D",
@@ -465,7 +508,7 @@ def test_conflict_detection_approved_booking_overlap(faculty_token, admin_token)
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-20",
+            "date": test_date,
             "start_time": "08:00:00",
             "end_time": "10:00:00",
             "purpose": "Early morning setup (adjacent before)",
@@ -486,7 +529,7 @@ def test_conflict_detection_approved_booking_overlap(faculty_token, admin_token)
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-20",
+            "date": test_date,
             "start_time": "12:00:00",
             "end_time": "14:00:00",
             "purpose": "Afternoon lab (after lock released)",
@@ -509,13 +552,15 @@ def test_competing_pending_requests_approval_race(faculty_token, faculty2_token,
     )
     res_id = res_resp.json()["id"]
 
+    test_date = get_future_booking_date(8)
+
     # Requester 1 submits PENDING -> succeeds (201 Created)
     req1_resp = client.post(
         "/resources/bookings",
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-25",
+            "date": test_date,
             "start_time": "14:00:00",
             "end_time": "16:00:00",
             "purpose": "Optics Experiment",
@@ -530,7 +575,7 @@ def test_competing_pending_requests_approval_race(faculty_token, faculty2_token,
         headers={"Authorization": f"Bearer {faculty2_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-25",
+            "date": test_date,
             "start_time": "15:00:00",
             "end_time": "17:00:00",
             "purpose": "Laser Interferometry",
@@ -553,7 +598,7 @@ def test_competing_pending_requests_approval_race(faculty_token, faculty2_token,
         headers={"Authorization": f"Bearer {faculty2_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-11-25",
+            "date": test_date,
             "start_time": "15:00:00",
             "end_time": "17:00:00",
             "purpose": "Laser Interferometry",
@@ -567,6 +612,10 @@ def test_published_timetable_conflict_detection(admin_token, faculty_token):
     Checks that bookings conflicting with a PUBLISHED timetable room return 409,
     while DRAFT/GENERATED versions do not block bookings.
     """
+    # Generate a dynamic future date and determine its day of week for the timetable slot
+    test_date = get_future_booking_date(9)
+    target_day = datetime.date.fromisoformat(test_date).strftime("%A").upper()
+
     # Create a Room and a linked Resource
     with Session(engine) as db:
         bldg = db.query(Building).first()
@@ -576,7 +625,7 @@ def test_published_timetable_conflict_detection(admin_token, faculty_token):
         db.flush()
 
         slot = TimeSlot(
-            day="WEDNESDAY",
+            day=target_day,
             start_time=datetime.time(10, 0, 0),
             end_time=datetime.time(11, 0, 0),
             slot_type="CLASS",
@@ -616,9 +665,6 @@ def test_published_timetable_conflict_detection(admin_token, faculty_token):
         },
     )
     res_id = res_resp.json()["id"]
-
-    # Wed Nov 18, 2026 is a Wednesday: (2026-11-18 is Wednesday)
-    test_date = "2026-11-18"
 
     # Since version is DRAFT, this should NOT cause a conflict
     avail_resp = client.get(
@@ -689,12 +735,13 @@ def test_alternative_resource_recommendations(admin_token, faculty_token):
     ).json()
 
     # Book and approve Projector Alpha
+    test_date = get_future_booking_date(10)
     b1 = client.post(
         "/resources/bookings",
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": p1["id"],
-            "date": "2026-11-28",
+            "date": test_date,
             "start_time": "10:00:00",
             "end_time": "12:00:00",
             "purpose": "Faculty Meeting",
@@ -704,7 +751,7 @@ def test_alternative_resource_recommendations(admin_token, faculty_token):
 
     # Query availability for Projector Alpha
     avail = client.get(
-        f"/resources/availability?resource_id={p1['id']}&date=2026-11-28&start_time=10:30:00&end_time=11:30:00",
+        f"/resources/availability?resource_id={p1['id']}&date={test_date}&start_time=10:30:00&end_time=11:30:00",
         headers={"Authorization": f"Bearer {faculty_token}"},
     ).json()
 
@@ -728,8 +775,9 @@ def test_route_precedence_and_matching(admin_token):
     assert isinstance(resp_bookings.json(), list)
 
     # 2. /resources/availability must reach availability handler, not 422 path validation error
+    avail_date = get_future_booking_date(11)
     resp_avail = client.get(
-        "/resources/availability?resource_id=1&date=2026-11-20&start_time=10:00:00&end_time=12:00:00",
+        f"/resources/availability?resource_id=1&date={avail_date}&start_time=10:00:00&end_time=12:00:00",
         headers=headers,
     )
     assert resp_avail.status_code == 200
@@ -761,7 +809,7 @@ def test_true_concurrent_competing_booking_approvals(admin_token, faculty_token,
     ).json()
     res_id = res_resp["id"]
 
-    test_date = "2026-12-05"
+    test_date = get_future_booking_date(14)
 
     # 2. Concurrently submit two competing booking requests from two separate threads.
     # Row-level locking on the parent Resource serializes both attempts.
@@ -824,12 +872,13 @@ def test_response_privacy_protection(admin_token, faculty_token, faculty2_token)
     ).json()
     res_id = res_resp["id"]
 
+    test_date = get_future_booking_date(15)
     book_resp = client.post(
         "/resources/bookings",
         headers={"Authorization": f"Bearer {faculty_token}"},
         json={
             "resource_id": res_id,
-            "date": "2026-12-10",
+            "date": test_date,
             "start_time": "11:00:00",
             "end_time": "12:00:00",
             "purpose": "Confidential Research Review",
