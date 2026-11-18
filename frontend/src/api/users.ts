@@ -35,7 +35,7 @@ export interface UserAdminUpdate {
 
 export const usersApi = {
   getAll: async (): Promise<UserAdminItem[]> => {
-    const { data } = await apiClient.get<UserListResponse>('/users', { params: { limit: 1000 } });
+    const { data } = await apiClient.get<UserListResponse>('/users', { params: { limit: 200 } });
     return data.items;
   },
 

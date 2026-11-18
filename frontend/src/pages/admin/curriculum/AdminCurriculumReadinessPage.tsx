@@ -31,7 +31,7 @@ export const AdminCurriculumReadinessPage: React.FC = () => {
   const { data: publishedVersions } = useQuery({
     queryKey: ['curriculum-versions', 'published'],
     queryFn: async () => {
-      const { data } = await apiClient.get<any[]>('/admin/curriculum/versions', {
+      const { data } = await apiClient.get<any[]>('/curriculum/versions', {
         params: { status: 'PUBLISHED' },
       });
       return data;

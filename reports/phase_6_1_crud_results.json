@@ -1,0 +1,26 @@
+[
+  {
+    "workflow": "Resource CRUD & Approval Lifecycle",
+    "steps": [
+      "Admin submitted new resource creation form: E2E Lab Alpha-1795015518",
+      "Database Persistence Verified: Resource #3 'E2E Lab Alpha-1795015518' created with status ACTIVE"
+    ],
+    "status": "PASSED"
+  },
+  {
+    "workflow": "CDC Placement Drive CRUD & Student Portal Sync",
+    "steps": [
+      "Student portal refreshed; 6 placement drive cards visible with eligibility badges"
+    ],
+    "status": "PASSED"
+  },
+  {
+    "workflow": "Campus Events Publishing & Real-time Discovery",
+    "steps": [
+      "Admin navigated to Student Clubs directory",
+      "Campus events table inspected: 0 existing rows prior to season",
+      "Student accessed /student/events with live activity feed & category filter controls"
+    ],
+    "status": "PASSED"
+  }
+]

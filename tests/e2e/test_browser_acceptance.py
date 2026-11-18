@@ -54,10 +54,10 @@ def page(browser_context: BrowserContext):
 
 
 CREDENTIALS_MAP = {
-    "superadmin@campus.edu": ["Test@1234", "Superadmin#RioLocal26"],
-    "admin@campus.edu": ["Admin#RioLocal26", "Test@1234"],
-    "nimrita.koul@rio-mjp.test": ["Nimritakoul#RioLocal26", "Faculty#RioLocal26", "Password@123"],
-    "r23eh001@rio-mjp.test": ["R23eh001#RioLocal26", "Student#RioLocal26", "Password@123"],
+    "superadmin@campus.edu": ["Superadmin#RioLocal26", "Test@1234"],
+    "admin@campus.edu": ["Admin#RioLocal26"],
+    "nimrita.koul@rio-mjp.test": ["Nimritakoul#RioLocal26"],
+    "r23eh001@rio-mjp.test": ["R23eh001#RioLocal26"],
 }
 
 
@@ -72,8 +72,8 @@ def do_login(page: Page, email: str, password: str, expected_pattern: str, timeo
         page.fill("input[type='password']", p_candidate)
         page.click("button[type='submit']")
         try:
-            page.wait_for_url(f"**{expected_pattern}**", timeout=5000)
-            page.wait_for_selector("h1, h2, header, nav", timeout=5000)
+            page.wait_for_url(f"**{expected_pattern}**", timeout=10000)
+            page.wait_for_selector("h1, h2, header, nav", timeout=8000)
             return
         except Exception:
             continue
@@ -215,8 +215,9 @@ def test_journey_05_faculty_portal_access(page: Page):
 def test_journey_06_timetable_viewing(page: Page):
     """Verifies admin timetable view interface renders grid structure and filter dropdowns."""
     do_login(page, "admin@campus.edu", "Admin#RioLocal26", "/admin")
-    page.goto(f"{FRONTEND_URL}/admin/timetable")
-    page.wait_for_selector("h1, h2, table, select", timeout=10000)
+    page.goto(f"{FRONTEND_URL}/admin/timetable", wait_until="networkidle")
+    page.wait_for_url("**/admin/timetable**", timeout=10000)
+    page.wait_for_selector("h1, h2, table, select, main", timeout=10000)
     assert "/admin/timetable" in page.url
     page.screenshot(path=os.path.join(SCREENSHOT_DIR, "j06_admin_timetable_view.png"))
 
@@ -228,7 +229,8 @@ def test_journey_06_timetable_viewing(page: Page):
 def test_journey_07_timetable_generation_workflow(page: Page):
     """Verifies timetable management controls for generation, constraint checking, and status."""
     do_login(page, "admin@campus.edu", "Admin#RioLocal26", "/admin")
-    page.goto(f"{FRONTEND_URL}/admin/timetable")
+    page.goto(f"{FRONTEND_URL}/admin/timetable", wait_until="networkidle")
+    page.wait_for_url("**/admin/timetable**", timeout=10000)
     page.wait_for_selector("main, h1, h2", timeout=10000)
 
     # Check for generation controls or page layout

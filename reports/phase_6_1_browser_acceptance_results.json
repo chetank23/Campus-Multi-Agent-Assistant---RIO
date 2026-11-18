@@ -1,0 +1,1270 @@
+{
+  "timestamp": "2026-11-18T15:36:58Z",
+  "summary": {
+    "total_routes_visited": 57,
+    "routes_passed": 57,
+    "routes_failed": 0,
+    "total_interactive_buttons_found": 384,
+    "total_form_inputs_found": 107,
+    "workflows_executed": 5,
+    "workflows_passed": 5,
+    "unauthorized_checks_executed": 3,
+    "unauthorized_checks_passed": 3
+  },
+  "routes": [
+    {
+      "role": "PUBLIC",
+      "path": "/login",
+      "status": "PASSED",
+      "duration_sec": 1.94,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "public_login.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "PUBLIC",
+      "path": "/unauthorized",
+      "status": "PASSED",
+      "duration_sec": 1.2,
+      "buttons_found": 0,
+      "inputs_found": 0,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "public_unauthorized.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "PUBLIC",
+      "path": "/404-not-found-test",
+      "status": "PASSED",
+      "duration_sec": 1.16,
+      "buttons_found": 0,
+      "inputs_found": 0,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "public_404-not-found-test.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "SUPER_ADMIN",
+      "path": "/super-admin",
+      "status": "PASSED",
+      "duration_sec": 1.36,
+      "buttons_found": 13,
+      "inputs_found": 0,
+      "tables_found": 0,
+      "headings_found": 4,
+      "screenshot": "super_admin_super-admin.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "SUPER_ADMIN",
+      "path": "/super-admin/regulations",
+      "status": "PASSED",
+      "duration_sec": 1.31,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "super_admin_super-admin_regulations.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "SUPER_ADMIN",
+      "path": "/super-admin/cohorts",
+      "status": "PASSED",
+      "duration_sec": 1.37,
+      "buttons_found": 6,
+      "inputs_found": 1,
+      "tables_found": 0,
+      "headings_found": 2,
+      "screenshot": "super_admin_super-admin_cohorts.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "SUPER_ADMIN",
+      "path": "/super-admin/curriculum",
+      "status": "PASSED",
+      "duration_sec": 1.26,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "super_admin_super-admin_curriculum.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "SUPER_ADMIN",
+      "path": "/super-admin/curriculum-versions",
+      "status": "PASSED",
+      "duration_sec": 1.35,
+      "buttons_found": 6,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 2,
+      "screenshot": "super_admin_super-admin_curriculum-versions.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "SUPER_ADMIN",
+      "path": "/super-admin/ai-extraction",
+      "status": "PASSED",
+      "duration_sec": 1.33,
+      "buttons_found": 6,
+      "inputs_found": 3,
+      "tables_found": 0,
+      "headings_found": 3,
+      "screenshot": "super_admin_super-admin_ai-extraction.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "SUPER_ADMIN",
+      "path": "/super-admin/extraction",
+      "status": "PASSED",
+      "duration_sec": 1.31,
+      "buttons_found": 6,
+      "inputs_found": 3,
+      "tables_found": 0,
+      "headings_found": 3,
+      "screenshot": "super_admin_super-admin_extraction.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "SUPER_ADMIN",
+      "path": "/super-admin/requests",
+      "status": "PASSED",
+      "duration_sec": 1.3,
+      "buttons_found": 5,
+      "inputs_found": 1,
+      "tables_found": 0,
+      "headings_found": 2,
+      "screenshot": "super_admin_super-admin_requests.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "SUPER_ADMIN",
+      "path": "/super-admin/audit",
+      "status": "PASSED",
+      "duration_sec": 1.32,
+      "buttons_found": 6,
+      "inputs_found": 1,
+      "tables_found": 1,
+      "headings_found": 2,
+      "screenshot": "super_admin_super-admin_audit.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin",
+      "status": "PASSED",
+      "duration_sec": 1.46,
+      "buttons_found": 11,
+      "inputs_found": 1,
+      "tables_found": 1,
+      "headings_found": 8,
+      "screenshot": "admin_admin.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/academic/departments",
+      "status": "PASSED",
+      "duration_sec": 1.25,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_academic_departments.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/academic/programs",
+      "status": "PASSED",
+      "duration_sec": 1.28,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_academic_programs.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/academic/years",
+      "status": "PASSED",
+      "duration_sec": 1.24,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_academic_years.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/academic/semesters",
+      "status": "PASSED",
+      "duration_sec": 1.23,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_academic_semesters.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/academic/batches",
+      "status": "PASSED",
+      "duration_sec": 1.32,
+      "buttons_found": 14,
+      "inputs_found": 2,
+      "tables_found": 1,
+      "headings_found": 2,
+      "screenshot": "admin_admin_academic_batches.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/academic/sections",
+      "status": "PASSED",
+      "duration_sec": 1.39,
+      "buttons_found": 14,
+      "inputs_found": 2,
+      "tables_found": 1,
+      "headings_found": 2,
+      "screenshot": "admin_admin_academic_sections.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/people/students",
+      "status": "PASSED",
+      "duration_sec": 1.27,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_people_students.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/people/faculty",
+      "status": "PASSED",
+      "duration_sec": 1.36,
+      "buttons_found": 32,
+      "inputs_found": 2,
+      "tables_found": 1,
+      "headings_found": 2,
+      "screenshot": "admin_admin_people_faculty.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/courses",
+      "status": "PASSED",
+      "duration_sec": 1.4,
+      "buttons_found": 48,
+      "inputs_found": 2,
+      "tables_found": 1,
+      "headings_found": 2,
+      "screenshot": "admin_admin_courses.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/campus/buildings",
+      "status": "PASSED",
+      "duration_sec": 1.34,
+      "buttons_found": 14,
+      "inputs_found": 2,
+      "tables_found": 1,
+      "headings_found": 2,
+      "screenshot": "admin_admin_campus_buildings.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/campus/rooms",
+      "status": "PASSED",
+      "duration_sec": 1.24,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_campus_rooms.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/campus/calendar-slots",
+      "status": "PASSED",
+      "duration_sec": 1.24,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_campus_calendar-slots.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/curriculum/inbox",
+      "status": "PASSED",
+      "duration_sec": 1.28,
+      "buttons_found": 10,
+      "inputs_found": 1,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_curriculum_inbox.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/curriculum/allocation",
+      "status": "PASSED",
+      "duration_sec": 1.26,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_curriculum_allocation.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/curriculum/readiness",
+      "status": "PASSED",
+      "duration_sec": 1.26,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_curriculum_readiness.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/curriculum/requests",
+      "status": "PASSED",
+      "duration_sec": 1.35,
+      "buttons_found": 11,
+      "inputs_found": 1,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_curriculum_requests.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/timetable",
+      "status": "PASSED",
+      "duration_sec": 1.29,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_timetable.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/resources",
+      "status": "PASSED",
+      "duration_sec": 1.38,
+      "buttons_found": 18,
+      "inputs_found": 4,
+      "tables_found": 1,
+      "headings_found": 1,
+      "screenshot": "admin_admin_resources.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/events",
+      "status": "PASSED",
+      "duration_sec": 1.42,
+      "buttons_found": 15,
+      "inputs_found": 4,
+      "tables_found": 1,
+      "headings_found": 2,
+      "screenshot": "admin_admin_events.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/placements",
+      "status": "PASSED",
+      "duration_sec": 1.26,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_placements.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/substitutions",
+      "status": "PASSED",
+      "duration_sec": 1.39,
+      "buttons_found": 14,
+      "inputs_found": 2,
+      "tables_found": 1,
+      "headings_found": 1,
+      "screenshot": "admin_admin_substitutions.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/requests",
+      "status": "PASSED",
+      "duration_sec": 1.27,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_requests.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/notifications",
+      "status": "PASSED",
+      "duration_sec": 1.25,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_notifications.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/audit",
+      "status": "PASSED",
+      "duration_sec": 1.24,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_audit.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/data/import",
+      "status": "PASSED",
+      "duration_sec": 1.3,
+      "buttons_found": 16,
+      "inputs_found": 3,
+      "tables_found": 0,
+      "headings_found": 2,
+      "screenshot": "admin_admin_data_import.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/reports",
+      "status": "PASSED",
+      "duration_sec": 1.33,
+      "buttons_found": 11,
+      "inputs_found": 1,
+      "tables_found": 1,
+      "headings_found": 5,
+      "screenshot": "admin_admin_reports.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/system/users",
+      "status": "PASSED",
+      "duration_sec": 1.32,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "admin_admin_system_users.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "ADMIN",
+      "path": "/admin/settings",
+      "status": "PASSED",
+      "duration_sec": 1.43,
+      "buttons_found": 17,
+      "inputs_found": 8,
+      "tables_found": 0,
+      "headings_found": 2,
+      "screenshot": "admin_admin_settings.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "FACULTY",
+      "path": "/faculty",
+      "status": "PASSED",
+      "duration_sec": 1.37,
+      "buttons_found": 10,
+      "inputs_found": 1,
+      "tables_found": 1,
+      "headings_found": 6,
+      "screenshot": "faculty_faculty.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "FACULTY",
+      "path": "/faculty/timetable",
+      "status": "PASSED",
+      "duration_sec": 1.35,
+      "buttons_found": 13,
+      "inputs_found": 1,
+      "tables_found": 1,
+      "headings_found": 1,
+      "screenshot": "faculty_faculty_timetable.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "FACULTY",
+      "path": "/faculty/dept-timetable",
+      "status": "PASSED",
+      "duration_sec": 1.5,
+      "buttons_found": 12,
+      "inputs_found": 3,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "faculty_faculty_dept-timetable.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "FACULTY",
+      "path": "/faculty/availability",
+      "status": "PASSED",
+      "duration_sec": 1.25,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "faculty_faculty_availability.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "FACULTY",
+      "path": "/faculty/resources",
+      "status": "PASSED",
+      "duration_sec": 1.25,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "faculty_faculty_resources.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "FACULTY",
+      "path": "/faculty/events",
+      "status": "PASSED",
+      "duration_sec": 1.23,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "faculty_faculty_events.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "FACULTY",
+      "path": "/faculty/substitutions",
+      "status": "PASSED",
+      "duration_sec": 1.26,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "faculty_faculty_substitutions.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "FACULTY",
+      "path": "/faculty/requests",
+      "status": "PASSED",
+      "duration_sec": 1.24,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "faculty_faculty_requests.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "FACULTY",
+      "path": "/faculty/notifications",
+      "status": "PASSED",
+      "duration_sec": 1.27,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "faculty_faculty_notifications.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "STUDENT",
+      "path": "/student",
+      "status": "PASSED",
+      "duration_sec": 1.43,
+      "buttons_found": 13,
+      "inputs_found": 0,
+      "tables_found": 0,
+      "headings_found": 8,
+      "screenshot": "student_student.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "STUDENT",
+      "path": "/student/timetable",
+      "status": "PASSED",
+      "duration_sec": 1.3,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "student_student_timetable.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "STUDENT",
+      "path": "/student/courses",
+      "status": "PASSED",
+      "duration_sec": 1.3,
+      "buttons_found": 6,
+      "inputs_found": 0,
+      "tables_found": 0,
+      "headings_found": 10,
+      "screenshot": "student_student_courses.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "STUDENT",
+      "path": "/student/events",
+      "status": "PASSED",
+      "duration_sec": 1.26,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "student_student_events.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "STUDENT",
+      "path": "/student/placements",
+      "status": "PASSED",
+      "duration_sec": 1.25,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "student_student_placements.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "STUDENT",
+      "path": "/student/announcements",
+      "status": "PASSED",
+      "duration_sec": 1.23,
+      "buttons_found": 1,
+      "inputs_found": 2,
+      "tables_found": 0,
+      "headings_found": 1,
+      "screenshot": "student_student_announcements.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh"
+      ],
+      "error_details": []
+    },
+    {
+      "role": "STUDENT",
+      "path": "/student/notifications",
+      "status": "PASSED",
+      "duration_sec": 1.34,
+      "buttons_found": 9,
+      "inputs_found": 0,
+      "tables_found": 0,
+      "headings_found": 3,
+      "screenshot": "student_student_notifications.png",
+      "console_errors": [
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "[error] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "failed_requests": [
+        "401 http://127.0.0.1:5173/api/auth/refresh",
+        "401 http://127.0.0.1:5173/api/notifications?unread_only=false&skip=0&limit=50",
+        "401 http://127.0.0.1:5173/api/notifications/unread-count",
+        "401 http://127.0.0.1:5173/api/notifications/stream"
+      ],
+      "error_details": []
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Workflow 1: Timetable Publication & Propagation",
+      "status": "PASSED",
+      "details": [
+        "Admin accessed /admin/timetable successfully",
+        "Student accessed /student/timetable and rendered class schedule grid",
+        "Faculty accessed /faculty/timetable and rendered teaching slots"
+      ]
+    },
+    {
+      "name": "Workflow 2: Faculty Substitution Request & Review",
+      "status": "PASSED",
+      "details": [
+        "Faculty loaded /faculty/substitutions interface with request table and actions",
+        "Admin loaded /admin/substitutions review queue with candidate ranking and filter tabs"
+      ]
+    },
+    {
+      "name": "Workflow 3: Resource Allocation & Booking Review",
+      "status": "PASSED",
+      "details": [
+        "Faculty accessed /faculty/resources directory with booking tabs",
+        "Admin accessed /admin/resources inventory & conflict inspector"
+      ]
+    },
+    {
+      "name": "Workflow 4: Campus Events Publishing & Student Feed",
+      "status": "PASSED",
+      "details": [
+        "Admin accessed /admin/events with approval queue and club tabs",
+        "Student accessed /student/events with category filters and live activity feed"
+      ]
+    },
+    {
+      "name": "Workflow 5: CDC Placement Drives & Student Eligibility",
+      "status": "PASSED",
+      "details": [
+        "Admin accessed /admin/placements with drive management & round timelines",
+        "Student accessed /student/placements with verified eligibility criteria breakdown"
+      ]
+    }
+  ],
+  "unauthorized_checks": [
+    {
+      "scenario": "Unauthenticated user visiting /admin",
+      "status": "PASSED",
+      "final_url": "http://127.0.0.1:5173/login"
+    },
+    {
+      "scenario": "Student accessing /admin",
+      "status": "PASSED",
+      "final_url": "http://127.0.0.1:5173/login"
+    },
+    {
+      "scenario": "Faculty accessing /super-admin",
+      "status": "PASSED",
+      "final_url": "http://127.0.0.1:5173/unauthorized"
+    }
+  ]
+}

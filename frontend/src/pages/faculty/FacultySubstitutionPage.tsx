@@ -481,7 +481,7 @@ export function FacultySubstitutionPage() {
           data={filteredClasses}
           isLoading={classesLoading}
           isError={false}
-          keyExtractor={(c) => c.timetable_entry_id}
+          keyExtractor={(c) => `${c.timetable_entry_id}-${c.date}`}
           emptyMessage="No scheduled classes found in the next 28 days."
         />
       )}
