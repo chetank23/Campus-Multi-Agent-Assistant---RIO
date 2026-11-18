@@ -127,7 +127,7 @@ The design specification mandates exactly 72 local test accounts:
 ### Audit Findings
 1. **SUPER_ADMIN Missing:** Querying `User.role == 'SUPER_ADMIN'` returns 0 records in `test_schema`. The account does not exist in the database.
 2. **ADMIN Active:** `admin@campus.edu` exists and authenticates with `Test@1234`.
-3. **FACULTY Active:** All 10 faculty authenticate with high-entropy unique credentials (`<Prefix>#RioLocal26`).
+3. **FACULTY Active:** All 10 faculty authenticate with high-entropy unique credentials (`<locally generated password — do not store in source control>`).
 4. **STUDENT Active:** All 60 students authenticate with `Password@123` / unique passwords and successfully load the 42 published timetable entries.
 5. **Stale Accounts:** 174 stale student and faculty user records exist from pre-clean runs.
 
