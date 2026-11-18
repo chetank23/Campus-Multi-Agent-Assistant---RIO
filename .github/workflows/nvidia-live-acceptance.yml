@@ -60,7 +60,7 @@ jobs:
             echo "::warning::Configured model '$CONFIGURED_MODEL' does not conform to expected 'nvidia/*' namespace."
           fi
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         if: steps.auth_check.outputs.has_credentials == 'true'
         with:
           python-version: "3.13"
