@@ -41,6 +41,15 @@ export const StudentLayout: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/student/courses?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
 
   // Fetch student identity and timetable academic context
   const { data: me } = useQuery({
@@ -299,15 +308,49 @@ export const StudentLayout: React.FC = () => {
 
               {/* Right Action Icons & Avatar */}
               <div className="flex items-center gap-3 self-end sm:self-auto">
-                {/* Search control button */}
-                <button
-                  type="button"
-                  title="Search timetable or courses"
-                  aria-label="Search"
-                  className="w-10 h-10 rounded-full border border-[#E5ECF5] text-[#71819A] hover:text-[#17243B] hover:bg-[#F1F6FF] flex items-center justify-center transition-colors shadow-xs"
-                >
-                  <Search size={16} />
-                </button>
+                {/* Search control button and expandable input */}
+                {searchOpen ? (
+                  <form onSubmit={handleSearchSubmit} className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="Search courses or schedule…"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="px-3 py-1.5 rounded-full border border-[#4B83D1] text-xs bg-white text-[#17243B] focus:outline-none w-44 sm:w-56 shadow-xs"
+                    />
+                    <button
+                      type="submit"
+                      title="Submit search"
+                      aria-label="Submit search"
+                      className="w-8 h-8 rounded-full bg-[#4B83D1] text-white flex items-center justify-center hover:bg-[#3D71BD] transition-colors shadow-xs"
+                    >
+                      <Search size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Close search"
+                      aria-label="Close search"
+                      onClick={() => {
+                        setSearchOpen(false);
+                        setSearchQuery('');
+                      }}
+                      className="w-8 h-8 rounded-full border border-[#E5ECF5] text-[#71819A] hover:bg-[#F1F6FF] flex items-center justify-center transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setSearchOpen(true)}
+                    title="Search timetable or courses"
+                    aria-label="Search"
+                    className="w-10 h-10 rounded-full border border-[#E5ECF5] text-[#71819A] hover:text-[#17243B] hover:bg-[#F1F6FF] flex items-center justify-center transition-colors shadow-xs cursor-pointer"
+                  >
+                    <Search size={16} />
+                  </button>
+                )}
 
                 {/* Notification Bell Dropdown */}
                 <NotificationBellDropdown

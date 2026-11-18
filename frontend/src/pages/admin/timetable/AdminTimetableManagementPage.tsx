@@ -175,6 +175,11 @@ export const AdminTimetableManagementPage: React.FC = () => {
       toast.success(msg, { duration: 6000 });
       refetchPublished();
       queryClient.invalidateQueries({ queryKey: ['timetable-canonical'] });
+      queryClient.invalidateQueries({ queryKey: ['timetableVersions'] });
+      queryClient.invalidateQueries({ queryKey: ['faculty', 'my-timetable'] });
+      queryClient.invalidateQueries({ queryKey: ['faculty-dept-timetable'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'my-timetable'] });
+      queryClient.invalidateQueries({ queryKey: ['student-courses'] });
       queryClient.invalidateQueries({ queryKey: ['admin-analytics-overview'] });
       queryClient.invalidateQueries({ queryKey: ['admin-dept-progress'] });
     },

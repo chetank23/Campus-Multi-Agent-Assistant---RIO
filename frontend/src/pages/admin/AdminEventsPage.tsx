@@ -160,6 +160,9 @@ export function AdminEventsPage() {
     }) => eventsApi.reviewEvent(id, { action, reason, notes }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['faculty', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-academic-calendar'] });
       setReviewModalEvent(null);
       setReviewNote('');
     },
@@ -170,6 +173,9 @@ export function AdminEventsPage() {
       eventsApi.cancelEvent(id, { reason }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['faculty', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-academic-calendar'] });
       setCancelModalEvent(null);
       setCancelReason('');
     },

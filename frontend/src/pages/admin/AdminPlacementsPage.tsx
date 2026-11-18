@@ -168,6 +168,7 @@ export function AdminPlacementsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-placement-drives'] });
       queryClient.invalidateQueries({ queryKey: ['placement-dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'placement-drives'] });
       toast.success('Placement drive created successfully!');
       setIsCreateModalOpen(false);
       resetForm();
@@ -183,6 +184,7 @@ export function AdminPlacementsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-placement-drives'] });
       queryClient.invalidateQueries({ queryKey: ['placement-dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'placement-drives'] });
       toast.success('Placement drive published to student cohort successfully!');
       closeActionModal();
     },
@@ -198,6 +200,7 @@ export function AdminPlacementsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-placement-drives'] });
       queryClient.invalidateQueries({ queryKey: ['placement-dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'placement-drives'] });
       toast.warning('Placement drive postponed and candidates notified.');
       closeActionModal();
     },
@@ -213,6 +216,7 @@ export function AdminPlacementsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-placement-drives'] });
       queryClient.invalidateQueries({ queryKey: ['placement-dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'placement-drives'] });
       toast.warning('Placement drive cancelled.');
       closeActionModal();
     },
@@ -227,6 +231,7 @@ export function AdminPlacementsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-placement-drives'] });
       queryClient.invalidateQueries({ queryKey: ['placement-dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'placement-drives'] });
       toast.info('Placement drive closed for new registrations.');
     },
     onError: (err) => {

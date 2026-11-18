@@ -54,6 +54,7 @@ import {
   type AlternativeResource,
   type ConflictDetail,
 } from '@/api/resources';
+import { useToast } from '@/context/useToast';
 
 const RESOURCE_TYPES: { label: string; value: ResourceType; icon: React.ElementType }[] = [
   { label: 'Laboratory', value: 'LAB', icon: Microscope },
@@ -65,6 +66,7 @@ const RESOURCE_TYPES: { label: string; value: ResourceType; icon: React.ElementT
 
 export function ResourcesPage() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // Active View Tab
   const [activeTab, setActiveTab] = useState<'inventory' | 'bookings' | 'availability'>('inventory');
@@ -140,7 +142,9 @@ export function ResourcesPage() {
     mutationFn: resourcesApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
+      queryClient.invalidateQueries({ queryKey: ['faculty-resources'] });
       closeResourceModal();
+      toast.success('Resource created successfully.');
     },
     onError: (err: unknown) => {
       if (isAxiosError(err)) {
@@ -156,7 +160,9 @@ export function ResourcesPage() {
       resourcesApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
+      queryClient.invalidateQueries({ queryKey: ['faculty-resources'] });
       closeResourceModal();
+      toast.success('Resource updated successfully.');
     },
     onError: (err: unknown) => {
       if (isAxiosError(err)) {
@@ -171,13 +177,15 @@ export function ResourcesPage() {
     mutationFn: (id: number) => resourcesApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources'] });
+      queryClient.invalidateQueries({ queryKey: ['faculty-resources'] });
       setResourceToDelete(null);
+      toast.success('Resource deleted successfully.');
     },
     onError: (err: unknown) => {
       if (isAxiosError(err)) {
-        alert(err.response?.data?.detail || 'Failed to deactivate or delete resource.');
+        toast.error(err.response?.data?.detail || 'Failed to deactivate or delete resource.');
       } else {
-        alert('Failed to delete resource.');
+        toast.error('Failed to delete resource.');
       }
       setResourceToDelete(null);
     },
@@ -187,6 +195,8 @@ export function ResourcesPage() {
     mutationFn: (id: number) => resourcesApi.approveBooking(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['faculty-bookings'] });
+      toast.success('Booking approved successfully.');
     },
     onError: (err: unknown) => {
       if (isAxiosError(err) && err.response?.status === 409) {
@@ -198,12 +208,12 @@ export function ResourcesPage() {
             alternatives: detail.alternatives || [],
           });
         } else {
-          alert(detail || 'Cannot approve: booking conflict exists.');
+          toast.error(detail || 'Cannot approve: booking conflict exists.');
         }
       } else if (isAxiosError(err)) {
-        alert(err.response?.data?.detail || 'Failed to approve booking.');
+        toast.error(err.response?.data?.detail || 'Failed to approve booking.');
       } else {
-        alert('Failed to approve booking.');
+        toast.error('Failed to approve booking.');
       }
     },
   });
@@ -213,11 +223,13 @@ export function ResourcesPage() {
       resourcesApi.rejectBooking(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['faculty-bookings'] });
       setRejectionModalBooking(null);
       setRejectionReason('');
+      toast.success('Booking rejected.');
     },
     onError: (err: unknown) => {
-      alert(isAxiosError(err) ? err.response?.data?.detail || 'Rejection failed.' : 'Rejection failed.');
+      toast.error(isAxiosError(err) ? err.response?.data?.detail || 'Rejection failed.' : 'Rejection failed.');
     },
   });
 
@@ -226,11 +238,13 @@ export function ResourcesPage() {
       resourcesApi.cancelBooking(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['resources-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['faculty-bookings'] });
       setCancelModalBooking(null);
       setCancelReason('');
+      toast.success('Booking cancelled.');
     },
     onError: (err: unknown) => {
-      alert(isAxiosError(err) ? err.response?.data?.detail || 'Cancellation failed.' : 'Cancellation failed.');
+      toast.error(isAxiosError(err) ? err.response?.data?.detail || 'Cancellation failed.' : 'Cancellation failed.');
     },
   });
 

@@ -65,6 +65,7 @@ export function FacultyAvailabilityPage() {
     mutationFn: facultyAvailabilityApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-availability'] });
+      queryClient.invalidateQueries({ queryKey: ['substitutions'] });
       toast.success('Teaching availability preference saved successfully!');
       setIsModalOpen(false);
       resetForm();

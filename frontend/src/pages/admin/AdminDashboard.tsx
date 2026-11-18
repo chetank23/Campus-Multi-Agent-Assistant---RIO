@@ -660,7 +660,7 @@ export function AdminDashboard() {
 
             {/* Tile 2: Import Academic Data */}
             <Link
-              to="/admin/campus/rooms"
+              to="/admin/data/import"
               className="bg-[#EDF5FF] border border-[#D8E9FE] hover:border-[#2563EB]/40 rounded-xl p-2.5 flex items-start gap-2.5 transition-all group hover:shadow-2xs"
             >
               <div className="w-8 h-8 rounded-lg bg-white/90 text-[#2563EB] flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">

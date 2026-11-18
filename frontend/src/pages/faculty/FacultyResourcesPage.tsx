@@ -70,6 +70,7 @@ export function FacultyResourcesPage() {
     mutationFn: (payload: ResourceBookingCreate) => resourcesApi.createBooking(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['faculty-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['resources-bookings'] });
       setIsBookModalOpen(false);
       resetBookingForm();
       setActiveTab('my-bookings');
@@ -82,6 +83,7 @@ export function FacultyResourcesPage() {
       resourcesApi.cancelBooking(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['faculty-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['resources-bookings'] });
       setIsCancelModalOpen(false);
       setBookingToCancel(null);
     },

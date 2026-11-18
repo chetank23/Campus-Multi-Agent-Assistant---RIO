@@ -122,6 +122,9 @@ export function AdminSubstitutionPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['substitutions'] });
+      queryClient.invalidateQueries({ queryKey: ['faculty', 'my-timetable'] });
+      queryClient.invalidateQueries({ queryKey: ['faculty-dept-timetable'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'my-timetable'] });
       setInspectingRequest(null);
       setSelectedCandidateId(null);
       setRejectModalOpen(false);

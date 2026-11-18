@@ -1,0 +1,2608 @@
+{
+  "summary": {
+    "total_pages": 59,
+    "total_components": 28,
+    "total_layouts": 3,
+    "total_page_buttons": 302,
+    "total_component_buttons": 49,
+    "total_page_forms": 36,
+    "total_page_modals": 54,
+    "total_page_queries": 104,
+    "total_page_mutations": 61
+  },
+  "pages": {
+    "admin/academic/AcademicYearsPage.tsx": {
+      "file": "frontend/src/pages/admin/academic/AcademicYearsPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setIsFormOpen(true)}\n            className=\"inline-flex item"
+        },
+        {
+          "props": "type=\"button\"               onClick={closeForm}               className=\"px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors\"               disabled={createMutation.isPending || updateMutation.isPending}",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createMutation.isPending || updateMutation.isPending}               className=\"px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50\"",
+          "content": "{createMutation.isPending || updateMutation.isPending ? 'Sav"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 2,
+      "onclick_count": 2,
+      "use_query_count": 1,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "academicYearsApi"
+      ]
+    },
+    "admin/academic/BatchesPage.tsx": {
+      "file": "frontend/src/pages/admin/academic/BatchesPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setIsFormOpen(true)}\n            className=\"inline-flex item"
+        },
+        {
+          "props": "type=\"button\"               onClick={closeForm}               className=\"px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors\"               disabled={createMutation.isPending || updateMutation.isPending}",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createMutation.isPending || updateMutation.isPending}               className=\"px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50\"",
+          "content": "{createMutation.isPending || updateMutation.isPending ? 'Sav"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 2,
+      "onclick_count": 2,
+      "use_query_count": 2,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "batchesApi",
+        "sectionsApi"
+      ]
+    },
+    "admin/academic/DepartmentsPage.tsx": {
+      "file": "frontend/src/pages/admin/academic/DepartmentsPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setIsFormOpen(true)}\n            className=\"inline-flex item"
+        },
+        {
+          "props": "type=\"button\"               onClick={closeForm}               className=\"px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors\"               disabled={createMutation.isPending || updateMutation.isPending}",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createMutation.isPending || updateMutation.isPending}               className=\"px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50\"",
+          "content": "{createMutation.isPending || updateMutation.isPending ? 'Sav"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 2,
+      "onclick_count": 2,
+      "use_query_count": 1,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "departmentsApi"
+      ]
+    },
+    "admin/academic/ProgramsPage.tsx": {
+      "file": "frontend/src/pages/admin/academic/ProgramsPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setIsFormOpen(true)}\n            className=\"inline-flex item"
+        },
+        {
+          "props": "type=\"button\"               onClick={closeForm}               className=\"px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors\"               disabled={createMutation.isPending || updateMutation.isPending}",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createMutation.isPending || updateMutation.isPending}               className=\"px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50\"",
+          "content": "{createMutation.isPending || updateMutation.isPending ? 'Sav"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 2,
+      "onclick_count": 2,
+      "use_query_count": 2,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "programsApi",
+        "departmentsApi"
+      ]
+    },
+    "admin/academic/SectionsPage.tsx": {
+      "file": "frontend/src/pages/admin/academic/SectionsPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setIsFormOpen(true)}\n            className=\"inline-flex item"
+        },
+        {
+          "props": "type=\"button\"               onClick={closeForm}               className=\"px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors\"               disabled={createMutation.isPending || updateMutation.isPending}",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createMutation.isPending || updateMutation.isPending}               className=\"px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50\"",
+          "content": "{createMutation.isPending || updateMutation.isPending ? 'Sav"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 2,
+      "onclick_count": 2,
+      "use_query_count": 4,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "programsApi",
+        "semestersApi",
+        "departmentsApi",
+        "sectionsApi"
+      ]
+    },
+    "admin/academic/SemestersPage.tsx": {
+      "file": "frontend/src/pages/admin/academic/SemestersPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setIsFormOpen(true)}\n            className=\"inline-flex item"
+        },
+        {
+          "props": "type=\"button\"               onClick={closeForm}               className=\"px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors\"               disabled={createMutation.isPending || updateMutation.isPending}",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createMutation.isPending || updateMutation.isPending}               className=\"px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50\"",
+          "content": "{createMutation.isPending || updateMutation.isPending ? 'Sav"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 2,
+      "onclick_count": 2,
+      "use_query_count": 2,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "semestersApi",
+        "academicYearsApi"
+      ]
+    },
+    "admin/AdminAuditLogsPage.tsx": {
+      "file": "frontend/src/pages/admin/AdminAuditLogsPage.tsx",
+      "buttons_count": 4,
+      "button_details": [
+        {
+          "props": "type=\"button\"             onClick={() =",
+          "content": "setStatusFilter('ALL')}\n            className={`px-3 py-1.5 "
+        },
+        {
+          "props": "type=\"button\"             onClick={() =",
+          "content": "setStatusFilter('ACTIVE')}\n            className={`px-3 py-1"
+        },
+        {
+          "props": "type=\"button\"             onClick={() =",
+          "content": "setStatusFilter('HISTORICAL_CLEARED')}\n            className"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 3,
+      "use_query_count": 1,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "getAuditLogs"
+      ]
+    },
+    "admin/AdminChangeRequestsPage.tsx": {
+      "file": "frontend/src/pages/admin/AdminChangeRequestsPage.tsx",
+      "buttons_count": 2,
+      "button_details": [
+        {
+          "props": "disabled={mutation.isPending} onClick={() =",
+          "content": "mutation.mutate({ id: item.id, status: 'REJECTED' })} classN"
+        },
+        {
+          "props": "disabled={mutation.isPending} onClick={() =",
+          "content": "mutation.mutate({ id: item.id, status: 'APPROVED' })} classN"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 2,
+      "use_query_count": 1,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "getPendingChangeRequests",
+        "reviewChangeRequest"
+      ]
+    },
+    "admin/AdminDashboard.tsx": {
+      "file": "frontend/src/pages/admin/AdminDashboard.tsx",
+      "buttons_count": 1,
+      "button_details": [],
+      "links_count": 12,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 10,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "roomsApi",
+        "academicCalendarApi",
+        "academicYearsApi",
+        "apiGetMe",
+        "getTimetableVersions",
+        "analyticsApi",
+        "getAuditLogs",
+        "facultyApi",
+        "coursesApi",
+        "apiClient",
+        "studentsApi"
+      ]
+    },
+    "admin/AdminEventsPage.tsx": {
+      "file": "frontend/src/pages/admin/AdminEventsPage.tsx",
+      "buttons_count": 24,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "{\n                setReviewModalEvent(row);\n                "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setCancelModalEvent(row)}\n              className=\"p-1 text-"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('events')}\n          className={`flex items-cen"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('approvals')}\n          className={`flex items-"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('clubs')}\n          className={`flex items-cent"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('capabilities')}\n          className={`flex ite"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('venue_check')}\n          className={`flex item"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "{\n                        setReviewModalEvent(ev);\n         "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "{\n                        setReviewModalEvent(ev);\n         "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "{\n                setEditingClub(null);\n                setC"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 6,
+      "modals_count": 5,
+      "onclick_count": 18,
+      "use_query_count": 0,
+      "use_mutation_count": 1,
+      "api_functions": [
+        "roomsApi",
+        "usersApi",
+        "eventsApi"
+      ]
+    },
+    "admin/AdminNotificationsPage.tsx": {
+      "file": "frontend/src/pages/admin/AdminNotificationsPage.tsx",
+      "buttons_count": 7,
+      "button_details": [
+        {
+          "props": "type=\"button\"               onClick={() =",
+          "content": "setActiveTab('feed')}\n              className={`px-3.5 py-1."
+        },
+        {
+          "props": "type=\"button\"               onClick={() =",
+          "content": "setActiveTab('broadcast')}\n              className={`px-3.5 "
+        },
+        {
+          "props": "key={ft}                   type=\"button\"                   onClick={() =",
+          "content": "setFilterType(ft)}\n                  className={`px-2.5 py-1"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "markAllAsRead()}\n                className=\"flex items-cente"
+        },
+        {
+          "props": "type=\"button\"                       onClick={() =",
+          "content": "markAsRead(notif.id)}\n                      className=\"p-1.5"
+        },
+        {
+          "props": "type=\"submit\"                 disabled={isBroadcasting}                 className=\"w-full sm:w-auto px-5 py-2.5 rounded-lg bg-[#3975D1] text-white text-xs font-bold hover:bg-[#2857A1] transition-colors flex items-center justify-center gap-2 shadow-xs disabled:opacity-50\"",
+          "content": "{isBroadcasting ? 'Broadcasting...' : 'Dispatch Announcement"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 0,
+      "onclick_count": 5,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "departmentsApi",
+        "broadcastAnnouncement"
+      ]
+    },
+    "admin/AdminPlacementsPage.tsx": {
+      "file": "frontend/src/pages/admin/AdminPlacementsPage.tsx",
+      "buttons_count": 20,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "{\n              setSelectedDrive(row);\n              setIsDe"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActionModal({\n                  isOpen: true,\n           "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActionModal({\n                    isOpen: true,\n         "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "closeMutation.mutate(row.id)}\n                className=\"p-1"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActionModal({\n                  isOpen: true,\n           "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setIsRecordModalOpen(true)}\n              className=\"inline-"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setIsCreateModalOpen(true)}\n              className=\"inline-"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('drives')}\n            className={`py-3 text-sm"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('academic_records')}\n            className={`py"
+        },
+        {
+          "props": "key={st}                   onClick={() =",
+          "content": "setStatusFilter(st)}\n                  className={`px-3 py-1"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 2,
+      "modals_count": 4,
+      "onclick_count": 17,
+      "use_query_count": 2,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "departmentsApi",
+        "placementsApi"
+      ]
+    },
+    "admin/AdminSettingsPage.tsx": {
+      "file": "frontend/src/pages/admin/AdminSettingsPage.tsx",
+      "buttons_count": 11,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setToastMessage(null)}\n            className=\"text-xs font-s"
+        },
+        {
+          "props": "key={tab.id}                 onClick={() =",
+          "content": "setActiveTab(tab.id as SettingsTab)}\n                classNa"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "updateGeneralMutation.mutate()}\n              disabled={upda"
+        },
+        {
+          "props": "type=\"button\"                   onClick={() =",
+          "content": "refetchDataSummary()}\n                  className=\"inline-fl"
+        },
+        {
+          "props": "type=\"button\"                   onClick={() =",
+          "content": "handleTriggerPreview(false)}\n                  disabled={sel"
+        },
+        {
+          "props": "type=\"button\"                   onClick={() =",
+          "content": "handleTriggerPreview(true)}\n                  disabled={prev"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "updateTimetableMutation.mutate()}\n              disabled={up"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setShowPreviewModal(false)}\n                className=\"text-"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "setShowPreviewModal(false)}\n                className=\"px-4 "
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "executeClearMutation.mutate({\n                    categories"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 10,
+      "use_query_count": 2,
+      "use_mutation_count": 3,
+      "api_functions": [
+        "settingsApi"
+      ]
+    },
+    "admin/AdminSubstitutionPage.tsx": {
+      "file": "frontend/src/pages/admin/AdminSubstitutionPage.tsx",
+      "buttons_count": 8,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "{\n                setInspectingRequest(r);\n                s"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('pending')}\n            className={`px-4 py-2 t"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('all')}\n            className={`px-4 py-2 text-"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "setRejectModalOpen(true)}\n                className=\"text-xs"
+        },
+        {
+          "props": "type=\"button\"                   onClick={() =",
+          "content": "setInspectingRequest(null)}\n                  className=\"px-"
+        },
+        {
+          "props": "type=\"submit\"                   disabled={reviewMutation.isPending || !selectedCandidateId}                   className=\"px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors disabled:opacity-50\"",
+          "content": "{reviewMutation.isPending ? 'Approving...' : 'Approve Substi"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "setRejectModalOpen(false)}\n                className=\"px-4 p"
+        },
+        {
+          "props": "type=\"submit\"                 disabled={reviewMutation.isPending}                 className=\"px-4 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors disabled:opacity-50\"",
+          "content": "{reviewMutation.isPending ? 'Rejecting...' : 'Confirm Reject"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 2,
+      "modals_count": 2,
+      "onclick_count": 7,
+      "use_query_count": 0,
+      "use_mutation_count": 1,
+      "api_functions": [
+        "substitutionsApi"
+      ]
+    },
+    "admin/campus/BuildingsPage.tsx": {
+      "file": "frontend/src/pages/admin/campus/BuildingsPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setIsFormOpen(true)}\n            className=\"inline-flex item"
+        },
+        {
+          "props": "type=\"button\"               onClick={closeForm}               className=\"px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors\"               disabled={createMutation.isPending || updateMutation.isPending}",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createMutation.isPending || updateMutation.isPending}               className=\"px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50\"",
+          "content": "{createMutation.isPending || updateMutation.isPending ? 'Sav"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 2,
+      "onclick_count": 2,
+      "use_query_count": 1,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "buildingsApi"
+      ]
+    },
+    "admin/campus/CalendarTimeSlotsPage.tsx": {
+      "file": "frontend/src/pages/admin/campus/CalendarTimeSlotsPage.tsx",
+      "buttons_count": 11,
+      "button_details": [
+        {
+          "props": "onClick={(e) =",
+          "content": "{\n            e.stopPropagation();\n            setDeleteTarg"
+        },
+        {
+          "props": "onClick={(e) =",
+          "content": "{\n            e.stopPropagation();\n            setDeleteTarg"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "{\n                resetEventForm();\n                setIsEve"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "{\n                resetSlotForm();\n                setIsSlot"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('calendar')}\n          className={`pb-3 text-sm"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('slots')}\n          className={`pb-3 text-sm fo"
+        },
+        {
+          "props": "key={day}                   onClick={() =",
+          "content": "setSelectedDayFilter(day)}\n                  className={`px-"
+        },
+        {
+          "props": "type=\"button\"               onClick={() =",
+          "content": "setIsEventModalOpen(false)}\n              className=\"px-4 py"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createEventMutation.isPending}               className=\"px-4 py-2 bg-[#2B568F] hover:bg-[#1D3B5C] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors disabled:opacity-50\"",
+          "content": "{createEventMutation.isPending ? 'Saving\u2026' : 'Save Event'}"
+        },
+        {
+          "props": "type=\"button\"               onClick={() =",
+          "content": "setIsSlotModalOpen(false)}\n              className=\"px-4 py-"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 2,
+      "modals_count": 3,
+      "onclick_count": 9,
+      "use_query_count": 3,
+      "use_mutation_count": 4,
+      "api_functions": [
+        "academicCalendarApi",
+        "academicYearsApi",
+        "timeSlotsApi"
+      ]
+    },
+    "admin/campus/RoomsPage.tsx": {
+      "file": "frontend/src/pages/admin/campus/RoomsPage.tsx",
+      "buttons_count": 4,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setIsFormOpen(true)}\n            className=\"inline-flex item"
+        },
+        {
+          "props": "type=\"button\"               onClick={closeForm}               className=\"px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors\"               disabled={createMutation.isPending || updateMutation.isPending}",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createMutation.isPending || updateMutation.isPending}               className=\"px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50\"",
+          "content": "{createMutation.isPending || updateMutation.isPending ? 'Sav"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 2,
+      "onclick_count": 2,
+      "use_query_count": 2,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "roomsApi",
+        "buildingsApi"
+      ]
+    },
+    "admin/courses/CoursesPage.tsx": {
+      "file": "frontend/src/pages/admin/courses/CoursesPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setIsFormOpen(true)}\n            className=\"inline-flex item"
+        },
+        {
+          "props": "type=\"button\"               onClick={closeForm}               className=\"px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors\"               disabled={createMutation.isPending || updateMutation.isPending}",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createMutation.isPending || updateMutation.isPending}               className=\"px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50\"",
+          "content": "{createMutation.isPending || updateMutation.isPending ? 'Sav"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 2,
+      "onclick_count": 2,
+      "use_query_count": 2,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "departmentsApi",
+        "coursesApi"
+      ]
+    },
+    "admin/curriculum/AdminCurriculumAllocationPage.tsx": {
+      "file": "frontend/src/pages/admin/curriculum/AdminCurriculumAllocationPage.tsx",
+      "buttons_count": 4,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/admin/curriculum/readiness')}\n          className"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "{\n                          setSelectedOffering(off);\n      "
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "setSelectedOffering(null)}\n                className=\"px-4 p"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "allocateMutation.mutate()}\n                disabled={allocat"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 4,
+      "use_query_count": 1,
+      "use_mutation_count": 1,
+      "api_functions": [
+        "allocateFacultyOffering",
+        "getSectionOfferings",
+        "apiClient"
+      ]
+    },
+    "admin/curriculum/AdminCurriculumInboxPage.tsx": {
+      "file": "frontend/src/pages/admin/curriculum/AdminCurriculumInboxPage.tsx",
+      "buttons_count": 4,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setSelectedRelease(rel)}\n                      className=\"px"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/admin/curriculum/allocation')}\n                  "
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "setSelectedRelease(null)}\n                className=\"px-4 py"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "ackMutation.mutate()}\n                disabled={ackMutation."
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 4,
+      "use_query_count": 1,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "getAdminCurriculumInbox",
+        "acknowledgeCurriculumRelease"
+      ]
+    },
+    "admin/curriculum/AdminCurriculumReadinessPage.tsx": {
+      "file": "frontend/src/pages/admin/curriculum/AdminCurriculumReadinessPage.tsx",
+      "buttons_count": 1,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/admin/timetable/generate')}\n            className"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 1,
+      "use_query_count": 1,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "getCurriculumReadiness",
+        "apiClient"
+      ]
+    },
+    "admin/curriculum/AdminCurriculumRequestsPage.tsx": {
+      "file": "frontend/src/pages/admin/curriculum/AdminCurriculumRequestsPage.tsx",
+      "buttons_count": 4,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "{\n            setTitle('');\n            setDescription('');\n"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "messageMutation.mutate()}\n                    disabled={mess"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "setIsCreateOpen(false)}\n                className=\"px-4 py-2"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "createMutation.mutate()}\n                disabled={createMut"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 5,
+      "use_query_count": 1,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "getAdminCurriculumRequests",
+        "createAdminCurriculumRequest",
+        "addAdminRequestMessage"
+      ]
+    },
+    "admin/data/ImportValidationPage.tsx": {
+      "file": "frontend/src/pages/admin/data/ImportValidationPage.tsx",
+      "buttons_count": 4,
+      "button_details": [
+        {
+          "props": "onClick={handleDownloadTemplate}             className=\"inline-flex items-center gap-2 px-3.5 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-xs transition-colors\"",
+          "content": "Download Sample CSV"
+        },
+        {
+          "props": "key={type}               type=\"button\"               onClick={() =",
+          "content": "handleEntityChange(type)}\n              className={`p-3 roun"
+        },
+        {
+          "props": "onClick={handleRunValidation}             disabled={previewMutation.isPending}             className=\"flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50\"",
+          "content": "{previewMutation.isPending ? 'Validating Against Database\u2026' "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setIsConfirmOpen(true)}\n              disabled={previewResul"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 1,
+      "onclick_count": 4,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "dataImportApi"
+      ]
+    },
+    "admin/people/FacultyPage.tsx": {
+      "file": "frontend/src/pages/admin/people/FacultyPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setIsFormOpen(true)}\n            className=\"inline-flex item"
+        },
+        {
+          "props": "type=\"button\"               onClick={closeForm}               className=\"px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors\"               disabled={createMutation.isPending || updateMutation.isPending}",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createMutation.isPending || updateMutation.isPending}               className=\"px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50\"",
+          "content": "{createMutation.isPending || updateMutation.isPending ? 'Sav"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 2,
+      "onclick_count": 2,
+      "use_query_count": 2,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "departmentsApi",
+        "facultyApi"
+      ]
+    },
+    "admin/people/StudentsPage.tsx": {
+      "file": "frontend/src/pages/admin/people/StudentsPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setIsFormOpen(true)}\n            className=\"inline-flex item"
+        },
+        {
+          "props": "type=\"button\"               onClick={closeForm}               className=\"px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors\"               disabled={createMutation.isPending || updateMutation.isPending}",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createMutation.isPending || updateMutation.isPending}               className=\"px-4 py-2 text-xs font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-xs disabled:opacity-50\"",
+          "content": "{createMutation.isPending || updateMutation.isPending ? 'Sav"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 2,
+      "onclick_count": 2,
+      "use_query_count": 6,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "semestersApi",
+        "batchesApi",
+        "programsApi",
+        "departmentsApi",
+        "sectionsApi",
+        "studentsApi"
+      ]
+    },
+    "admin/reports/ReportsPage.tsx": {
+      "file": "frontend/src/pages/admin/reports/ReportsPage.tsx",
+      "buttons_count": 1,
+      "button_details": [
+        {
+          "props": "onClick={handleRefreshAll}             className=\"inline-flex items-center gap-2 px-3.5 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-xs transition-colors\"",
+          "content": "{isRefetchingOverview ? 'Refreshing\u2026' : 'Refresh Metrics'}"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 1,
+      "use_query_count": 2,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "analyticsApi"
+      ]
+    },
+    "admin/resources/ResourcesPage.tsx": {
+      "file": "frontend/src/pages/admin/resources/ResourcesPage.tsx",
+      "buttons_count": 20,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "openEditModal(r)}\n            className=\"p-1.5 text-slate-60"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setResourceToDelete(r)}\n            className=\"p-1.5 text-sl"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "approveBookingMutation.mutate(b.id)}\n                disable"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setRejectionModalBooking(b)}\n                className=\"px-2"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setCancelModalBooking(b)}\n              className=\"px-2.5 py"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "{\n                refetchResources();\n                refetc"
+        },
+        {
+          "props": "onClick={openCreateModal}               className=\"px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm flex items-center gap-2 shadow-sm transition-colors\"",
+          "content": "New Resource"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('inventory')}\n            className={`py-3 px-1"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('bookings')}\n            className={`py-3 px-1 "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('availability')}\n            className={`py-3 p"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 2,
+      "modals_count": 5,
+      "onclick_count": 18,
+      "use_query_count": 2,
+      "use_mutation_count": 3,
+      "api_functions": [
+        "resourcesApi"
+      ]
+    },
+    "admin/system/UsersPage.tsx": {
+      "file": "frontend/src/pages/admin/system/UsersPage.tsx",
+      "buttons_count": 7,
+      "button_details": [
+        {
+          "props": "onClick={(e) =",
+          "content": "{\n              e.stopPropagation();\n              openEditF"
+        },
+        {
+          "props": "onClick={(e) =",
+          "content": "{\n              e.stopPropagation();\n              openReset"
+        },
+        {
+          "props": "onClick={openCreateForm}             className=\"inline-flex items-center gap-2 px-3.5 py-2 bg-[#2B568F] hover:bg-[#1D3B5C] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors\"",
+          "content": "Add User"
+        },
+        {
+          "props": "type=\"button\"               onClick={closeForm}               className=\"px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors\"",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createMutation.isPending || updateMutation.isPending}               className=\"px-4 py-2 bg-[#2B568F] hover:bg-[#1D3B5C] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors disabled:opacity-50\"",
+          "content": "{createMutation.isPending || updateMutation.isPending ? 'Sav"
+        },
+        {
+          "props": "type=\"button\"                   onClick={() =",
+          "content": "{\n                    setIsResetOpen(false);\n               "
+        },
+        {
+          "props": "type=\"submit\"                   disabled={resetPasswordMutation.isPending}                   className=\"px-4 py-2 bg-[#2B568F] hover:bg-[#1D3B5C] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors disabled:opacity-50\"",
+          "content": "{resetPasswordMutation.isPending ? 'Updating\u2026' : 'Update Pas"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 2,
+      "modals_count": 2,
+      "onclick_count": 5,
+      "use_query_count": 2,
+      "use_mutation_count": 1,
+      "api_functions": [
+        "departmentsApi",
+        "usersApi"
+      ]
+    },
+    "admin/timetable/AdminTimetableManagementPage.tsx": {
+      "file": "frontend/src/pages/admin/timetable/AdminTimetableManagementPage.tsx",
+      "buttons_count": 8,
+      "button_details": [
+        {
+          "props": "type=\"button\"                   onClick={() =",
+          "content": "setPreviewData(null)}\n                  disabled={generateMu"
+        },
+        {
+          "props": "type=\"button\"                 onClick={handleGenerate}                 disabled={generateMutation.isPending || publishMutation.isPending}                 className={`inline-flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold shadow-sm text-white transition-all ${                   isExistingPublished                     ? 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500'                     : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'                 } disabled:opacity-50`}",
+          "content": "{generateMutation.isPending ? (\n                  <>\n       "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setPublishSuccessMsg(null)}\n            className=\"text-emer"
+        },
+        {
+          "props": "type=\"button\"                   onClick={() =",
+          "content": "setShowPublishModal(true)}\n                  disabled={publi"
+        },
+        {
+          "props": "key={sec.id}                     onClick={() =",
+          "content": "setActiveSectionId(sec.id)}\n                    className={`"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "setShowPublishModal(false)}\n                disabled={publis"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "publishMutation.mutate()}\n                disabled={publishM"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 7,
+      "use_query_count": 5,
+      "use_mutation_count": 1,
+      "api_functions": [
+        "getTimetableAcademicYears",
+        "getTimetableSections",
+        "publishCanonicalTimetable",
+        "getTimetableSemesters",
+        "getCanonicalTimetables",
+        "generateTimetablePreview",
+        "getTimetableDepartments"
+      ]
+    },
+    "admin/timetable/AdminTimetableReviewPage.tsx": {
+      "file": "frontend/src/pages/admin/timetable/AdminTimetableReviewPage.tsx",
+      "buttons_count": 7,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/admin/timetable/versions')}\n          className=\""
+        },
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/admin/timetable/versions')}\n            className"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "validateMutation.mutate()}\n                  disabled={valid"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "{\n                    if (confirm('Finalize this timetable? "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "{\n                        setShowPublishConfirm(false);\n    "
+        },
+        {
+          "props": "type=\"button\"                       onClick={() =",
+          "content": "setShowPublishConfirm(false)}\n                      disabled"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setShowPublishConfirm(true)}\n                    disabled={p"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 7,
+      "use_query_count": 10,
+      "use_mutation_count": 3,
+      "api_functions": [
+        "semestersApi",
+        "roomsApi",
+        "publishTimetableVersion",
+        "finalizeTimetableVersion",
+        "validateTimetableVersion",
+        "academicYearsApi",
+        "getTimetableVersion",
+        "programsApi",
+        "coursesApi",
+        "facultyApi",
+        "getCourseAssignments",
+        "departmentsApi",
+        "getTimeSlots"
+      ]
+    },
+    "admin/timetable/AdminTimetableVersionsPage.tsx": {
+      "file": "frontend/src/pages/admin/timetable/AdminTimetableVersionsPage.tsx",
+      "buttons_count": 2,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/admin/timetable/generate')}\n            className"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/admin/timetable/generate')}\n              classNa"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 3,
+      "use_query_count": 1,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "getTimetableVersions"
+      ]
+    },
+    "admin/timetable/TimetableGenerationPage.tsx": {
+      "file": "frontend/src/pages/admin/timetable/TimetableGenerationPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/admin/timetable/versions')}\n            className"
+        },
+        {
+          "props": "type=\"submit\"               disabled={generateMutation.isPending || !isFormValid}               className=\"academic-btn-primary inline-flex items-center justify-center gap-2 min-w-[200px]\"",
+          "content": "{generateMutation.isPending ? (\n                <>\n         "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/admin/timetable/versions')}\n              classNa"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 0,
+      "onclick_count": 2,
+      "use_query_count": 4,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "semestersApi",
+        "roomsApi",
+        "academicYearsApi",
+        "generateTimetable",
+        "programsApi",
+        "coursesApi",
+        "facultyApi",
+        "getCourseAssignments",
+        "departmentsApi",
+        "getTimeSlots"
+      ]
+    },
+    "faculty/FacultyAvailabilityPage.tsx": {
+      "file": "frontend/src/pages/faculty/FacultyAvailabilityPage.tsx",
+      "buttons_count": 5,
+      "button_details": [
+        {
+          "props": "onClick={(e) =",
+          "content": "{\n            e.stopPropagation();\n            setDeleteTarg"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "{\n              resetForm();\n              setIsModalOpen(tr"
+        },
+        {
+          "props": "type=\"button\"               onClick={() =",
+          "content": "setIsModalOpen(false)}\n              className=\"px-4 py-2 bo"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createMutation.isPending}               className=\"px-4 py-2 bg-[#2B568F] hover:bg-[#1D3B5C] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors disabled:opacity-50\"",
+          "content": "{createMutation.isPending ? 'Saving\u2026' : 'Save Preference'}"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 2,
+      "onclick_count": 3,
+      "use_query_count": 2,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "timeSlotsApi",
+        "facultyAvailabilityApi"
+      ]
+    },
+    "faculty/FacultyChangeRequestsPage.tsx": {
+      "file": "frontend/src/pages/faculty/FacultyChangeRequestsPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "{\n            resetForm();\n            setIsModalOpen(true);"
+        },
+        {
+          "props": "type=\"button\"               onClick={() =",
+          "content": "setIsModalOpen(false)}\n              className=\"px-4 py-2 bo"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createMutation.isPending}               className=\"px-4 py-2 bg-[#2B568F] hover:bg-[#1D3B5C] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors disabled:opacity-50\"",
+          "content": "{createMutation.isPending ? 'Submitting\u2026' : 'Submit Request'"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 1,
+      "onclick_count": 2,
+      "use_query_count": 1,
+      "use_mutation_count": 1,
+      "api_functions": [
+        "listChangeRequests",
+        "createChangeRequest"
+      ]
+    },
+    "faculty/FacultyDashboard.tsx": {
+      "file": "frontend/src/pages/faculty/FacultyDashboard.tsx",
+      "buttons_count": 8,
+      "button_details": [
+        {
+          "props": "type=\"button\"                     onClick={() =",
+          "content": "setTimetableMode('grid')}\n                    className={`in"
+        },
+        {
+          "props": "type=\"button\"                     onClick={() =",
+          "content": "setTimetableMode('agenda')}\n                    className={`"
+        },
+        {
+          "props": "type=\"button\"                   onClick={() =",
+          "content": "refetchTimetable()}\n                  disabled={isRefetching"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "setShowProfileModal(true)}\n                className=\"p-3.5 "
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "refetchTimetable()}\n                disabled={isRefetching}\n"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "setShowProfileModal(false)}\n                className=\"w-7 h"
+        },
+        {
+          "props": "type=\"button\"               onClick={() =",
+          "content": "setShowProfileModal(false)}\n              className=\"w-full "
+        }
+      ],
+      "links_count": 7,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 7,
+      "use_query_count": 2,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "apiGetMe",
+        "getFacultyMyTimetable"
+      ]
+    },
+    "faculty/FacultyDeptTimetablePage.tsx": {
+      "file": "frontend/src/pages/faculty/FacultyDeptTimetablePage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "refetch()}\n          className=\"flex items-center gap-2 px-4"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setSelectedDay('ALL')}\n            className={`px-3 py-1.5 r"
+        },
+        {
+          "props": "key={d}               onClick={() =",
+          "content": "setSelectedDay(d)}\n              className={`px-3 py-1.5 rou"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 3,
+      "use_query_count": 3,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "semestersApi",
+        "sectionsApi",
+        "getFacultyDepartmentTimetable"
+      ]
+    },
+    "faculty/FacultyEventsPage.tsx": {
+      "file": "frontend/src/pages/faculty/FacultyEventsPage.tsx",
+      "buttons_count": 15,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "{\n                    setEditingEvent(row);\n                "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "submitMutation.mutate(row.id)}\n                  disabled={s"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setCancelModalEvent(row)}\n                className=\"p-1 tex"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "{\n              setEditingEvent(null);\n              setEven"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "{\n              setEditingEvent(null);\n              setEven"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('all')}\n              className={`px-3 py-1.5 t"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('drafts')}\n              className={`px-3 py-1."
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('pending')}\n              className={`px-3 py-1"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('published')}\n              className={`px-3 py"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('live')}\n              className={`px-3 py-1.5 "
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 2,
+      "modals_count": 2,
+      "onclick_count": 13,
+      "use_query_count": 0,
+      "use_mutation_count": 1,
+      "api_functions": [
+        "roomsApi",
+        "eventsApi"
+      ]
+    },
+    "faculty/FacultyNotificationsPage.tsx": {
+      "file": "frontend/src/pages/faculty/FacultyNotificationsPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "markAllMutation.mutate()}\n            disabled={markAllMutat"
+        },
+        {
+          "props": "key={tab}               onClick={() =",
+          "content": "setFilterType(tab)}\n              className={`px-3 py-1.5 ro"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "markReadMutation.mutate(item.id)}\n                  classNam"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 3,
+      "use_query_count": 1,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "getNotifications",
+        "markAllNotificationsAsRead",
+        "markNotificationAsRead"
+      ]
+    },
+    "faculty/FacultyResourcesPage.tsx": {
+      "file": "frontend/src/pages/faculty/FacultyResourcesPage.tsx",
+      "buttons_count": 6,
+      "button_details": [
+        {
+          "props": "onClick={(e) =",
+          "content": "{\n              e.stopPropagation();\n              setBookin"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('browse')}\n          className={`pb-3 text-sm f"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('my-bookings')}\n          className={`pb-3 text"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "handleOpenBookModal(res)}\n                  disabled={res.st"
+        },
+        {
+          "props": "type=\"button\"               onClick={() =",
+          "content": "setIsBookModalOpen(false)}\n              className=\"px-4 py-"
+        },
+        {
+          "props": "type=\"submit\"               disabled={createBookingMutation.isPending}               className=\"px-4 py-2 bg-[#2B568F] hover:bg-[#1D3B5C] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors disabled:opacity-50\"",
+          "content": "{createBookingMutation.isPending ? 'Requesting\u2026' : 'Submit R"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 2,
+      "onclick_count": 5,
+      "use_query_count": 2,
+      "use_mutation_count": 1,
+      "api_functions": [
+        "resourcesApi"
+      ]
+    },
+    "faculty/FacultySubstitutionPage.tsx": {
+      "file": "frontend/src/pages/faculty/FacultySubstitutionPage.tsx",
+      "buttons_count": 7,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "{\n              setSelectedClass(c);\n              setReason"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "cancelRequestMutation.mutate(r.id)}\n            disabled={ca"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('classes')}\n            className={`px-4 py-2 t"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('requests')}\n            className={`px-4 py-2 "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('duties')}\n            className={`px-4 py-2 te"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "setSelectedClass(null)}\n                className=\"px-5 py-2"
+        },
+        {
+          "props": "type=\"submit\"                 disabled={createRequestMutation.isPending || !reason.trim()}                 className=\"px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors disabled:opacity-50\"",
+          "content": "{createRequestMutation.isPending ? 'Submitting...' : 'Submit"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 1,
+      "onclick_count": 6,
+      "use_query_count": 0,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "substitutionsApi"
+      ]
+    },
+    "faculty/FacultyTimetablePage.tsx": {
+      "file": "frontend/src/pages/faculty/FacultyTimetablePage.tsx",
+      "buttons_count": 1,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 1,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "getFacultyMyTimetable"
+      ]
+    },
+    "Login.tsx": {
+      "file": "frontend/src/pages/Login.tsx",
+      "buttons_count": 1,
+      "button_details": [
+        {
+          "props": "type=\"submit\"               disabled={submitting}               className=\"w-full bg-primary-600 hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg transition-colors text-xs uppercase tracking-wider shadow-xs focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2\"",
+          "content": "{submitting ? (\n                \n                  \n        "
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "NotFound.tsx": {
+      "file": "frontend/src/pages/NotFound.tsx",
+      "buttons_count": 0,
+      "button_details": [],
+      "links_count": 1,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "student/StudentAnnouncementsPage.tsx": {
+      "file": "frontend/src/pages/student/StudentAnnouncementsPage.tsx",
+      "buttons_count": 1,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "refetch()}\n          className=\"flex items-center gap-2 px-3"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 1,
+      "use_query_count": 1,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "getNotifications"
+      ]
+    },
+    "student/StudentCoursesPage.tsx": {
+      "file": "frontend/src/pages/student/StudentCoursesPage.tsx",
+      "buttons_count": 1,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "refetch()}\n            className=\"flex items-center gap-2 px"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 1,
+      "use_query_count": 1,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "getStudentCourses"
+      ]
+    },
+    "student/StudentDashboard.tsx": {
+      "file": "frontend/src/pages/student/StudentDashboard.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "type=\"button\"                   onClick={() =",
+          "content": "setShowSearchInput((prev) => !prev)}\n                  title"
+        },
+        {
+          "props": "key={day}                     type=\"button\"                     onClick={() =",
+          "content": "setSelectedCalendarDay(day)}\n                    className={"
+        }
+      ],
+      "links_count": 5,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 2,
+      "use_query_count": 3,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "getStudentLiveStatus",
+        "apiGetMe",
+        "getStudentMyTimetable"
+      ]
+    },
+    "student/StudentEventsPage.tsx": {
+      "file": "frontend/src/pages/student/StudentEventsPage.tsx",
+      "buttons_count": 6,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('ongoing')}\n              className={`flex item"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('today')}\n              className={`px-3 py-1.5"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('upcoming')}\n              className={`px-3 py-"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('clubs')}\n              className={`px-3 py-1.5"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('all')}\n              className={`px-3 py-1.5 t"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "setSelectedEvent(null)}\n                className=\"px-4 py-1"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 1,
+      "onclick_count": 7,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "eventsApi"
+      ]
+    },
+    "student/StudentNotificationsPage.tsx": {
+      "file": "frontend/src/pages/student/StudentNotificationsPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "markAllMutation.mutate()}\n            disabled={markAllMutat"
+        },
+        {
+          "props": "key={tab}               onClick={() =",
+          "content": "setFilterType(tab)}\n              className={`px-3 py-1.5 ro"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "markReadMutation.mutate(item.id)}\n                  classNam"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 3,
+      "use_query_count": 1,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "getNotifications",
+        "markAllNotificationsAsRead",
+        "markNotificationAsRead"
+      ]
+    },
+    "student/StudentPlacementsPage.tsx": {
+      "file": "frontend/src/pages/student/StudentPlacementsPage.tsx",
+      "buttons_count": 6,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('all')}\n            className={`px-3 py-1.5 rou"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('eligible')}\n            className={`px-3 py-1."
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('full_time')}\n            className={`px-3 py-1"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setActiveTab('internship')}\n            className={`px-3 py-"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setSelectedDrive(drive)}\n                    className=\"w-fu"
+        },
+        {
+          "props": "type=\"button\"                   onClick={() =",
+          "content": "setSelectedDrive(null)}\n                  className=\"px-4 py"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 1,
+      "onclick_count": 6,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "placementsApi"
+      ]
+    },
+    "student/StudentTimetablePage.tsx": {
+      "file": "frontend/src/pages/student/StudentTimetablePage.tsx",
+      "buttons_count": 1,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 1,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "getStudentMyTimetable"
+      ]
+    },
+    "super_admin/SuperAdminAuditHistoryPage.tsx": {
+      "file": "frontend/src/pages/super_admin/SuperAdminAuditHistoryPage.tsx",
+      "buttons_count": 1,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "refetch()}\n          className=\"px-3.5 py-1.5 bg-white borde"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 1,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "apiClient"
+      ]
+    },
+    "super_admin/SuperAdminCohortsPage.tsx": {
+      "file": "frontend/src/pages/super_admin/SuperAdminCohortsPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={openCreateModal}           className=\"px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs rounded-xl shadow-sm transition-all flex items-center gap-2 self-start\"",
+          "content": "New Admission Cohort"
+        },
+        {
+          "props": "type=\"button\"                 onClick={closeModal}                 className=\"px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors\"",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "createMutation.mutate()}\n                disabled={createMut"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 3,
+      "use_query_count": 2,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "apiClient",
+        "getRegulations",
+        "getCohorts",
+        "createCohort"
+      ]
+    },
+    "super_admin/SuperAdminCurriculumVersionsPage.tsx": {
+      "file": "frontend/src/pages/super_admin/SuperAdminCurriculumVersionsPage.tsx",
+      "buttons_count": 7,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "{\n            setDepartmentId(departments?.[0]?.id || '');\n "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "navigate(`/super-admin/curriculum-versions/${v.id}`)}\n      "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "navigate(`/super-admin/curriculum-versions/${v.id}`)}\n      "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "publishMutation.mutate(v.id)}\n                            di"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "reviseMutation.mutate(v.id)}\n                            dis"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "setIsCreateOpen(false)}\n                className=\"px-4 py-2"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "createMutation.mutate()}\n                disabled={createMut"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 7,
+      "use_query_count": 3,
+      "use_mutation_count": 2,
+      "api_functions": [
+        "publishCurriculumVersion",
+        "reviseCurriculumVersion",
+        "getCohorts",
+        "createCurriculumVersion",
+        "getCurriculumVersions",
+        "apiClient",
+        "getRegulations"
+      ]
+    },
+    "super_admin/SuperAdminDashboard.tsx": {
+      "file": "frontend/src/pages/super_admin/SuperAdminDashboard.tsx",
+      "buttons_count": 8,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/super-admin/curriculum-versions')}\n              "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/super-admin/extraction')}\n              className"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/super-admin/requests')}\n              className=\""
+        },
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/super-admin/regulations')}\n              classNam"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/super-admin/cohorts')}\n              className=\"t"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/super-admin/curriculum-versions')}\n              "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/super-admin/requests')}\n              className=\""
+        },
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/super-admin/audit')}\n            className=\"text-"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 8,
+      "use_query_count": 1,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "getSuperAdminDashboardStats"
+      ]
+    },
+    "super_admin/SuperAdminPDFExtractionPage.tsx": {
+      "file": "frontend/src/pages/super_admin/SuperAdminPDFExtractionPage.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "uploadAndExtractMutation.mutate()}\n            disabled={upl"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "reviewMutation.mutate('REJECT')}\n                  disabled="
+        },
+        {
+          "props": "onClick={() =",
+          "content": "reviewMutation.mutate('APPROVE')}\n                  disabled"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 3,
+      "use_query_count": 1,
+      "use_mutation_count": 1,
+      "api_functions": [
+        "uploadCurriculumPDF",
+        "getExtractionJob",
+        "getCurriculumVersions",
+        "triggerExtractionJob",
+        "reviewExtractionJob"
+      ]
+    },
+    "super_admin/SuperAdminRegulationsPage.tsx": {
+      "file": "frontend/src/pages/super_admin/SuperAdminRegulationsPage.tsx",
+      "buttons_count": 4,
+      "button_details": [
+        {
+          "props": "onClick={openCreateModal}           className=\"px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-sm transition-all flex items-center gap-2 self-start\"",
+          "content": "New Academic Regulation"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "openEditModal(reg)}\n                        className=\"p-1.5"
+        },
+        {
+          "props": "type=\"button\"                 onClick={closeModal}                 className=\"px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors\"",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "saveMutation.mutate()}\n                disabled={saveMutatio"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 4,
+      "use_query_count": 1,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "createRegulation",
+        "getRegulations",
+        "updateRegulation"
+      ]
+    },
+    "super_admin/SuperAdminRequestsPage.tsx": {
+      "file": "frontend/src/pages/super_admin/SuperAdminRequestsPage.tsx",
+      "buttons_count": 5,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "statusMutation.mutate('UNDER_REVIEW')}\n                  cla"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "statusMutation.mutate('NEEDS_INFORMATION')}\n                "
+        },
+        {
+          "props": "onClick={() =",
+          "content": "statusMutation.mutate('RESOLVED')}\n                  classNa"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "statusMutation.mutate('REJECTED')}\n                  classNa"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "messageMutation.mutate()}\n                  disabled={messag"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 6,
+      "use_query_count": 2,
+      "use_mutation_count": 1,
+      "api_functions": [
+        "updateSuperAdminRequestStatus",
+        "addSuperAdminRequestMessage",
+        "getSuperAdminRequest",
+        "getSuperAdminRequests"
+      ]
+    },
+    "super_admin/SuperAdminSemesterWorkspacePage.tsx": {
+      "file": "frontend/src/pages/super_admin/SuperAdminSemesterWorkspacePage.tsx",
+      "buttons_count": 11,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "navigate('/super-admin/curriculum-versions')}\n            cl"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "statusMutation.mutate('NEEDS_REVIEW')}\n              disable"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "statusMutation.mutate('APPROVED')}\n              disabled={s"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "publishMutation.mutate()}\n              disabled={publishMut"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "reviseMutation.mutate()}\n              disabled={reviseMutat"
+        },
+        {
+          "props": "key={sem.id}             onClick={() =",
+          "content": "setSelectedSemesterIdx(idx)}\n            className={`px-4 py"
+        },
+        {
+          "props": "onClick={openAddSubjectModal}               className=\"px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5\"",
+          "content": "Add Subject"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "openEditSubjectModal(sub)}\n                            class"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "{\n                              if (confirm(`Delete subject "
+        },
+        {
+          "props": "type=\"button\"                 onClick={closeSubjectModal}                 className=\"px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors\"",
+          "content": "Cancel"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 11,
+      "use_query_count": 1,
+      "use_mutation_count": 4,
+      "api_functions": [
+        "deleteSubjectMapping",
+        "publishCurriculumVersion",
+        "reviseCurriculumVersion",
+        "updateSubjectMapping",
+        "getCurriculumVersion",
+        "updateCurriculumVersionStatus",
+        "addSubjectMapping"
+      ]
+    },
+    "Unauthorized.tsx": {
+      "file": "frontend/src/pages/Unauthorized.tsx",
+      "buttons_count": 0,
+      "button_details": [],
+      "links_count": 1,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    }
+  },
+  "components": {
+    "chat/CampusAssistantDrawer.tsx": {
+      "file": "frontend/src/components/chat/CampusAssistantDrawer.tsx",
+      "buttons_count": 13,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setIsOpen(true)}\n          className=\"fixed bottom-6 right-6"
+        },
+        {
+          "props": "type=\"button\"                       onClick={() =",
+          "content": "setShowConvDropdown((prev) => !prev)}\n                      "
+        },
+        {
+          "props": "type=\"button\"                             onClick={startNewConversation}                             className=\"inline-flex items-center gap-1 text-xs text-blue-600 font-semibold hover:text-blue-700 cursor-pointer\"",
+          "content": "New"
+        },
+        {
+          "props": "type=\"button\"                                   onClick={(e) =",
+          "content": "handleDeleteConversation(e, c.id)}\n                         "
+        },
+        {
+          "props": "onClick={startNewConversation}                   className=\"w-9 h-9 rounded-full border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 hover:bg-slate-50 flex items-center justify-center transition-colors shadow-2xs cursor-pointer\"                   title=\"Start New Conversation\"                   aria-label=\"New conversation\"",
+          "content": ""
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setIsOpen(false)}\n                  className=\"w-9 h-9 round"
+        },
+        {
+          "props": "type=\"button\"                                 onClick={() =",
+          "content": "handleSendMessage(`confirm ${msg.proposal?.proposal_id}`)}\n "
+        },
+        {
+          "props": "type=\"button\"                                 onClick={() =",
+          "content": "handleSendMessage('cancel that')}\n                          "
+        },
+        {
+          "props": "type=\"button\"                               onClick={() =",
+          "content": "handleSendMessage('help')}\n                              cla"
+        },
+        {
+          "props": "type=\"button\"                   onClick={() =",
+          "content": "setShowAttachNotice((prev) => !prev)}\n                  clas"
+        }
+      ],
+      "links_count": 1,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 16,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "getConversations",
+        "deleteConversation",
+        "getConversation",
+        "streamChatMessage"
+      ]
+    },
+    "common/ConfirmDialog.tsx": {
+      "file": "frontend/src/components/common/ConfirmDialog.tsx",
+      "buttons_count": 2,
+      "button_details": [
+        {
+          "props": "type=\"button\"             onClick={onCancel}             disabled={isProcessing}             className=\"px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary-600 disabled:opacity-50 transition-colors shadow-xs\"",
+          "content": "{cancelLabel}"
+        },
+        {
+          "props": "type=\"button\"             onClick={onConfirm}             disabled={isProcessing}             className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 transition-colors shadow-xs ${               isDestructive                 ? 'bg-rose-600 hover:bg-rose-700 focus:ring-rose-500'                 : 'bg-primary-600 hover:bg-primary-700 focus:ring-primary-500'             }`}",
+          "content": "{isProcessing && }\n            {isProcessing ? processingLab"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 3,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "common/DataTable.tsx": {
+      "file": "frontend/src/components/common/DataTable.tsx",
+      "buttons_count": 3,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 2,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "common/EmptyState.tsx": {
+      "file": "frontend/src/components/common/EmptyState.tsx",
+      "buttons_count": 0,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "common/ErrorState.tsx": {
+      "file": "frontend/src/components/common/ErrorState.tsx",
+      "buttons_count": 1,
+      "button_details": [
+        {
+          "props": "type=\"button\"           onClick={onRetry}           className=\"inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-rose-300 text-rose-700 rounded-lg hover:bg-rose-50 text-xs font-semibold shadow-xs transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500\"",
+          "content": "Retry"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 1,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "common/FilterBar.tsx": {
+      "file": "frontend/src/components/common/FilterBar.tsx",
+      "buttons_count": 1,
+      "button_details": [
+        {
+          "props": "type=\"button\"           onClick={onReset}           className=\"inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 font-medium px-2 py-1 rounded transition-colors shrink-0\"",
+          "content": "Reset"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 1,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "common/FormModal.tsx": {
+      "file": "frontend/src/components/common/FormModal.tsx",
+      "buttons_count": 1,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 2,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "common/IconButton.tsx": {
+      "file": "frontend/src/components/common/IconButton.tsx",
+      "buttons_count": 1,
+      "button_details": [
+        {
+          "props": "ref={ref}         type=\"button\"         title={title || ariaLabel}         aria-label={ariaLabel}         disabled={disabled}         className={`inline-flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-1 disabled:opacity-40 disabled:cursor-not-allowed ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}         {...props}",
+          "content": "{icon}"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "common/LoadingState.tsx": {
+      "file": "frontend/src/components/common/LoadingState.tsx",
+      "buttons_count": 0,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "common/PageHeader.tsx": {
+      "file": "frontend/src/components/common/PageHeader.tsx",
+      "buttons_count": 0,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "common/RefreshButton.tsx": {
+      "file": "frontend/src/components/common/RefreshButton.tsx",
+      "buttons_count": 1,
+      "button_details": [
+        {
+          "props": "type=\"button\"         disabled={isRefreshing}         onClick={handleRefresh}         aria-busy={isRefreshing}         aria-label={label || 'Refresh data'}         className={`${baseClasses} ${sizeClasses} ${variantClasses} ${className}`}",
+          "content": "{isRefreshing ? 'Refreshing\u2026' : label}"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 1,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "common/SearchBar.tsx": {
+      "file": "frontend/src/components/common/SearchBar.tsx",
+      "buttons_count": 1,
+      "button_details": [
+        {
+          "props": "type=\"button\"           onClick={() =",
+          "content": "onChange('')}\n          disabled={disabled}\n          aria-l"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 1,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "common/SectionHeader.tsx": {
+      "file": "frontend/src/components/common/SectionHeader.tsx",
+      "buttons_count": 0,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "common/SignOutConfirmDialog.tsx": {
+      "file": "frontend/src/components/common/SignOutConfirmDialog.tsx",
+      "buttons_count": 0,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 1,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "common/StatCard.tsx": {
+      "file": "frontend/src/components/common/StatCard.tsx",
+      "buttons_count": 0,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "common/StatusBadge.tsx": {
+      "file": "frontend/src/components/common/StatusBadge.tsx",
+      "buttons_count": 0,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "layout/AdminSidebar.tsx": {
+      "file": "frontend/src/components/layout/AdminSidebar.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "type=\"button\"             onClick={onCloseMobile}             className=\"lg:hidden z-10 p-1.5 rounded-lg text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors\"             aria-label=\"Close navigation\"",
+          "content": ""
+        },
+        {
+          "props": "type=\"button\"                               onClick={(e) =",
+          "content": "{\n                                e.stopPropagation();\n     "
+        },
+        {
+          "props": "type=\"button\"           onClick={() =",
+          "content": "setCollapsed(!collapsed)}\n          className={`w-full hidde"
+        }
+      ],
+      "links_count": 6,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 11,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "layout/AppShell.tsx": {
+      "file": "frontend/src/components/layout/AppShell.tsx",
+      "buttons_count": 0,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "layout/Sidebar.tsx": {
+      "file": "frontend/src/components/layout/Sidebar.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "type=\"button\"             onClick={onCloseMobile}             className=\"lg:hidden p-1.5 rounded-lg text-[#B8C7D9] hover:text-white hover:bg-[#1D3B5C] transition-colors\"             aria-label=\"Close navigation\"",
+          "content": ""
+        },
+        {
+          "props": "type=\"button\"                             onClick={(e) =",
+          "content": "{\n                              e.preventDefault();\n        "
+        },
+        {
+          "props": "type=\"button\"           onClick={() =",
+          "content": "setCollapsed(!collapsed)}\n          className=\"w-full hidden"
+        }
+      ],
+      "links_count": 3,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 6,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "layout/Topbar.tsx": {
+      "file": "frontend/src/components/layout/Topbar.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "type=\"button\"             onClick={onToggleMobile}             className=\"lg:hidden p-2 rounded-lg text-[#536783] hover:text-[#111D35] hover:bg-[#F4F7FB] transition-colors focus:outline-none focus:ring-2 focus:ring-[#93B5E8]\"             aria-label=\"Toggle navigation menu\"",
+          "content": ""
+        },
+        {
+          "props": "type=\"button\"             onClick={() =",
+          "content": "setMenuOpen((v) => !v)}\n            className=\"flex items-ce"
+        },
+        {
+          "props": "type=\"button\"                   onClick={handleOpenSignOutConfirm}                   disabled={loggingOut}                   className=\"w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50\"",
+          "content": "Sign out of portal"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 1,
+      "onclick_count": 3,
+      "use_query_count": 1,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "academicYearsApi"
+      ]
+    },
+    "notifications/NotificationBellDropdown.tsx": {
+      "file": "frontend/src/components/notifications/NotificationBellDropdown.tsx",
+      "buttons_count": 7,
+      "button_details": [
+        {
+          "props": "type=\"button\"         onClick={() =",
+          "content": "setIsOpen((prev) => !prev)}\n        className={buttonClassNa"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "refresh()}\n                disabled={isLoading}\n            "
+        },
+        {
+          "props": "type=\"button\"                   onClick={() =",
+          "content": "markAllAsRead()}\n                  className=\"flex items-cen"
+        },
+        {
+          "props": "type=\"button\"               onClick={() =",
+          "content": "setFilterUnread(false)}\n              className={`pb-2 px-2 "
+        },
+        {
+          "props": "type=\"button\"               onClick={() =",
+          "content": "setFilterUnread(true)}\n              className={`pb-2 px-2 b"
+        },
+        {
+          "props": "type=\"button\"                         onClick={(e) =",
+          "content": "{\n                          e.stopPropagation();\n           "
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "{\n                  setIsOpen(false);\n                  navi"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 8,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "timetable/EditEntryModal.tsx": {
+      "file": "frontend/src/components/timetable/EditEntryModal.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "type=\"button\"             onClick={onClose}             className=\"p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors\"             aria-label=\"Close modal\"",
+          "content": ""
+        },
+        {
+          "props": "type=\"button\"               onClick={onClose}               disabled={updateMutation.isPending}               className=\"academic-btn-secondary text-xs\"",
+          "content": "Cancel"
+        },
+        {
+          "props": "type=\"submit\"               disabled={updateMutation.isPending}               className=\"academic-btn-primary text-xs inline-flex items-center gap-2\"",
+          "content": "{updateMutation.isPending ? (\n                <>\n           "
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 1,
+      "modals_count": 0,
+      "onclick_count": 2,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "updateTimetableEntry"
+      ]
+    },
+    "timetable/GenerationDiagnostics.tsx": {
+      "file": "frontend/src/components/timetable/GenerationDiagnostics.tsx",
+      "buttons_count": 0,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "timetable/GenerationSummary.tsx": {
+      "file": "frontend/src/components/timetable/GenerationSummary.tsx",
+      "buttons_count": 0,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "timetable/PersonalTimetableGrid.tsx": {
+      "file": "frontend/src/components/timetable/PersonalTimetableGrid.tsx",
+      "buttons_count": 4,
+      "button_details": [
+        {
+          "props": "type=\"button\"             onClick={() =",
+          "content": "setActiveDay('ALL')}\n            className={`px-3 py-1.5 rou"
+        },
+        {
+          "props": "key={d}                 type=\"button\"                 onClick={() =",
+          "content": "setActiveDay(d)}\n                className={`px-3 py-1.5 rou"
+        },
+        {
+          "props": "type=\"button\"             onClick={() =",
+          "content": "setViewMode('grid')}\n            title=\"Grid View\"\n         "
+        },
+        {
+          "props": "type=\"button\"             onClick={() =",
+          "content": "setViewMode('agenda')}\n            title=\"Agenda View\"\n     "
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 4,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "timetable/TimetableCell.tsx": {
+      "file": "frontend/src/components/timetable/TimetableCell.tsx",
+      "buttons_count": 0,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "timetable/TimetableGrid.tsx": {
+      "file": "frontend/src/components/timetable/TimetableGrid.tsx",
+      "buttons_count": 2,
+      "button_details": [
+        {
+          "props": "onClick={handleExportPDF}               className=\"inline-flex items-center px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-100 transition-colors\"",
+          "content": "Export PDF"
+        },
+        {
+          "props": "onClick={handlePrint}             className=\"inline-flex items-center px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-100 transition-colors\"",
+          "content": "Print"
+        }
+      ],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 1,
+      "onclick_count": 3,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    },
+    "timetable/ValidationResultDisplay.tsx": {
+      "file": "frontend/src/components/timetable/ValidationResultDisplay.tsx",
+      "buttons_count": 0,
+      "button_details": [],
+      "links_count": 0,
+      "forms_count": 0,
+      "modals_count": 0,
+      "onclick_count": 0,
+      "use_query_count": 0,
+      "use_mutation_count": 0,
+      "api_functions": []
+    }
+  },
+  "layouts": {
+    "FacultyLayout.tsx": {
+      "file": "frontend/src/layouts/FacultyLayout.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "type=\"button\"             onClick={handleSignOutClick}             disabled={isLoggingOut}             className=\"w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-medium text-[#A2B4CC] hover:text-white hover:bg-[#1D3152] transition-colors duration-150 disabled:opacity-50\"",
+          "content": "Sign out"
+        },
+        {
+          "props": "type=\"button\"               onClick={() =",
+          "content": "setMobileMenuOpen((prev) => !prev)}\n              className="
+        },
+        {
+          "props": "type=\"button\"                 onClick={handleSignOutClick}                 disabled={isLoggingOut}                 className=\"text-xs font-semibold text-[#38BDF8] hover:underline disabled:opacity-50\"",
+          "content": "Sign out"
+        }
+      ],
+      "links_count": 2,
+      "forms_count": 0,
+      "modals_count": 1,
+      "onclick_count": 4,
+      "use_query_count": 2,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "apiGetMe",
+        "getFacultyMyTimetable"
+      ]
+    },
+    "StudentLayout.tsx": {
+      "file": "frontend/src/layouts/StudentLayout.tsx",
+      "buttons_count": 4,
+      "button_details": [
+        {
+          "props": "type=\"button\"                 onClick={handleSignOutClick}                 disabled={isLoggingOut}                 className=\"w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-[#4B83D1] hover:bg-[#3D71BD] text-white text-xs font-semibold shadow-xs transition-colors duration-150 active:scale-[0.98] disabled:opacity-50\"",
+          "content": "Sign Out"
+        },
+        {
+          "props": "type=\"button\"                 onClick={() =",
+          "content": "setMobileMenuOpen((prev) => !prev)}\n                classNam"
+        },
+        {
+          "props": "type=\"button\"                   onClick={handleSignOutClick}                   disabled={isLoggingOut}                   className=\"w-full flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-[#4B83D1] text-white text-xs font-semibold shadow-xs disabled:opacity-50\"",
+          "content": "Sign Out"
+        },
+        {
+          "props": "type=\"button\"                   title=\"Search timetable or courses\"                   aria-label=\"Search\"                   className=\"w-10 h-10 rounded-full border border-[#E5ECF5] text-[#71819A] hover:text-[#17243B] hover:bg-[#F1F6FF] flex items-center justify-center transition-colors shadow-xs\"",
+          "content": ""
+        }
+      ],
+      "links_count": 2,
+      "forms_count": 0,
+      "modals_count": 1,
+      "onclick_count": 4,
+      "use_query_count": 2,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "apiGetMe",
+        "getStudentMyTimetable"
+      ]
+    },
+    "SuperAdminLayout.tsx": {
+      "file": "frontend/src/layouts/SuperAdminLayout.tsx",
+      "buttons_count": 3,
+      "button_details": [
+        {
+          "props": "onClick={() =",
+          "content": "setMobileMenuOpen(false)}\n            className=\"lg:hidden p"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setShowSignOutConfirm(true)}\n              title=\"Sign Out\"\n"
+        },
+        {
+          "props": "onClick={() =",
+          "content": "setMobileMenuOpen(true)}\n              className=\"lg:hidden "
+        }
+      ],
+      "links_count": 1,
+      "forms_count": 0,
+      "modals_count": 1,
+      "onclick_count": 4,
+      "use_query_count": 1,
+      "use_mutation_count": 0,
+      "api_functions": [
+        "apiGetMe"
+      ]
+    }
+  }
+}

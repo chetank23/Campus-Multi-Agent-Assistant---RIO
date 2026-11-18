@@ -148,6 +148,8 @@ export function FacultyEventsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['faculty', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'events'] });
       setCreateModalOpen(false);
       setEditingEvent(null);
       setVenueCheckResult(null);
@@ -158,6 +160,8 @@ export function FacultyEventsPage() {
     mutationFn: (id: number) => eventsApi.submitEvent(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['faculty', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'events'] });
     },
   });
 
@@ -166,6 +170,8 @@ export function FacultyEventsPage() {
       eventsApi.cancelEvent(id, { reason }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['faculty', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['student', 'events'] });
       setCancelModalEvent(null);
       setCancelReason('');
     },

@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   BookOpen,
@@ -9,11 +11,24 @@ import { getStudentCourses } from '@/api/timetable';
 import { LoadingState, ErrorState } from '@/components/common';
 
 export function StudentCoursesPage() {
+  const [searchParams] = useSearchParams();
+  const query = searchParams.get('q')?.toLowerCase().trim() || '';
+
   const { data: courses, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['student-courses'],
     queryFn: getStudentCourses,
     staleTime: 60_000,
   });
+
+  const filteredCourses = useMemo(() => {
+    if (!courses) return [];
+    if (!query) return courses;
+    return courses.filter((c) =>
+      c.course_code.toLowerCase().includes(query) ||
+      c.course_name.toLowerCase().includes(query) ||
+      (c.faculty_name && c.faculty_name.toLowerCase().includes(query))
+    );
+  }, [courses, query]);
 
   if (isLoading) {
     return (
@@ -35,7 +50,7 @@ export function StudentCoursesPage() {
     );
   }
 
-  const totalCredits = (courses || []).reduce((acc, c) => acc + (c.credits || 0), 0);
+  const totalCredits = (filteredCourses || []).reduce((acc, c) => acc + (c.credits || 0), 0);
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto pb-10">
@@ -68,19 +83,21 @@ export function StudentCoursesPage() {
       </div>
 
       {/* Courses Grid */}
-      {!courses || courses.length === 0 ? (
+      {!filteredCourses || filteredCourses.length === 0 ? (
         <div className="p-12 bg-white rounded-2xl border border-slate-200 text-center space-y-2">
           <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
             <BookOpen size={24} />
           </div>
-          <h3 className="text-sm font-bold text-slate-900">No Courses Assigned</h3>
+          <h3 className="text-sm font-bold text-slate-900">{query ? 'No Matching Courses Found' : 'No Courses Assigned'}</h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            Your section does not have any active course assignments registered in the academic directory.
+            {query
+              ? `No courses matching "${query}" were found in your assigned semester curriculum.`
+              : 'Your section does not have any active course assignments registered in the academic directory.'}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {courses.map((course) => (
+          {filteredCourses.map((course) => (
             <div
               key={course.id}
               className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-blue-400 transition-all flex flex-col justify-between space-y-4"
