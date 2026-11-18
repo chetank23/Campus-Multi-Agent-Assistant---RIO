@@ -7,51 +7,18 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
-  secret-scan:
-    name: Secret scanning
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Gitleaks Secret Scanner
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - name: RIO Repository Source Secret Scan
-        run: python scripts/scan_secrets.py
-
-  frontend:
-    name: Frontend build and lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install dependencies
-        working-directory: frontend
-        run: npm ci
-      - name: Lint
-        working-directory: frontend
-        run: npm run lint
-      - name: Type-check and build
-        working-directory: frontend
-        run: npm run build
-
   backend:
-    name: Backend tests
+    name: Backend quality and tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -71,21 +38,288 @@ jobs:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/campus_ai_test
       SECRET_KEY: rio-ci-only-signing-key-not-used-outside-ephemeral-tests-2026
       PYTHONPATH: .
+      RIO_CHAT_LLM_ENABLED: "false"
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: requirements.txt
+
       - name: Install dependencies
-        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyrefly
+
       - name: Create isolated application test database
         env:
           PGPASSWORD: postgres
         run: |
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE campus_ai_app_test"
+
       - name: Compile Python modules
-        run: python -m compileall -q backend agents database
-      - name: Run test suite against isolated local PostgreSQL
-        run: pytest -q
+        run: python -m compileall -q backend agents database scripts
+
+      - name: Run Pyrefly static type check
+        run: pyrefly check --min-severity=warn
+
+      - name: Run test suite against isolated PostgreSQL
+        run: |
+          mkdir -p reports/junit
+          pytest -q --junitxml=reports/junit/pytest-backend.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: reports/junit/pytest-backend.xml
+          retention-days: 14
+
+  migrations:
+    name: Database migration validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: campus_migration_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d campus_migration_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/campus_migration_test
+      SECRET_KEY: rio-ci-only-signing-key-not-used-outside-ephemeral-tests-2026
+      PYTHONPATH: .
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify single unambiguous migration head
+        run: |
+          head_output=$(alembic heads)
+          echo "Current heads: $head_output"
+          num_heads=$(echo "$head_output" | grep -v '^$' | wc -l)
+          if [ "$num_heads" -ne 1 ]; then
+            echo "::error::Multiple migration heads detected ($num_heads heads). Migration graph has branched!"
+            exit 1
+          fi
+
+      - name: Execute fresh migration upgrade to head
+        run: alembic upgrade head
+
+      - name: Verify migration status matches head
+        run: |
+          current_rev=$(alembic current)
+          echo "Applied revision: $current_rev"
+
+      - name: Verify schema consistency (alembic check)
+        run: alembic check
+
+      - name: Verify migration reversibility (downgrade -1 then re-upgrade)
+        run: |
+          alembic downgrade -1
+          alembic upgrade head
+          alembic check
+
+  frontend:
+    name: Frontend build and type checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run linter (Oxlint)
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Run TypeScript type check
+        working-directory: frontend
+        run: npx tsc -b
+
+      - name: Run production build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-production-dist
+          path: frontend/dist/
+          retention-days: 14
+
+  browser-acceptance:
+    name: Browser acceptance tests
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: campus_ai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d campus_ai_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/campus_ai_app_test
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/campus_ai_app_test
+      SECRET_KEY: rio-ci-only-signing-key-not-used-outside-ephemeral-tests-2026
+      PYTHONPATH: .
+      RIO_CHAT_LLM_ENABLED: "false"
+      FRONTEND_URL: "http://localhost:5173"
+      BACKEND_URL: "http://127.0.0.1:8000"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Install Frontend dependencies & build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Setup application test database & seed data
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE campus_ai_app_test"
+          alembic upgrade head
+          python scripts/import_aids_a_dataset.py
+
+      - name: Start FastAPI Backend
+        run: |
+          python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
+          timeout 30 bash -c 'until curl -sf http://127.0.0.1:8000/health; do sleep 1; done'
+
+      - name: Start Frontend Preview Server
+        working-directory: frontend
+        run: |
+          npx vite preview --host 127.0.0.1 --port 5173 &
+          timeout 30 bash -c 'until curl -sf http://127.0.0.1:5173; do sleep 1; done'
+
+      - name: Run Playwright Browser Acceptance Suite
+        run: |
+          mkdir -p reports/screenshots reports/traces reports/junit
+          pytest tests/e2e/test_browser_acceptance.py -v -m browser --junitxml=reports/junit/pytest-browser.xml
+
+      - name: Upload browser test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-acceptance-artifacts
+          path: |
+            reports/screenshots/
+            reports/traces/
+            reports/junit/pytest-browser.xml
+          retention-days: 14
+
+  security:
+    name: Security and vulnerability scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks Secret Scanner
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: RIO Repository Source Secret Scan
+        run: python scripts/scan_secrets.py
+
+      - name: Python Dependency Vulnerability Audit (pip-audit)
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit
+          pip-audit --desc -r requirements.txt || true
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend Dependency Vulnerability Audit (npm audit)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm audit --audit-level=high
