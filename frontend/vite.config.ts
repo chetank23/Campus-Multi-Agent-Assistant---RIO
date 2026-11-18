@@ -24,5 +24,37 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    build: {
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            const normalized = id.replace(/\\/g, '/');
+            if (normalized.includes('/node_modules/')) {
+              if (normalized.includes('/jspdf') || normalized.includes('/jspdf-autotable')) {
+                return 'vendor-jspdf';
+              }
+              if (normalized.includes('/lucide-react/')) {
+                return 'vendor-icons';
+              }
+              if (normalized.includes('/@tanstack/')) {
+                return 'vendor-query';
+              }
+              if (
+                normalized.includes('/react/') ||
+                normalized.includes('/react-dom/') ||
+                normalized.includes('/react-router/') ||
+                normalized.includes('/react-router-dom/')
+              ) {
+                return 'vendor-react';
+              }
+              if (normalized.includes('/axios/')) {
+                return 'vendor-axios';
+              }
+            }
+          },
+        },
+      },
+    },
   };
 });

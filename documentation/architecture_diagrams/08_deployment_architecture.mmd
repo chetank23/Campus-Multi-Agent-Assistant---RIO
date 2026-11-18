@@ -1,0 +1,59 @@
+```mermaid
+graph TD
+    subgraph ClientEnvironments ["Client Tier"]
+        WEB_BROWSER["Desktop / Laptop Browsers (Chrome, Firefox, Safari, Edge)"]
+        MOBILE_VIEW["Responsive Mobile Viewports"]
+    end
+
+    subgraph IngressLayer ["Ingress & Reverse Proxy Tier"]
+        EDGE_ROUTER["Cloud Ingress / Reverse Proxy (Nginx / Cloudflare CDN)"]
+        SSL_TERMINATION["SSL/TLS Termination (HTTPS Port 443)"]
+        STATIC_FILES["Frontend Static Assets (Vite Production Build)"]
+    end
+
+    subgraph ApplicationCluster ["Application Tier (Docker / Containerized)"]
+        FASTAPI_WORKER_1["FastAPI ASGI Worker 1 (Uvicorn - Python 3.13)"]
+        FASTAPI_WORKER_2["FastAPI ASGI Worker 2 (Uvicorn - Python 3.13)"]
+        FASTAPI_WORKER_N["FastAPI ASGI Worker N (Horizontal Auto-Scaling)"]
+
+        subgraph EmbeddedEngines ["In-Process Computational Engines"]
+            ORT_ENGINE["Google OR-Tools CP-SAT Optimizer (C++ Core via Cython)"]
+            LANGGRAPH_ENGINE["LangGraph Multi-Agent Supervisor Runtime"]
+            VALIDATION_ENGINE["Deterministic Rule Validator & Quality Scorer"]
+        end
+    end
+
+    subgraph BackgroundWorkerTier ["Asynchronous & Worker Tier"]
+        CELERY_WORKER["Celery Background Worker (Long-Running Solver & PDF Extraction)"]
+        REDIS_BROKER[("Redis In-Memory Broker & Cache")]
+        STORAGE_BUCKET[("Curriculum Storage (Local / S3 / MinIO PDFs)")]
+    end
+
+    subgraph ExternalServices ["External Intelligence Providers"]
+        ANTHROPIC_API["Anthropic Claude 3.5 Sonnet API (Tool Calling HTTPS)"]
+    end
+
+    subgraph DataCluster ["Persistence Tier (PostgreSQL HA Cluster)"]
+        PG_PRIMARY[("PostgreSQL 16/18 Primary Instance (Port 5432)")]
+        PG_REPLICA[("PostgreSQL Streaming Read-Replica (Reporting & Analytics)")]
+        PG_WAL[("Write-Ahead Log (WAL) Continuous Archival")]
+    end
+
+    WEB_BROWSER & MOBILE_VIEW -->|HTTPS / WSS| EDGE_ROUTER
+    EDGE_ROUTER --> SSL_TERMINATION
+    SSL_TERMINATION -->|Route /| STATIC_FILES
+    SSL_TERMINATION -->|Route /api & /chat| FASTAPI_WORKER_1 & FASTAPI_WORKER_2 & FASTAPI_WORKER_N
+
+    FASTAPI_WORKER_1 & FASTAPI_WORKER_2 & FASTAPI_WORKER_N --> EmbeddedEngines
+    FASTAPI_WORKER_1 & FASTAPI_WORKER_2 & FASTAPI_WORKER_N -->|Connection Pool (psycopg v3)| PG_PRIMARY
+    FASTAPI_WORKER_1 & FASTAPI_WORKER_2 & FASTAPI_WORKER_N -->|Enqueue Async Jobs| REDIS_BROKER
+    REDIS_BROKER --> CELERY_WORKER
+    CELERY_WORKER --> STORAGE_BUCKET
+    CELERY_WORKER --> PG_PRIMARY
+
+    LANGGRAPH_ENGINE -.->|Optional Tool Calling| ANTHROPIC_API
+
+    PG_PRIMARY -->|Synchronous Streaming Replication| PG_REPLICA
+    PG_PRIMARY --> PG_WAL
+```
+

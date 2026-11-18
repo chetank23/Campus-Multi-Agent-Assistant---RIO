@@ -1,0 +1,134 @@
+```mermaid
+erDiagram
+    %% 1. Identity & Security Domain
+    users ||--o{ students : "is profile of"
+    users ||--o{ faculty : "is profile of"
+    users ||--o{ refresh_sessions : "has active sessions"
+    users ||--o{ audit_logs : "triggers"
+    users ||--o{ notifications : "receives"
+    users ||--o{ resource_bookings : "requests"
+    users ||--o{ chat_conversations : "owns"
+
+    %% 2. Academic Core Hierarchy
+    departments ||--o{ programs : "offers"
+    departments ||--o{ faculty : "employs"
+    departments ||--o{ courses : "administers"
+    departments ||--o{ rooms : "owns/allocated"
+    programs ||--o{ semesters : "contains"
+    semesters ||--o{ sections : "subdivides into"
+    sections ||--o{ batches : "divides into lab cohorts"
+    sections ||--o{ students : "enrolls"
+    sections ||--o{ timetables : "has canonical schedule"
+    academic_years ||--o{ semesters : "spans"
+    academic_years ||--o{ timetables : "academic scope"
+
+    %% 3. Courses & Faculty Allocation
+    courses ||--o{ course_assignments : "assigned to"
+    faculty ||--o{ course_assignments : "teaches"
+    sections ||--o{ course_assignments : "allocated for"
+    batches ||--o{ course_assignments : "allocated for lab"
+    elective_groups ||--o{ elective_group_courses : "contains"
+    courses ||--o{ elective_group_courses : "mapped in"
+
+    %% 4. Campus Infrastructure & Space-Time
+    buildings ||--o{ rooms : "houses"
+    rooms ||--o{ labs : "specialized as"
+    rooms ||--o{ timetable_entries : "hosts class"
+    time_slots ||--o{ timetable_entries : "scheduled at"
+    faculty ||--o{ faculty_availability : "defines preferences"
+    time_slots ||--o{ faculty_availability : "applies to"
+
+    %% 5. Canonical Timetables
+    timetables ||--o{ timetable_entries : "contains classes"
+    courses ||--o{ timetable_entries : "instructed subject"
+    faculty ||--o{ timetable_entries : "assigned teacher"
+    sections ||--o{ timetable_entries : "attending section"
+    batches ||--o{ timetable_entries : "attending batch"
+
+    %% 6. Resource Management & Bookings
+    resources ||--o{ resource_bookings : "booked in"
+    rooms ||--o{ resource_bookings : "allocated venue"
+
+    %% 7. Events, Clubs & Placements (CDC)
+    clubs ||--o{ campus_events : "organizes"
+    placement_drives ||--o{ placement_schedules : "schedules rounds"
+    students ||--o{ student_academic_records : "academic history"
+
+    %% 8. Faculty Substitution & Governance
+    faculty ||--o{ faculty_substitutions : "absent faculty"
+    faculty ||--o{ faculty_substitutions : "substitute faculty"
+    timetable_entries ||--o{ faculty_substitutions : "covered lecture"
+
+    %% 9. Central Curriculum Governance (Super Admin)
+    regulations ||--o{ curriculum_versions : "governs"
+    curriculum_versions ||--o{ curriculum_semesters : "structures"
+    curriculum_versions ||--o{ curriculum_releases : "version snapshots"
+    admission_cohorts ||--o{ students : "admission cohort"
+
+    %% Entity Attributes Summary
+    users {
+        int id PK
+        string email UK
+        string password_hash
+        string role "SUPER_ADMIN | ADMIN | FACULTY | STUDENT"
+        boolean is_active
+    }
+
+    students {
+        int id PK
+        int user_id FK
+        string srn UK
+        int department_id FK
+        int section_id FK
+        int batch_id FK
+    }
+
+    faculty {
+        int id PK
+        int user_id FK
+        string employee_id UK
+        string designation
+        int department_id FK
+        string specialization
+    }
+
+    timetables {
+        int id PK
+        int academic_year_id FK
+        int semester_id FK
+        int section_id FK
+        string status "DRAFT | PUBLISHED | ARCHIVED"
+        string working_days "MON_SAT | MON_FRI"
+    }
+
+    timetable_entries {
+        int id PK
+        int timetable_id FK
+        int course_id FK
+        int faculty_id FK
+        int room_id FK
+        int slot_id FK
+        int section_id FK
+        int batch_id FK
+        string hour_type "THEORY | PRACTICAL | TUTORIAL"
+        string status "ACTIVE | CANCELLED | RESCHEDULED"
+    }
+
+    rooms {
+        int id PK
+        int building_id FK
+        string room_number
+        int floor_number
+        int capacity
+        string room_type "CLASSROOM | LAB | SEMINAR_HALL"
+    }
+
+    time_slots {
+        int id PK
+        string day "MON .. SAT"
+        time start_time
+        time end_time
+        string slot_type "REGULAR | BREAK | LUNCH"
+    }
+```
+

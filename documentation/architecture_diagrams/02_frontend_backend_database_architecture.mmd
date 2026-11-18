@@ -1,0 +1,59 @@
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Client Browser (React 19 SPA)
+    participant AuthCtx as React AuthProvider & Axios Interceptor
+    participant Gateway as FastAPI Router & Dependencies
+    participant Security as Security Core (JWT & Bcrypt)
+    participant Service as Business Domain Service
+    participant ORM as SQLAlchemy 2.0 Engine
+    participant DB as PostgreSQL 16/18 Database
+
+    %% 1. Authentication Phase
+    Note over User, DB: 1. Authentication & Token Issuance
+    User->>AuthCtx: Enter credentials (email, password)
+    AuthCtx->>Gateway: POST /auth/login { username, password }
+    Gateway->>Security: verify_password(plain, hashed_pw)
+    Security->>ORM: SELECT password_hash, role FROM users WHERE email=?
+    ORM->>DB: Execute Parameterized SQL
+    DB-->>ORM: User Record
+    ORM-->>Security: User Object
+    Security-->>Gateway: Verified: True, Role: ADMIN/FACULTY/STUDENT
+    Gateway->>Security: create_access_token(user_id, role)
+    Security-->>Gateway: JWT Access Token (15 min) + Refresh Cookie (7 days)
+    Gateway-->>AuthCtx: HTTP 200 { access_token, user_profile }
+    AuthCtx-->>User: Store Token in Memory & Render Role Portal
+
+    %% 2. Authenticated API Call
+    Note over User, DB: 2. Authenticated Data Retrieval Lifecycle
+    User->>AuthCtx: Navigate to Timetable / Courses / Students
+    AuthCtx->>Gateway: GET /student/my-timetable (Authorization: Bearer <JWT>)
+    Gateway->>Security: decode_jwt(token) -> user_id, role
+    Security-->>Gateway: Claims Valid (role="STUDENT", user_id=105)
+    Gateway->>Gateway: require_role(["STUDENT", "ADMIN"]) -> PASS
+    Gateway->>Service: get_student_my_timetable(student_id, academic_year_id)
+    Service->>ORM: Query canonical timetable & joined courses/rooms/slots
+    ORM->>DB: SELECT * FROM timetables JOIN timetable_entries ... WHERE section_id=?
+    DB-->>ORM: Result Set (42 instructional periods)
+    ORM-->>Service: Hydrated ORM Entities
+    Service-->>Gateway: Pydantic TimetableDTO
+    Gateway-->>AuthCtx: HTTP 200 JSON Response
+    AuthCtx-->>User: Update TanStack Query Cache & Render Grid UI
+
+    %% 3. Token Expiry & Silent Refresh
+    Note over User, DB: 3. Token Expiration & Silent Interceptor Refresh
+    User->>Gateway: GET /protected-resource (Expired Access Token)
+    Gateway-->>AuthCtx: HTTP 401 Unauthorized (Token Expired)
+    AuthCtx->>Gateway: POST /auth/refresh (HttpOnly Refresh Cookie)
+    Gateway->>Security: Validate RefreshSession in DB
+    Security->>ORM: SELECT * FROM refresh_sessions WHERE token_hash=? AND is_revoked=false
+    ORM->>DB: Query Session
+    DB-->>ORM: Active Session Found
+    Gateway->>Security: Mint new Access Token
+    Security-->>Gateway: New JWT Access Token
+    Gateway-->>AuthCtx: HTTP 200 { access_token }
+    AuthCtx->>Gateway: Replay original failed request with new Bearer Token
+    Gateway-->>AuthCtx: HTTP 200 OK
+    AuthCtx-->>User: Seamless UI State Update (Zero Interruption)
+```
+

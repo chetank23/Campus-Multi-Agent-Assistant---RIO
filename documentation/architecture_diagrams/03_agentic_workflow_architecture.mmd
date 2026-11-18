@@ -1,0 +1,99 @@
+```mermaid
+graph TD
+    subgraph Client ["Client Interface"]
+        USER["Authenticated User (Admin / Faculty / Student)"]
+        DRAWER["Campus Assistant Drawer (React 19)"]
+    end
+
+    subgraph API_Route ["FastAPI Backend Layer"]
+        CHAT_ENDPOINT["POST /chat Endpoint"]
+        AUTH_INSPECT["Extract User Role & Department Claims"]
+    end
+
+    subgraph LangGraph_Runtime ["LangGraph Supervisor Engine"]
+        INIT_STATE["Initialize AgentState (user_id, role, dept, message)"]
+        SUPERVISOR["Supervisor Node (Intent Classifier & Authorization Guard)"]
+        ROUTER{"Conditional Edge: route_supervisor()"}
+
+        subgraph SpecialistAgents ["Specialist Agent Nodes"]
+            QUERY_NODE["Query Agent Node (Campus Intelligence)"]
+            SCHED_NODE["Scheduling Agent Node (Timetable Advisory)"]
+            RES_NODE["Resource Agent Node (Facility Bookings)"]
+            COMP_NODE["Composite Coordinator Node (Cross-Agent Orchestration)"]
+        end
+
+        END_NODE["End Node (Consolidate State & Sanitize Plain English)"]
+    end
+
+    subgraph GroundingLayer ["Deterministic Grounding & Tools Layer"]
+        TOOL_REGISTRY["Typed Database Tool Registry"]
+        CAMPUS_TOOLS["Campus & Infrastructure Tools"]
+        ACAD_TOOLS["Academic Roster & Student Profile Tools"]
+        TIMETABLE_TOOLS["Timetable & Conflict Checking Tools"]
+        BOOKING_TOOLS["Resource Availability & Reservation Tools"]
+    end
+
+    subgraph ExternalLLM ["LLM Dual-Engine Execution"]
+        API_CHECK{"ANTHROPIC_API_KEY Configured?"}
+        CLAUDE["Anthropic Claude 3.5 Sonnet (Tool Calling API)"]
+        DETERMINISTIC_FALLBACK["Deterministic Pattern-Matching Tool Dispatcher"]
+    end
+
+    subgraph HumanInTheLoop ["Human-in-the-Loop Governance"]
+        PROP_STORE["Two-Phase Proposal Store (op_prop_*, res_prop_*)"]
+        CONFIRM_CHECK{"User Confirmed Action Token?"}
+        MUTATION["Execute Authorized Mutation Transaction"]
+        PROPOSAL_RESPONSE["Return Proposal Summary & Confirmation Token"]
+    end
+
+    subgraph Database ["PostgreSQL Database (Source of Truth)"]
+        PG_DB[("PostgreSQL 16/18 Tables (Zero Hallucination Grounding)")]
+    end
+
+    USER -->|Type Natural Language Query| DRAWER
+    DRAWER -->|POST /chat { message }| CHAT_ENDPOINT
+    CHAT_ENDPOINT --> AUTH_INSPECT
+    AUTH_INSPECT --> INIT_STATE
+    INIT_STATE --> SUPERVISOR
+    SUPERVISOR --> ROUTER
+
+    ROUTER -->|Read-only info| QUERY_NODE
+    ROUTER -->|Timetable/Solver inquiry| SCHED_NODE
+    ROUTER -->|Facility reservation| RES_NODE
+    ROUTER -->|Room + Faculty supervision| COMP_NODE
+    ROUTER -->|Out-of-scope / Refusal| END_NODE
+
+    QUERY_NODE --> API_CHECK
+    API_CHECK -->|Yes| CLAUDE
+    API_CHECK -->|No / Offline| DETERMINISTIC_FALLBACK
+
+    CLAUDE --> TOOL_REGISTRY
+    DETERMINISTIC_FALLBACK --> TOOL_REGISTRY
+
+    TOOL_REGISTRY --> CAMPUS_TOOLS
+    TOOL_REGISTRY --> ACAD_TOOLS
+    TOOL_REGISTRY --> TIMETABLE_TOOLS
+    TOOL_REGISTRY --> BOOKING_TOOLS
+
+    CAMPUS_TOOLS --> PG_DB
+    ACAD_TOOLS --> PG_DB
+    TIMETABLE_TOOLS --> PG_DB
+    BOOKING_TOOLS --> PG_DB
+
+    RES_NODE --> CONFIRM_CHECK
+    SCHED_NODE --> CONFIRM_CHECK
+    CONFIRM_CHECK -->|No: Generate Proposal| PROP_STORE
+    PROP_STORE --> PROPOSAL_RESPONSE
+    CONFIRM_CHECK -->|Yes: Token Valid & Role Authorized| MUTATION
+    MUTATION --> PG_DB
+
+    QUERY_NODE --> END_NODE
+    SCHED_NODE --> END_NODE
+    RES_NODE --> END_NODE
+    COMP_NODE --> END_NODE
+
+    END_NODE -->|Sanitized Plain English Reply + Sources| CHAT_ENDPOINT
+    CHAT_ENDPOINT -->|HTTP 200 JSON Response| DRAWER
+    DRAWER -->|Display Assistant Message| USER
+```
+

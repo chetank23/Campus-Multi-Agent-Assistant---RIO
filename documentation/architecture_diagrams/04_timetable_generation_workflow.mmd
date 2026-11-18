@@ -1,0 +1,81 @@
+```mermaid
+flowchart TD
+    subgraph AdminUI ["Admin Interface (React 19 SPA)"]
+        SCOPE_SEL["1. Select Scope: Academic Year, Semester, Section, Working Days (MON_SAT / MON_FRI)"]
+        BTN_PREVIEW["2. Click 'Generate Preview'"]
+        VIEW_GRID["4. Render In-Memory Preview Grid (Zero DB Commit)"]
+        BTN_PUBLISH["5. Click 'Confirm & Publish'"]
+        VIEW_PUBLISHED["7. View Authoritative Published Timetable Grid (42 Periods)"]
+    end
+
+    subgraph BackendAPI ["FastAPI Service Layer"]
+        ROUTE_PREVIEW["POST /timetable/generate-preview"]
+        INPUT_LOADER["timetable_input_loader.load_optimizer_input()"]
+        ROUTE_PUBLISH["POST /timetable/publish"]
+    end
+
+    subgraph ORToolsSolver ["Google OR-Tools CP-SAT Engine"]
+        MODEL_BUILD["Instantiate CpModel() & Decision Variables x[a,h,r,t] in {0,1}"]
+        HARD_RULES["Inject Hard Constraints:
+        - Required course hours sum(x) == req_hours
+        - Faculty clash <= 1 class / slot
+        - Section clash <= 1 class / slot
+        - Batch clash <= 1 lab / slot
+        - Room double-booking <= 1 class / slot
+        - Temporal overlap across period intervals
+        - Elective group exclusions"]
+        SOFT_OBJECTIVES["Inject Soft Multi-Objective Terms:
+        - Faculty gap penalty (weight=10)
+        - Student gap penalty (weight=10)
+        - Preferred slot bonus (weight=-5*pref)
+        - Room change penalty (weight=5)
+        - Late lab penalty >=14:00 (weight=20)
+        - Daily workload variance balance (weight=15)
+        - Minimal perturbation penalties"]
+        STRATEGY_PROFILE["Apply Profile: BALANCED / FACULTY_COMFORT / ROOM_EFFICIENCY / LAB_PREFERENCE"]
+        SOLVE_EXEC["CpSolver().Solve(model) -> Status OPTIMAL / FEASIBLE / INFEASIBLE"]
+    end
+
+    subgraph ValidationEngine ["Independent Deterministic Validator & Scorer"]
+        VALIDATOR["validator.validate_timetable(entries, input)
+        Check: BLOCKER (Hard), WARNING (Soft), INFO"]
+        SCORER["scorer.compute_score(validation_result, entries, input)
+        Score = 0.0 if blocker_count > 0
+        Score = [0, 100] based on gap, room & preference normalization"]
+    end
+
+    subgraph DatabaseLayer ["PostgreSQL 16/18 Persistence Layer"]
+        FETCH_INPUT[("Fetch Courses, Assignments, Rooms, Slots, Faculty Availability")]
+        TX_PUBLISH["Transactional Atomic Write:
+        1. Lock row in 'timetables' (academic_year, semester, section)
+        2. Delete previous draft/published entries for this section
+        3. Insert new 42 TimetableEntry records (status='PUBLISHED')
+        4. Update Timetable.status = 'PUBLISHED'
+        5. Sync legacy TimetableVersion for backwards compatibility
+        6. Commit Transaction"]
+    end
+
+    SCOPE_SEL --> BTN_PREVIEW
+    BTN_PREVIEW --> ROUTE_PREVIEW
+    ROUTE_PREVIEW --> INPUT_LOADER
+    INPUT_LOADER --> FETCH_INPUT
+    FETCH_INPUT --> INPUT_LOADER
+    INPUT_LOADER --> MODEL_BUILD
+    MODEL_BUILD --> HARD_RULES
+    HARD_RULES --> SOFT_OBJECTIVES
+    SOFT_OBJECTIVES --> STRATEGY_PROFILE
+    STRATEGY_PROFILE --> SOLVE_EXEC
+
+    SOLVE_EXEC -->|Feasible Entries| VALIDATOR
+    VALIDATOR --> SCORER
+    SCORER -->|In-Memory JSON DTO| ROUTE_PREVIEW
+    ROUTE_PREVIEW --> VIEW_GRID
+
+    VIEW_GRID --> BTN_PUBLISH
+    BTN_PUBLISH --> ROUTE_PUBLISH
+    ROUTE_PUBLISH --> VALIDATOR
+    VALIDATOR -->|Zero Blockers| TX_PUBLISH
+    TX_PUBLISH --> ROUTE_PUBLISH
+    ROUTE_PUBLISH --> VIEW_PUBLISHED
+```
+

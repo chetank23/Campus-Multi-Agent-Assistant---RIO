@@ -1,0 +1,83 @@
+```mermaid
+flowchart TD
+    %% Entities
+    USER_STUDENT(["Student Persona"])
+    USER_FACULTY(["Faculty Persona"])
+    USER_ADMIN(["Admin / Super Admin Persona"])
+
+    %% Process 1: Authentication & Authorization
+    subgraph P1 ["Process 1: Authentication & RBAC Engine"]
+        AUTH_LOGIN["1.1 Verify Credentials (Bcrypt)"]
+        AUTH_JWT["1.2 Generate Access Token & Refresh Cookie"]
+        AUTH_GUARD["1.3 RBAC Route Guard & Permission Inspector"]
+    end
+
+    %% Process 2: Timetable Optimization & Scheduling
+    subgraph P2 ["Process 2: Constraint Optimization Engine"]
+        LOAD_INPUT["2.1 Aggregate Input Constraints (DTO)"]
+        SOLVE_CPSAT["2.2 CP-SAT Constraint Programming Solver"]
+        VALIDATE_SCORE["2.3 Independent Validation & Quality Scoring"]
+        CANONICAL_PUB["2.4 Transactional Publication & Archival"]
+    end
+
+    %% Process 3: Multi-Agent Conversational AI
+    subgraph P3 ["Process 3: Multi-Agent Natural Language Assistant"]
+        INTENT_CLASSIFY["3.1 Intent & Entity Extraction (Supervisor)"]
+        AGENT_DISPATCH["3.2 Route to Specialist Agent (Query/Sched/Res)"]
+        GROUNDING_EXEC["3.3 Grounded Tool Execution (Zero Hallucination)"]
+        PROPOSAL_MGMT["3.4 Two-Phase Human Approval Handling"]
+    end
+
+    %% Process 4: Campus Resource & Event Management
+    subgraph P4 ["Process 4: Resource & Event Allocation Engine"]
+        AVAIL_CHECK["4.1 Temporal Overlap & Capacity Conflict Detection"]
+        FACULTY_SUB["4.2 Faculty Substitution Qualification Engine"]
+        CDC_ELIG["4.3 CDC Placement Eligibility & Registration Engine"]
+    end
+
+    %% Data Stores
+    subgraph DataStores ["Relational Data Stores (PostgreSQL)"]
+        DS_AUTH[("D1: Users, Roles & Refresh Sessions")]
+        DS_ACAD[("D2: Academic Hierarchy (Depts, Progs, Sections, Batches)")]
+        DS_SPACE[("D3: Campus Space-Time (Buildings, Rooms, Labs, Slots)")]
+        DS_COURSE[("D4: Courses, Syllabi & Faculty Allocations")]
+        DS_TT[("D5: Canonical Timetables & Entries")]
+        DS_RES[("D6: Resources, Bookings & Events")]
+        DS_CDC[("D7: Placement Drives & Student History")]
+        DS_SUB[("D8: Faculty Substitution & Leave Records")]
+        DS_AUDIT[("D9: Audit Trail & Notification Outbox")]
+    end
+
+    %% Flows from Users to Authentication
+    USER_STUDENT & USER_FACULTY & USER_ADMIN -->|Email + Password| AUTH_LOGIN
+    AUTH_LOGIN <-->|Query Hash & Salt| DS_AUTH
+    AUTH_LOGIN --> AUTH_JWT
+    AUTH_JWT -->|Bearer Token| AUTH_GUARD
+
+    %% Flows to Timetable Optimization
+    USER_ADMIN -->|Define Scope & Strategy| LOAD_INPUT
+    LOAD_INPUT <-->|Fetch Curriculum, Staff & Rooms| DS_ACAD & DS_SPACE & DS_COURSE
+    LOAD_INPUT --> SOLVE_CPSAT
+    SOLVE_CPSAT --> VALIDATE_SCORE
+    VALIDATE_SCORE -->|In-Memory Preview Grid| USER_ADMIN
+    USER_ADMIN -->|Approve & Confirm| CANONICAL_PUB
+    CANONICAL_PUB -->|Atomic Insert/Update| DS_TT
+
+    %% Flows to Conversational AI
+    USER_STUDENT & USER_FACULTY & USER_ADMIN -->|Natural Language Prompt| INTENT_CLASSIFY
+    INTENT_CLASSIFY --> AGENT_DISPATCH
+    AGENT_DISPATCH --> GROUNDING_EXEC
+    GROUNDING_EXEC <-->|Read Direct Records| DS_ACAD & DS_SPACE & DS_COURSE & DS_TT & DS_RES
+    AGENT_DISPATCH --> PROPOSAL_MGMT
+    PROPOSAL_MGMT <-->|Store/Retrieve Action Tokens| DS_AUDIT
+    GROUNDING_EXEC -->|Grounded Natural English Answer| USER_STUDENT & USER_FACULTY & USER_ADMIN
+
+    %% Flows to Resource Allocation & Substitution
+    USER_FACULTY -->|Request Substitution| FACULTY_SUB
+    FACULTY_SUB <-->|Check Qualified Staff & Non-Clash| DS_COURSE & DS_TT & DS_SUB
+    USER_STUDENT -->|Check Placement Eligibility| CDC_ELIG
+    CDC_ELIG <-->|Evaluate CGPA & Backlogs| DS_CDC
+    USER_ADMIN & USER_FACULTY -->|Reserve Venue / Equipment| AVAIL_CHECK
+    AVAIL_CHECK <-->|Verify Non-Overlap & Active Slots| DS_SPACE & DS_RES
+```
+

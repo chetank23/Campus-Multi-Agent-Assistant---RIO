@@ -1,0 +1,87 @@
+```mermaid
+graph TD
+    subgraph Users ["User Personas & Role Tiers"]
+        SA["Super Admin (Academic Governance)"]
+        ADM["Admin (Academic & Operational Authority)"]
+        FAC["Faculty Member (Teaching & Availability)"]
+        STU["Student (Schedules, Courses & Placements)"]
+    end
+
+    subgraph ClientLayer ["Client Layer (Frontend SPA - React 19 + TypeScript + Vite)"]
+        UI_AUTH["Auth & Session Management (Axios Interceptors)"]
+        UI_DASH["Role-Based Portals & Dashboards"]
+        UI_TT["Interactive Timetable Grid & Preview/Publish"]
+        UI_DRAWER["Campus Assistant Chat Drawer"]
+        UI_ADMIN["Curriculum, Infrastructure & Space Management"]
+    end
+
+    subgraph APIGateway ["Backend API Gateway (FastAPI 0.110.0 + Uvicorn)"]
+        ROUTER["Modular APIRouter (36 Domain Modules / 253 Endpoints)"]
+        AUTH_DEP["Security Middleware & RBAC Dependencies (require_role, JWT)"]
+        RATE_LIMIT["Authentication Rate Limiting & Throttling"]
+        EXCEPTION_HANDLER["Deterministic Error Handling & Exception Handlers"]
+    end
+
+    subgraph ServiceDomain ["Service & Domain Logic Layer"]
+        AUTH_SVC["Auth & Identity Service (Bcrypt, Refresh Tokens)"]
+        ACAD_SVC["Academic Structure & Enrollment Service"]
+        TT_SVC["Timetable Management & Ingestion Service"]
+        SUB_SVC["Faculty Substitution & Qualification Engine"]
+        CDC_SVC["CDC Placements & Eligibility Engine"]
+        RES_SVC["Resource Inventory & Booking Service"]
+        EVENT_SVC["Campus Events & Club Coordination Service"]
+        CURR_SVC["Curriculum Governance & PDF Syllabus Ingestion"]
+    end
+
+    subgraph AI_AgenticSystem ["Multi-Agent AI System (LangGraph + Anthropic Claude 3.5 Sonnet)"]
+        SUPERVISOR["LangGraph Supervisor Agent (Intent & Scope Classifier)"]
+        QUERY_AGENT["Query Agent (Read-Only Campus Intelligence)"]
+        SCHED_AGENT["Scheduling Agent (Timetable Advisory & Conflict Explanation)"]
+        RES_AGENT["Resource Agent (Booking Proposals & Facility Allocation)"]
+        COMP_COORD["Composite Coordinator (Cross-Agent Multi-Facility Booking)"]
+        PROP_STORE["Two-Phase Commit Proposal Store (Human-in-the-Loop)"]
+        TYPED_TOOLS["18+ Typed Database Tools (Campus, Dept, Faculty, Student, etc.)"]
+    end
+
+    subgraph OptimizationEngine ["Timetable Optimization Engine (Google OR-Tools CP-SAT)"]
+        INPUT_LOADER["Optimizer Input Loader (DTO Data Mapping)"]
+        CPSAT_SOLVER["CP-SAT Mathematical Solver (Constraint Satisfaction)"]
+        HARD_CONSTRAINTS["Hard Constraint Model (Faculty, Room, Section, Batch, Intervals)"]
+        SOFT_CONSTRAINTS["Soft Multi-Objective Weights (Faculty/Student Gaps, Lab Prefs)"]
+        PROFILES["Strategy Profiles (BALANCED, FACULTY_COMFORT, ROOM_EFFICIENCY, LAB_PREFERENCE)"]
+        VALIDATOR["Independent Deterministic Validator (BLOCKER, WARNING, INFO)"]
+        SCORER["Deterministic Quality Scorer (0-100 Normalization Formula)"]
+    end
+
+    subgraph PersistenceLayer ["Persistence & Database Layer (PostgreSQL 16/18)"]
+        SQLALCHEMY["SQLAlchemy 2.0 ORM & Connection Pooling"]
+        ALEMBIC["Alembic Migration Engine (Schema Version Control)"]
+        DB_TABLES[("52+ Relational Tables: Academic, Identity, Space-Time, Courses, Timetables, Resources, Events, CDC, Substitutions, Curriculum, Workflow")]
+        AUDIT_TRAIL[("Tamper-Evident Audit Logs & Notification Outbox")]
+    end
+
+    %% Connections between Layers
+    Users --> ClientLayer
+    ClientLayer -->|HTTPS REST JSON & Bearer JWT| APIGateway
+    APIGateway --> AUTH_DEP
+    AUTH_DEP --> ROUTER
+    ROUTER --> ServiceDomain
+    ROUTER -->|/chat endpoint| AI_AgenticSystem
+    ROUTER -->|/timetable/generate-preview| OptimizationEngine
+
+    ServiceDomain --> SQLALCHEMY
+    AI_AgenticSystem --> TYPED_TOOLS
+    TYPED_TOOLS --> SQLALCHEMY
+    OptimizationEngine --> INPUT_LOADER
+    INPUT_LOADER --> SQLALCHEMY
+    CPSAT_SOLVER --> HARD_CONSTRAINTS
+    CPSAT_SOLVER --> SOFT_CONSTRAINTS
+    CPSAT_SOLVER --> PROFILES
+    CPSAT_SOLVER --> VALIDATOR
+    VALIDATOR --> SCORER
+
+    SQLALCHEMY --> DB_TABLES
+    SQLALCHEMY --> AUDIT_TRAIL
+    ALEMBIC -.-> DB_TABLES
+```
+

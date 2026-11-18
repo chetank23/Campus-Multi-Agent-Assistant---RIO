@@ -1,0 +1,52 @@
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as User / Browser
+    participant Gateway as FastAPI Router (/auth/login)
+    participant RateLimiter as Rate Limiting Middleware
+    participant AuthCore as Auth Service & Passlib Bcrypt
+    participant DB as PostgreSQL Database
+    participant JWT as PyJWT Token Engine
+
+    Note over Client, JWT: Phase 1: Authentication & Credential Verification
+    Client->>Gateway: POST /auth/login { username: "admin@campus.edu", password: "Password@123" }
+    Gateway->>RateLimiter: check_rate_limit(client_ip, email)
+    alt Rate Limit Exceeded (> 5 attempts / min)
+        RateLimiter-->>Client: HTTP 429 Too Many Requests { retry_after: 60 }
+    else Rate Limit OK
+        RateLimiter->>AuthCore: authenticate_user(email, password)
+        AuthCore->>DB: SELECT id, email, password_hash, role, is_active FROM users WHERE email=?
+        DB-->>AuthCore: User Record
+        AuthCore->>AuthCore: pwd_context.verify(password, password_hash)
+        alt Invalid Password / Inactive User
+            AuthCore-->>Client: HTTP 401 Unauthorized "Invalid email or password"
+        else Credentials Valid
+            AuthCore->>JWT: create_access_token(sub=user.id, role=user.role, exp=15m)
+            JWT-->>AuthCore: access_token (HS256 signed JWT)
+            AuthCore->>JWT: create_refresh_token(sub=user.id, exp=7d)
+            JWT-->>AuthCore: refresh_token_string
+            AuthCore->>DB: INSERT INTO refresh_sessions (user_id, token_hash, expires_at) VALUES (...)
+            DB-->>AuthCore: Session Saved
+            AuthCore-->>Gateway: AuthResult { access_token, user_profile, refresh_token }
+            Gateway-->>Client: HTTP 200 OK (Set-Cookie: refresh_token; HttpOnly; SameSite=Lax)<br/>Body: { access_token, token_type: "bearer", user: {...} }
+        end
+    end
+
+    Note over Client, JWT: Phase 2: Role-Based Authorization on Protected Route
+    Client->>Gateway: GET /admin/academic/departments (Header: "Authorization: Bearer <access_token>")
+    Gateway->>JWT: decode_token(access_token, SECRET_KEY, algorithms=["HS256"])
+    alt Token Invalid / Expired
+        JWT-->>Client: HTTP 401 Unauthorized "Could not validate credentials"
+    else Token Valid
+        JWT-->>Gateway: Payload { sub: 1, role: "ADMIN", exp: 1718000000 }
+        Gateway->>Gateway: require_role(["ADMIN", "SUPER_ADMIN"])
+        alt Insufficient Permissions
+            Gateway-->>Client: HTTP 403 Forbidden "Operation not permitted for role STUDENT"
+        else Authorized
+            Gateway->>DB: Execute Business Query (SELECT * FROM departments)
+            DB-->>Gateway: Department Records
+            Gateway-->>Client: HTTP 200 OK [ { id: 1, name: "AI & DS", code: "AIDS" }, ... ]
+        end
+    end
+```
+
