@@ -54,7 +54,7 @@ def test_allows_non_test_database_without_override(monkeypatch):
     """Non-test production/development database targets do not require the test-runner override."""
     monkeypatch.delenv("ALLOW_TEST_DATABASE_MIGRATIONS", raising=False)
     cfg = Config()
-    cfg.set_main_option("sqlalchemy.url", "postgresql+psycopg://campus_user:pass@localhost:5432/campus_ai")
+    cfg.set_main_option("sqlalchemy.url", "postgresql+psycopg://campus_user:yourpassword@localhost:5432/campus_ai")
     cfg.attributes.pop("allow_test_database_migrations", None)
 
     url = validate_migration_target(cfg)
@@ -73,7 +73,7 @@ def test_rejects_non_postgresql_target(monkeypatch):
 def test_rejects_empty_database_name(monkeypatch):
     """URLs without an explicit database name must be rejected."""
     cfg = Config()
-    cfg.set_main_option("sqlalchemy.url", "postgresql+psycopg://campus_user:pass@localhost:5432/")
+    cfg.set_main_option("sqlalchemy.url", "postgresql+psycopg://campus_user:yourpassword@localhost:5432/")
 
     with pytest.raises(RuntimeError, match="Alembic migration target must include an explicit database name."):
         validate_migration_target(cfg)
