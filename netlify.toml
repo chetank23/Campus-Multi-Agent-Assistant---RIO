@@ -5,6 +5,8 @@
   base = "frontend"
   publish = "dist"
   command = "npm run build"
+  # Automatic deployment ban: exit 0 tells Netlify to cancel/ignore all Git-triggered builds.
+  ignore = "exit 0"
 
 # API forwarding rule (reverse proxy) to the backend service.
 # Must appear BEFORE the SPA fallback rule to avoid swallowing API requests.

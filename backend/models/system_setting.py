@@ -36,7 +36,7 @@ class SystemSetting(Base):
         DateTime, default=utc_now, onupdate=utc_now, server_default=func.now()
     )
     updated_by_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("users.id", name="fk_ss_updated_by_id"), nullable=True
+        Integer, ForeignKey("users.id", name="fk_ss_updated_by_id", ondelete="SET NULL"), nullable=True
     )
 
     updated_by: Mapped[Optional["User"]] = relationship("User", foreign_keys=[updated_by_id])
