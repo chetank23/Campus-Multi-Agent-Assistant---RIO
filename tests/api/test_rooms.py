@@ -95,6 +95,8 @@ def test_invalid_building_fk_error():
     # The global exception handler should catch this and return a 422 instead of 500
     assert response.status_code == 422
     assert "Database integrity error" in response.text
+    assert "fk_rooms_building_id" not in response.text
+    assert "Key (building_id)" not in response.text
 
 def test_csv_import_validation(test_building):
     csv_content = f"""building_id,room_number,capacity,room_type
