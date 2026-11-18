@@ -7,7 +7,7 @@ python-dotenv
 # Web Framework & ASGI Server
 fastapi>=0.110.0
 uvicorn[standard]>=0.28.0
-python-multipart>=0.0.9
+python-multipart>=0.0.33
 
 # Scheduling & Optimization Engine
 ortools>=9.8.0
