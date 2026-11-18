@@ -56,7 +56,7 @@ def validate_and_build_test_urls(
             "RIO-MJP tests require an explicitly configured TEST_DATABASE_URL.\n"
             "Fallback to DATABASE_URL is strictly forbidden.\n"
             "Please configure TEST_DATABASE_URL in .env pointing to a dedicated test database "
-            "(e.g., postgresql+psycopg://user:password@localhost:5432/campus_ai_test)."
+            "(e.g., postgresql+psycopg://[user]:[password]@localhost:5432/campus_ai_test)."
         )
 
     try:
@@ -204,6 +204,7 @@ def setup_test_database():
         with engine.connect() as conn:
             conn.execute(text("DROP SCHEMA IF EXISTS test_schema CASCADE"))
             conn.execute(text("CREATE SCHEMA test_schema"))
+        engine.dispose()
 
         # 2. Run Alembic migrations against the test database with search_path=test_schema
         alembic_cfg = Config("alembic.ini")

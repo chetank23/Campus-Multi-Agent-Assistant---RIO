@@ -13,10 +13,55 @@ Strict Security:
 from __future__ import annotations
 
 import datetime
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+SENSITIVE_KEY_SUBSTRINGS = (
+    "pass", "pwd", "token", "secret", "key", "auth", "credential",
+    "session", "cookie", "jwt", "bearer", "phone", "mobile",
+    "address", "parent", "father", "mother", "guardian", "aadhaar",
+    "ssn", "dob", "date_of_birth", "salary", "bank", "account",
+    "cgpa", "gpa",
+)
+
+RE_DB_CONN = re.compile(r"postgres(?:ql)?(?:\+[a-z0-9]+)?://[^:@\s]+:[^@\s]+@[a-zA-Z0-9_.-]+")
+RE_API_KEY = re.compile(r"(?:nvapi|sk-ant|sk)-[A-Za-z0-9_-]{10,}")
+RE_JWT = re.compile(r"eyJhbGciOi[A-Za-z0-9_.-]{20,}")
+
+
+def sanitize_log_message(msg: Optional[str]) -> str:
+    """Masks database credentials, API keys, and JWT tokens in arbitrary text."""
+    if msg is None:
+        return ""
+    if not isinstance(msg, str):
+        msg = str(msg)
+    msg = RE_DB_CONN.sub("postgresql://[REDACTED_USER]:[REDACTED_PASS]@[REDACTED_HOST]", msg)
+    msg = RE_API_KEY.sub("[REDACTED_API_KEY]", msg)
+    msg = RE_JWT.sub("[REDACTED_JWT]", msg)
+    return msg
+
+
+def sanitize_for_logging(val: Any, depth: int = 0) -> Any:
+    """Recursively sanitizes values, masking sensitive keys and embedded credentials."""
+    if depth > 5:
+        return "[MAX_DEPTH]"
+    if isinstance(val, dict):
+        sanitized = {}
+        for k, v in val.items():
+            k_str = str(k).lower()
+            if any(sub in k_str for sub in SENSITIVE_KEY_SUBSTRINGS):
+                sanitized[k] = "[REDACTED]"
+            else:
+                sanitized[k] = sanitize_for_logging(v, depth + 1)
+        return sanitized
+    elif isinstance(val, (list, tuple, set)):
+        return [sanitize_for_logging(item, depth + 1) for item in val]
+    elif isinstance(val, str):
+        return sanitize_log_message(val)
+    return val
 
 
 @dataclass
@@ -71,8 +116,8 @@ class ChatRequestTrace:
         error: Optional[str] = None,
     ) -> None:
         self.tools_requested.append(tool_name)
-        # Sanitize args: never include sensitive keywords
-        safe_args = {k: v for k, v in args.items() if not any(s in k.lower() for s in ["pass", "token", "secret", "key"])}
+        # Deeply sanitize tool arguments removing credentials and sensitive student information
+        safe_args = sanitize_for_logging(args)
         self.tools_executed.append(
             ToolExecutionTrace(
                 tool_name=tool_name,
@@ -80,7 +125,7 @@ class ChatRequestTrace:
                 records_returned=records_count,
                 execution_time_ms=round(duration_ms, 2),
                 success=success,
-                error=error,
+                error=sanitize_log_message(error) if error else None,
             )
         )
         self.db_queries_executed += 1

@@ -45,7 +45,11 @@ from openai.types.chat.chat_completion_message_function_tool_call_param import (
 from sqlalchemy.orm import Session
 
 from backend.models.identity import User
-from agents.common.diagnostics import ChatRequestTrace
+from agents.common.diagnostics import (
+    ChatRequestTrace,
+    sanitize_for_logging,
+    sanitize_log_message,
+)
 from agents.llm.provider_interface import (
     BaseLLMProvider,
     FormattedResponseResult,
@@ -319,7 +323,8 @@ CORE OPERATING MANDATES:
                         except Exception:
                             tool_args = {}
 
-                        logger.info(f"NVIDIA Nemotron called tool '{tool_name}' with args {tool_args}")
+                        safe_args = sanitize_for_logging(tool_args)
+                        logger.info("NVIDIA Nemotron called tool '%s' with sanitized args %s", tool_name, safe_args)
                         t0 = time.perf_counter()
                         tool_result = execute_tool(
                             tool_name=tool_name,
@@ -404,8 +409,9 @@ CORE OPERATING MANDATES:
             }
 
         except Exception as exc:
-            logger.error(f"NVIDIA Nemotron API call failed: {exc}", exc_info=True)
-            diagnostics_summary = trace.finalize(success=False, error=str(exc))
+            safe_exc_msg = sanitize_log_message(str(exc))
+            logger.error("NVIDIA Nemotron API call failed: %s", safe_exc_msg, exc_info=True)
+            diagnostics_summary = trace.finalize(success=False, error=safe_exc_msg)
             return {
                 "reply": "",
                 "intent": "ERROR",

@@ -1,10 +1,14 @@
 import email_validator
 setattr(email_validator, "TEST_ENVIRONMENT", True)
+import logging
 import os
+import uuid
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import IntegrityError
+
+logger = logging.getLogger("backend.main")
 
 from backend.routes import (
     academic_calendar,
@@ -46,19 +50,56 @@ from backend.routes import (
 
 app = FastAPI(title="Campus AI System")
 
+
+@app.middleware("http")
+async def correlation_id_middleware(request: Request, call_next):
+    req_id = (
+        request.headers.get("X-Request-ID")
+        or request.headers.get("X-Correlation-ID")
+        or f"req-{uuid.uuid4().hex[:16]}"
+    )
+    request.state.request_id = req_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = req_id
+    return response
+
+
 @app.get("/health", tags=["system"])
 def health_check():
     """Liveness & readiness probe for cloud hosting and monitoring."""
     return {"status": "ok", "service": "rio-mjp-backend"}
 
+
 @app.exception_handler(IntegrityError)
 async def sqlalchemy_integrity_error_handler(request: Request, exc: IntegrityError):
+    req_id = (
+        getattr(request.state, "request_id", None)
+        or request.headers.get("X-Request-ID")
+        or f"req-{uuid.uuid4().hex[:16]}"
+    )
+    orig_msg = str(exc.orig) if hasattr(exc, "orig") else str(exc)
+
+    # Detailed server-side structured logging for auditing & diagnostics
+    logger.error(
+        "Database integrity error: request_id=%s method=%s path=%s client=%s exception=%s detail=%s",
+        req_id,
+        request.method,
+        request.url.path,
+        request.client.host if request.client else "unknown",
+        type(exc).__name__,
+        orig_msg,
+        exc_info=True,
+    )
+
+    # Client-facing response: strictly sanitized, no driver details, no raw SQL
     return JSONResponse(
         status_code=422,
+        headers={"X-Request-ID": req_id},
         content={
             "detail": "Database integrity error: check constraint or foreign key violation.",
-            "error": str(exc.orig) if hasattr(exc, "orig") else str(exc)
-        }
+            "error_code": "INTEGRITY_ERROR",
+            "request_id": req_id,
+        },
     )
 
 # Determine CORS allowed origins:

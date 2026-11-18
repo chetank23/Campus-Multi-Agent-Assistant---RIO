@@ -69,8 +69,24 @@ logindetails.html
 storage/curriculum_documents/*
 !storage/curriculum_documents/.gitkeep
 
+# Security & Credentials
 *credentials*
 aids_a_seed_credentials.json
 LOCAL_TEST_*
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+*.secrets
+*.secret
+secrets/
+.secrets/
+.env.local
+.env.production
+.env.staging
+.env.test
+gitleaks-report.json
 backups/
 *.dump

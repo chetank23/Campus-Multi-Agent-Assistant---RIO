@@ -30,6 +30,7 @@ from agents.resource_agent.proposal_store import resource_proposal_store
 from agents.common.operation_proposal_store import operation_proposal_store
 from agents.action_registry import action_registry
 from agents.common.formatter import sanitize_plain_english
+from agents.common.diagnostics import sanitize_log_message
 from agents.resource_agent.parser import (
     parse_date,
     parse_time_interval,
@@ -716,14 +717,16 @@ def execute_supervisor(
                     "diagnostics": llm_res.get("diagnostics"),
                 }
             else:
+                err_clean = sanitize_log_message(str(llm_res.get("error")))
                 logger.warning(
                     "LLM provider execution returned unsuccessful response: %s. Falling back to deterministic graph.",
-                    llm_res.get("error"),
+                    err_clean,
                 )
         except Exception as llm_exc:
+            exc_clean = sanitize_log_message(str(llm_exc))
             logger.warning(
                 "LLM provider execution raised exception: %s. Falling back to deterministic graph.",
-                llm_exc,
+                exc_clean,
             )
 
     # 2. Deterministic LangGraph Execution (Fallback & Proposals)

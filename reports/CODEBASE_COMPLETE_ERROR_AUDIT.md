@@ -58,7 +58,7 @@ All configured static analysis tools, compilers, linters, and verification suite
 
 5. **Local Test Verification Script (`scripts/generate_local_test_login_deliverables.py`):**
    - Initial run against port 5433 `campus_ai_test / test_schema`:
-     - 244 of 245 accounts failed authentication due to mismatched hardcoded test passwords (`Password@123` vs `Test@1234` in seeded database).
+     - 244 of 245 accounts failed authentication due to mismatched test passwords across legacy test fixtures vs newly seeded database.
      - 3 student accounts failed with HTTP 422 Unprocessable Entity during login because `LoginRequest` enforced `email: EmailStr` which rejected synthetically generated names containing titles/suffixes (e.g. `dr..william.warren@campus.edu`, `david.douglas.jr.@campus.edu`).
 
 ---
@@ -133,7 +133,7 @@ All configured static analysis tools, compilers, linters, and verification suite
     ```python
     base = re.sub(r'[^a-z0-9.]', '', name.lower().replace(" ", ".")).strip('.')
     ```
-  - In `scripts/generate_local_test_login_deliverables.py`, added multi-password fallback (`Test@1234` for seed data, `Password@123` for imported AIDS-A accounts), allowing seamless verification across both environments.
+  - In `scripts/generate_local_test_login_deliverables.py`, added multi-password fallback allowing seamless verification across both environments.
 
 ---
 
@@ -412,7 +412,7 @@ The test environment contains exactly **72 user accounts**, with zero unapproved
 - All account permissions, Super Admin roles, JWT authentication, and administrative capabilities remain 100% intact.
 
 #### Unique Local-Only Credentials Engine
-- Eliminated shared static passwords (`Password@123` / `Test@1234`) across test accounts.
+- Eliminated shared static passwords across test accounts.
 - Implemented deterministic, role-scoped, high-entropy unique password generation in `scripts/import_aids_a_dataset.py` (`get_unique_account_password(role, identifier)`).
 - Every account among the 72 provisioned accounts receives a unique credential derived from secure cryptographic hashing.
 - **Credential Deliverables & Security:** Generated credentials are saved only to `LOCAL_TEST_CREDENTIALS.csv`, `LOCAL_TEST_LOGIN_VERIFICATION.json`, and `LOCAL_TEST_LOGIN_GUIDE.md`. All three files are strictly added to `.gitignore` and confirmed untracked via `git status --ignored`. Plaintext passwords are NEVER committed, pushed, or printed in public reports.

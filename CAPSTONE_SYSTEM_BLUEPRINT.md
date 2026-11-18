@@ -38,7 +38,7 @@
 
 **Problem statement:** Campus operations — answering student/staff queries, scheduling classes, and allocating shared resources — run through disconnected manual processes, producing duplicated effort, scheduling conflicts, and slow responses. Timetable creation is a constraint-satisfaction problem (faculty availability × room capacity × course requirements × electives) that does not scale to manual solving without conflicts.
 
-**Objective:** An autonomous multi-agent campus assistant that (a) resolves routine campus queries in natural language and (b) automatically produces conflict-free timetables and resource allocations, coordinated across five human roles: Student, Faculty, HOD, Timetable Coordinator, Admin.
+**Objective:** An autonomous multi-agent campus assistant that (a) resolves routine campus queries in natural language and (b) automatically produces conflict-free timetables and resource allocations, coordinated across THREE human roles: Student, Faculty, Admin.
 
 **Required research outcome:** A working multi-agent assistant, a timetable generator producing provably conflict-free schedules, a resource allocation module, and evaluation results on **scheduling accuracy** and **query resolution rate**.
 
@@ -1033,7 +1033,7 @@ jobs:
 ## 18.3 Environment variables
 
 ```
-DATABASE_URL=postgresql://user:pass@db:5432/campus_ai
+DATABASE_URL=postgresql://[user]:[password]@[host]:5432/campus_ai
 REDIS_URL=redis://redis:6379/0
 JWT_SECRET=
 JWT_ACCESS_EXPIRY_MIN=20

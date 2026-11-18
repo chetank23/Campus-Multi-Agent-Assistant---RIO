@@ -11,6 +11,24 @@ permissions:
   contents: read
 
 jobs:
+  secret-scan:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks Secret Scanner
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: RIO Repository Source Secret Scan
+        run: python scripts/scan_secrets.py
+
   frontend:
     name: Frontend build and lint
     runs-on: ubuntu-latest

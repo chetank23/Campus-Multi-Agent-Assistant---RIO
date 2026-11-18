@@ -46,10 +46,10 @@ All requirements of the Final Master Completion Plan have been fully achieved:
 The application strictly maintains the canonical master dataset imported from `RIO_MJP_AIDS_A_Clean_Test_Data_No_Attendance.xlsx`:
 
 - **Total Provisioned User Accounts:** **72 Accounts**
-  - **Super Admin (1):** `superadmin@campus.edu` (`Superadmin#RioLocal26`)
-  - **Admin (1):** `admin@campus.edu` (`Admin#RioLocal26`)
-  - **Faculty (10):** `nimrita.koul@rio-mjp.test` (`Nimritakoul#RioLocal26`), plus 9 department instructors
-  - **Students (60):** `r23eh001@rio-mjp.test` (`R23eh001#RioLocal26`) to `r23eh060@rio-mjp.test` (`R23eh060#RioLocal26`)
+  - **Super Admin (1):** `superadmin@campus.edu` (Configured via secure environment / seed credentials)
+  - **Admin (1):** `admin@campus.edu` (Configured via secure environment / seed credentials)
+  - **Faculty (10):** `nimrita.koul@rio-mjp.test`, plus 9 department instructors (Unique credentials provisioned per environment)
+  - **Students (60):** `r23eh001@rio-mjp.test` to `r23eh060@rio-mjp.test` (Unique credentials provisioned per environment)
 - **Academic Hierarchy:**
   - Department: Department of AI & DS
   - Program: B.Tech Artificial Intelligence and Data Science
@@ -74,10 +74,10 @@ The following environment variables configure the system in staging and producti
 
 ```bash
 # ── Application Database (PostgreSQL 16+) ────────────────────────────────────
-DATABASE_URL=postgresql+psycopg://user:password@host:port/dbname?sslmode=require
+DATABASE_URL=postgresql+psycopg://[user]:[password]@[host]:[port]/[dbname]?sslmode=require
 
 # ── Test Database (Isolated port 5433 for local regression runs) ─────────────
-TEST_DATABASE_URL=postgresql+psycopg://campus_user:@127.0.0.1:5433/campus_ai_pytest
+TEST_DATABASE_URL=postgresql+psycopg://[test_user]:[test_password]@127.0.0.1:5433/campus_ai_pytest
 
 # ── Supabase PostgreSQL Integration (Optional) ───────────────────────────────
 SUPABASE_DATABASE_URL=postgresql+psycopg://postgres.[project]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres?sslmode=require

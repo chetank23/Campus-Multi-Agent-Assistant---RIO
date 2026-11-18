@@ -1079,7 +1079,7 @@ jobs:
 ## 18.3 Environment variables
 
 ```
-DATABASE_URL=postgresql://user:pass@db:5432/campus_ai
+DATABASE_URL=postgresql://[user]:[password]@[host]:5432/campus_ai
 REDIS_URL=redis://redis:6379/0
 JWT_SECRET=
 JWT_ACCESS_EXPIRY_MIN=20
