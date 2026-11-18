@@ -273,7 +273,7 @@ def update_timetable_settings(db: Session, payload: TimetableSettingsUpdate, use
 def get_user_access_summary(db: Session) -> UserAccessSummary:
     from backend.models.identity import User
     roles = db.query(User.role, func.count(User.id)).group_by(User.role).all()
-    role_map: Dict[str, int] = {str(r[0]): int(r[1]) for r in roles}
+    role_map: Dict[str, int] = {r[0]: r[1] for r in roles}
     total = sum(role_map.values())
     return UserAccessSummary(
         total_users=total,

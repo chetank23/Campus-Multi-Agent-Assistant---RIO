@@ -26,6 +26,8 @@ httpx2>=2.0.0
 pytest>=8.0.0
 playwright>=1.42.0
 openpyxl>=3.1.0
+types-openpyxl>=3.1.5
+python-docx>=1.1.0
 
 # AI & Multi-Agent Architecture
 langgraph>=1.2.0

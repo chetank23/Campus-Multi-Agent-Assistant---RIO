@@ -104,6 +104,7 @@ jobs:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/campus_migration_test
       SECRET_KEY: rio-ci-only-signing-key-not-used-outside-ephemeral-tests-2026
       PYTHONPATH: .
+      ALLOW_TEST_DATABASE_MIGRATIONS: "1"
 
     steps:
       - name: Checkout repository
@@ -213,6 +214,7 @@ jobs:
       RIO_CHAT_LLM_ENABLED: "false"
       FRONTEND_URL: "http://localhost:5173"
       BACKEND_URL: "http://127.0.0.1:8000"
+      ALLOW_TEST_DATABASE_MIGRATIONS: "1"
 
     steps:
       - name: Checkout repository

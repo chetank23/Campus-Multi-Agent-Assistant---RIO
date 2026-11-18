@@ -205,7 +205,7 @@ Ensure the following tools are installed on your host machine:
    ```
    Configure the required variables in `.env`:
    ```ini
-   DATABASE_URL=postgresql://campus_user:your_password@127.0.0.1:5433/campus_ai_test
+   DATABASE_URL=postgresql+psycopg://[username]:[password]@localhost:5432/campus_ai
    SECRET_KEY=generate-a-secure-random-64-character-hex-string
    ALGORITHM=HS256
    ACCESS_TOKEN_EXPIRE_MINUTES=30

@@ -1137,22 +1137,23 @@ def _notify_event_published(db: Session, event: CampusEvent) -> None:
             q = q.join(Department, Student.department_id == Department.id).filter(Department.id == event.target_department_id)
         if event.target_batch_id:
             q = q.filter(Student.batch_id == event.target_batch_id)
-        user_ids.extend([u[0] for u in q.all()])
+        user_ids.extend([u[0] for u in q.all() if u[0] is not None])
 
     if audience in ("ALL", "FACULTY"):
         fq = db.query(Faculty.user_id)
         if event.target_department_id:
             fq = fq.filter(Faculty.department_id == event.target_department_id)
-        user_ids.extend([u[0] for u in fq.all()])
+        user_ids.extend([u[0] for u in fq.all() if u[0] is not None])
 
     unique_uids = list(set(user_ids))
     if unique_uids:
         club_prefix = f"[{event.club.name}] " if event.club else ""
+        start_time_str = event.start_time.strftime("%Y-%m-%d %H:%M") if event.start_time is not None else "TBD"
         notifs = [
             Notification(
                 user_id=uid,
                 title=f"New Event: {club_prefix}{event.title}",
-                message=f"{event.category}: Scheduled on {event.start_time.strftime('%Y-%m-%d %H:%M')}. {event.description or ''}".strip(),
+                message=f"{event.category}: Scheduled on {start_time_str}. {event.description or ''}".strip(),
                 type="EVENT_PUBLISHED",
                 link="/events",
                 entity_type="CampusEvent",
@@ -1178,22 +1179,23 @@ def _notify_event_cancelled(db: Session, event: CampusEvent, reason: Optional[st
         q = db.query(Student.user_id)
         if event.target_department_id:
             q = q.join(Department, Student.department_id == Department.id).filter(Department.id == event.target_department_id)
-        user_ids.extend([u[0] for u in q.all()])
+        user_ids.extend([u[0] for u in q.all() if u[0] is not None])
 
     if audience in ("ALL", "FACULTY"):
         fq = db.query(Faculty.user_id)
         if event.target_department_id:
             fq = fq.filter(Faculty.department_id == event.target_department_id)
-        user_ids.extend([u[0] for u in fq.all()])
+        user_ids.extend([u[0] for u in fq.all() if u[0] is not None])
 
     unique_uids = list(set(user_ids))
     if unique_uids:
         reason_txt = f" Reason: {reason}" if reason else ""
+        date_str = event.start_time.strftime("%Y-%m-%d") if event.start_time is not None else "TBD"
         notifs = [
             Notification(
                 user_id=uid,
                 title=f"Event Cancelled: {event.title}",
-                message=f"Notice: The event scheduled for {event.start_time.strftime('%Y-%m-%d')} has been cancelled.{reason_txt}",
+                message=f"Notice: The event scheduled for {date_str} has been cancelled.{reason_txt}",
                 type="EVENT_CANCELLED",
                 link="/events",
                 entity_type="CampusEvent",

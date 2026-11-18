@@ -192,12 +192,14 @@ def check_resource_conflicts(
         )
 
         for entry, slot in tt_conflicts:
+            st_str = slot.start_time.strftime("%H:%M") if slot.start_time is not None else "TBD"
+            et_str = slot.end_time.strftime("%H:%M") if slot.end_time is not None else "TBD"
             conflicts.append(
                 ConflictDetail(
                     conflict_type="PUBLISHED_TIMETABLE",
                     description=(
                         f"Physical room '{room.room_number}' is occupied by published timetable class "
-                        f"on {day_full} ({slot.start_time.strftime('%H:%M')} - {slot.end_time.strftime('%H:%M')})"
+                        f"on {day_full} ({st_str} - {et_str})"
                     ),
                     conflicting_id=entry.id,
                     start_time=slot.start_time,

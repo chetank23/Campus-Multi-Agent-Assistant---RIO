@@ -205,6 +205,8 @@ def validate_and_load_input(db: Session, scope: GenerationScope) -> OptimizerInp
         .all()
     )
     for b_fid, b_sid in external_busy_slots:
+        if b_fid is None or b_sid is None:
+            continue
         match_fa = next((fa for fa in opt_fa if fa.faculty_id == b_fid and fa.slot_id == b_sid), None)
         if match_fa:
             match_fa.availability = "UNAVAILABLE"
