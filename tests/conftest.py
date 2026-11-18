@@ -184,6 +184,7 @@ def pytest_configure(config):
     Fails closed immediately if TEST_DATABASE_URL is missing or unsafe.
     """
     get_test_urls()
+    os.environ["RIO_CHAT_LLM_ENABLED"] = "false"
 
 
 @pytest.fixture(scope="session", autouse=True)
