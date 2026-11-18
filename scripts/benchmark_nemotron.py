@@ -104,13 +104,30 @@ def run_benchmarks() -> Dict[str, Any]:
         admin = session.query(User).filter(User.role == "ADMIN").first()
         faculty = session.query(User).filter(User.role == "FACULTY").first()
         student = session.query(User).filter(User.role == "STUDENT").first()
-        users_by_role = {"ADMIN": admin, "FACULTY": faculty, "STUDENT": student}
+
+        if admin is None or faculty is None or student is None:
+            missing = [r for r, u in [("ADMIN", admin), ("FACULTY", faculty), ("STUDENT", student)] if u is None]
+            raise RuntimeError(
+                f"Benchmark execution aborted: Missing required database user fixtures for roles: "
+                f"{', '.join(missing)}. Please verify database seed migrations before benchmarking."
+            )
+
+        # Narrowed non-null types for static type safety
+        users_by_role: Dict[str, User] = {
+            "ADMIN": admin,
+            "FACULTY": faculty,
+            "STUDENT": student,
+        }
 
         for item in BENCHMARK_QUERIES:
             q_id = item["id"]
             q_text = item["query"]
             q_role = item["role"]
-            caller = users_by_role.get(q_role) or admin
+            caller = users_by_role.get(q_role)
+            if caller is None:
+                raise RuntimeError(
+                    f"Benchmark query [{q_id}] requested role '{q_role}', but no user fixture is mapped."
+                )
 
             print(f"\nEvaluating [{q_id}] ({q_role}): \"{q_text}\"")
 

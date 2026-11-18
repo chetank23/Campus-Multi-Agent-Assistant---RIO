@@ -481,7 +481,8 @@ def test_super_admin_cross_department_and_institutional_overview(
         db_session,
     )
     assert stu_res.get("error") is None
-    assert stu_res.get("total_count") > 0
+    total_count = stu_res.get("total_count")
+    assert isinstance(total_count, int) and total_count > 0
 
 
 def test_admin_department_scope_restriction(db_session: Session, admin_user: User):
@@ -489,8 +490,8 @@ def test_admin_department_scope_restriction(db_session: Session, admin_user: Use
     Verifies department-scoped Admin cannot query outside assigned department.
     """
     first_dept = db_session.query(Department).first()
-    other_dept = db_session.query(Department).filter(Department.id != first_dept.id).first()
     assert first_dept is not None
+    other_dept = db_session.query(Department).filter(Department.id != first_dept.id).first()
     assert other_dept is not None
 
     orig_dept = admin_user.department_id

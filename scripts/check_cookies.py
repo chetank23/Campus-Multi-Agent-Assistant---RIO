@@ -12,5 +12,5 @@ with sync_playwright() as p:
     cookies = ctx.cookies()
     print("Cookies in browser context:")
     for c in cookies:
-        print(f"  {c['name']} (domain={c['domain']}, path={c['path']}, httpOnly={c['httpOnly']})")
+        print(f"  {c.get('name')} (domain={c.get('domain')}, path={c.get('path')}, httpOnly={c.get('httpOnly')})")
     browser.close()

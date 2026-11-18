@@ -16,7 +16,6 @@ jobs:
   live-nim-acceptance:
     name: Live NVIDIA NIM Integration Verification
     runs-on: ubuntu-latest
-    if: ${{ secrets.NVIDIA_API_KEY != '' }}
     services:
       postgres:
         image: postgres:16
@@ -36,7 +35,6 @@ jobs:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/campus_ai_test
       SECRET_KEY: rio-ci-only-signing-key-not-used-outside-ephemeral-tests-2026
       PYTHONPATH: .
-      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
       NVIDIA_BASE_URL: ${{ secrets.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1' }}
       NVIDIA_MODEL: ${{ inputs.test_model || secrets.NVIDIA_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b' }}
       RIO_CHAT_LLM_ENABLED: "true"
@@ -44,18 +42,45 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify NVIDIA Credentials and Model Configuration
+        id: auth_check
+        env:
+          NVIDIA_KEY_CHECK: ${{ secrets.NVIDIA_API_KEY }}
+          CONFIGURED_MODEL: ${{ inputs.test_model || secrets.NVIDIA_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b' }}
+        run: |
+          if [ -z "$NVIDIA_KEY_CHECK" ]; then
+            echo "::error::NVIDIA_API_KEY secret is not configured or empty. Live NIM acceptance tests cannot run without valid credentials."
+            echo "has_credentials=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "has_credentials=true" >> "$GITHUB_OUTPUT"
+          echo "Model configured: $CONFIGURED_MODEL"
+          if [[ "$CONFIGURED_MODEL" != nvidia/* ]]; then
+            echo "::warning::Configured model '$CONFIGURED_MODEL' does not conform to expected 'nvidia/*' namespace."
+          fi
+
       - uses: actions/setup-python@v5
+        if: steps.auth_check.outputs.has_credentials == 'true'
         with:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: requirements.txt
+
       - name: Install dependencies
+        if: steps.auth_check.outputs.has_credentials == 'true'
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
       - name: Create isolated application test database
+        if: steps.auth_check.outputs.has_credentials == 'true'
         env:
           PGPASSWORD: postgres
         run: |
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE campus_ai_app_test"
+
       - name: Run Live Acceptance Test Suite
+        if: steps.auth_check.outputs.has_credentials == 'true'
+        env:
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
         run: |
           pytest tests/live/ -v -m live --tb=short

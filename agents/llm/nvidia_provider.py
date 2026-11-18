@@ -32,7 +32,7 @@ import threading
 import time
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
-import httpx
+import httpx2
 from openai import OpenAI
 from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
@@ -444,8 +444,15 @@ def synthesize_tool_results_answer(
         t_res = rec.get("result")
         err = rec.get("error")
 
-        if err or (isinstance(t_res, dict) and t_res.get("error")):
-            failure_notices.append(f"Unable to retrieve records for {t_name.replace('_', ' ')}: {err or t_res.get('error')}")
+        err_msg: Optional[str] = None
+        if err:
+            err_msg = str(err)
+        elif isinstance(t_res, dict) and t_res.get("error"):
+            err_val = t_res.get("error")
+            err_msg = str(err_val) if err_val is not None else "Unknown tool execution failure"
+
+        if err_msg is not None:
+            failure_notices.append(f"Unable to retrieve records for {t_name.replace('_', ' ')}: {err_msg}")
         else:
             section_text = synthesize_single_tool_result(
                 tool_name=t_name,
@@ -530,8 +537,27 @@ def execute_tool_calls_batch(
         if getattr(tc, "type", "function") != "function":
             continue
         t_id = getattr(tc, "id", "")
-        t_name = tc.function.name if hasattr(tc, "function") else tc.get("name", "")
-        raw_args = tc.function.arguments if hasattr(tc, "function") else tc.get("arguments", "{}")
+        t_name = ""
+        raw_args = "{}"
+        if hasattr(tc, "function"):
+            func_obj = getattr(tc, "function")
+            t_name = getattr(func_obj, "name", "")
+            raw_args = getattr(func_obj, "arguments", "{}")
+        elif isinstance(tc, dict):
+            func_dict = tc.get("function")
+            if isinstance(func_dict, dict):
+                t_name = str(func_dict.get("name", ""))
+                raw_args = str(func_dict.get("arguments", "{}"))
+            else:
+                t_name = str(tc.get("name", ""))
+                raw_args = str(tc.get("arguments", "{}"))
+        elif hasattr(tc, "custom"):
+            custom_obj = getattr(tc, "custom")
+            t_name = getattr(custom_obj, "name", "")
+            raw_args = getattr(custom_obj, "arguments", "{}")
+        elif hasattr(tc, "name"):
+            t_name = getattr(tc, "name", "")
+            raw_args = getattr(tc, "arguments", "{}")
         try:
             t_args = json.loads(raw_args or "{}") if isinstance(raw_args, str) else raw_args
         except Exception:
@@ -629,7 +655,7 @@ class NvidiaNemotronProvider(BaseLLMProvider):
     Interprets open-ended campus queries in real time and grounds answers via database tools.
     """
 
-    _shared_http_client: Optional[httpx.Client] = None
+    _shared_http_client: Optional[httpx2.Client] = None
     _shared_openai_client: Optional[OpenAI] = None
     _client_lock: threading.Lock = threading.Lock()
 
@@ -664,7 +690,7 @@ class NvidiaNemotronProvider(BaseLLMProvider):
                 return OpenAI(
                     base_url=self.base_url,
                     api_key=self.api_key,
-                    timeout=httpx.Timeout(
+                    timeout=httpx2.Timeout(
                         timeout=self.read_timeout,
                         connect=self.connect_timeout,
                         read=self.read_timeout,
@@ -673,13 +699,13 @@ class NvidiaNemotronProvider(BaseLLMProvider):
                     max_retries=2,
                 )
             if NvidiaNemotronProvider._shared_openai_client is None:
-                http_client = httpx.Client(
-                    limits=httpx.Limits(
+                http_client = httpx2.Client(
+                    limits=httpx2.Limits(
                         max_keepalive_connections=20,
                         max_connections=50,
                         keepalive_expiry=30.0,
                     ),
-                    timeout=httpx.Timeout(
+                    timeout=httpx2.Timeout(
                         timeout=self.read_timeout,
                         connect=self.connect_timeout,
                         read=self.read_timeout,
@@ -916,10 +942,31 @@ CORE OPERATING MANDATES:
                     tool_calls_param: List[ChatCompletionMessageFunctionToolCallParam] = []
                     for tc in msg.tool_calls:
                         if getattr(tc, "type", "function") == "function":
-                            tc_name = tc.function.name if hasattr(tc, "function") else tc.get("name", "")
-                            tc_args = tc.function.arguments if hasattr(tc, "function") else tc.get("arguments", "{}")
+                            tc_id = getattr(tc, "id", f"call_{len(tool_calls_param)}")
+                            tc_name = ""
+                            tc_args = "{}"
+                            if hasattr(tc, "function"):
+                                func_obj = getattr(tc, "function")
+                                tc_name = getattr(func_obj, "name", "")
+                                tc_args = getattr(func_obj, "arguments", "{}")
+                            elif isinstance(tc, dict):
+                                func_dict = tc.get("function")
+                                if isinstance(func_dict, dict):
+                                    tc_name = str(func_dict.get("name", ""))
+                                    tc_args = str(func_dict.get("arguments", "{}"))
+                                else:
+                                    tc_name = str(tc.get("name", ""))
+                                    tc_args = str(tc.get("arguments", "{}"))
+                            elif hasattr(tc, "custom"):
+                                custom_obj = getattr(tc, "custom")
+                                tc_name = getattr(custom_obj, "name", "")
+                                tc_args = getattr(custom_obj, "arguments", "{}")
+                            elif hasattr(tc, "name"):
+                                tc_name = getattr(tc, "name", "")
+                                tc_args = getattr(tc, "arguments", "{}")
+
                             tool_calls_param.append({
-                                "id": getattr(tc, "id", f"call_{len(tool_calls_param)}"),
+                                "id": tc_id,
                                 "type": "function",
                                 "function": {
                                     "name": tc_name,

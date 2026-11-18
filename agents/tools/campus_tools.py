@@ -673,7 +673,7 @@ def get_section_overview_data(
 def get_semester_courses_data(
     db: Session,
     user: User,
-    semester_number: int = 7,
+    semester_number: int | str = 7,
 ) -> Dict[str, Any]:
     """
     Retrieves curriculum courses assigned to a specific semester.
