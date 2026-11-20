@@ -159,10 +159,10 @@ export function StudentDashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E5ECF5]">
         <div>
           <h2 className="text-xl sm:text-2xl font-black text-[#17243B] tracking-tight">
-            Welcome back, {user?.name || 'Student'}!
+            Academic Overview
           </h2>
           <p className="text-xs font-semibold text-[#71819A] mt-0.5">
-            Student Academic Dashboard & Real-Time Schedule Hub
+            Your academic dashboard and real-time schedule hub.
           </p>
         </div>
         <RefreshButton
