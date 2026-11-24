@@ -530,7 +530,11 @@ class TimetableSolver:
                     if c:
                         f_req += (c.lecture_hours or 0) + (c.tutorial_hours or 0) + (c.practical_hours or 0)
             
-            f_avail = sum(1 for slot_id, av in self.faculty_availability.get(f.id, {}).items() if av.availability in ('AVAILABLE', 'PREFERRED') and slot_id in self.slots)
+            f_avail = sum(
+                1
+                for slot_id, av in (self.faculty_availability.get(f.id) or {}).items()
+                if av and getattr(av, "availability", None) in ("AVAILABLE", "PREFERRED") and slot_id in self.slots
+            )
             if f_req > f_avail:
                 diagnostics.append(f"Faculty availability shortage: Faculty ID {f.id} needs {f_req} teaching hours but only provided {f_avail} available slots. Suggest adding {f_req - f_avail} more available slots for this faculty.")
 

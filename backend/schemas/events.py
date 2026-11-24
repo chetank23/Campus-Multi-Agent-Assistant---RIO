@@ -231,3 +231,35 @@ class EventResponse(BaseModel):
     version: int
     created_at: str
     updated_at: str
+
+
+class ClubMembershipResponse(BaseModel):
+    id: int
+    club_id: int
+    club_name: str
+    club_code: str
+    user_id: int
+    user_name: str
+    user_email: Optional[str] = None
+    role: str
+    status: str
+    joined_at: str
+
+
+class EventRegistrationCreate(BaseModel):
+    notes: Optional[str] = None
+
+
+class EventRegistrationResponse(BaseModel):
+    id: int
+    event_id: int
+    event_title: str
+    event_start_time: str
+    event_end_time: str
+    user_id: int
+    user_name: str
+    user_email: Optional[str] = None
+    status: str
+    notes: Optional[str] = None
+    registered_at: str
+

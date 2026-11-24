@@ -39,6 +39,7 @@ from backend.routes import (
     settings,
     student,
     substitutions,
+    tasks,
     time_slot,
     timetable,
     users,
@@ -85,6 +86,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(audit_logs.router)
+app.include_router(audit_logs.root_router)
 app.include_router(change_requests.router)
 app.include_router(buildings.router)
 app.include_router(rooms.router)
@@ -121,4 +123,5 @@ app.include_router(curriculum.router)
 app.include_router(curriculum.super_admin_router)
 app.include_router(curriculum.admin_curriculum_router)
 app.include_router(settings.router)
+app.include_router(tasks.router)
 

@@ -6,7 +6,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Briefcase,
   CheckCircle2,
@@ -20,6 +20,8 @@ import {
   DollarSign,
   ArrowRight,
   ShieldCheck,
+  FileText,
+  Send,
 } from 'lucide-react';
 
 import {
@@ -28,22 +30,61 @@ import {
   LoadingState,
   FormModal,
 } from '@/components/common';
+import { useToast } from '@/context/useToast';
 
 import {
   placementsApi,
   type PlacementDriveItem,
+  type PlacementApplicationItem,
 } from '@/api/placements';
 
 export function StudentPlacementsPage() {
-  const [activeTab, setActiveTab] = useState<'all' | 'eligible' | 'internship' | 'full_time'>('all');
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const [activeTab, setActiveTab] = useState<'all' | 'eligible' | 'internship' | 'full_time' | 'my_applications'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDrive, setSelectedDrive] = useState<PlacementDriveItem | null>(null);
+
+  // Apply Modal state
+  const [applyingDrive, setApplyingDrive] = useState<PlacementDriveItem | null>(null);
+  const [resumeUrl, setResumeUrl] = useState('');
+  const [applyNotes, setApplyNotes] = useState('');
 
   // Queries
   const { data: drives = [], isLoading } = useQuery<PlacementDriveItem[]>({
     queryKey: ['student', 'placement-drives'],
     queryFn: () => placementsApi.listDrives(),
     refetchInterval: 60_000,
+  });
+
+  const { data: myApplications = [], isLoading: isLoadingApps } = useQuery<PlacementApplicationItem[]>({
+    queryKey: ['student', 'placement-applications'],
+    queryFn: () => placementsApi.getMyApplications(),
+    refetchInterval: 60_000,
+  });
+
+  // Map of applied drives
+  const appliedMap = useMemo(
+    () => new Map(myApplications.map((a) => [a.drive_id, a])),
+    [myApplications]
+  );
+
+  // Apply mutation
+  const applyMutation = useMutation({
+    mutationFn: ({ driveId, payload }: { driveId: number; payload: { resume_url?: string; notes?: string } }) =>
+      placementsApi.applyForDrive(driveId, payload),
+    onSuccess: () => {
+      toast.success('Your placement application has been successfully submitted!');
+      queryClient.invalidateQueries({ queryKey: ['student', 'placement-applications'] });
+      setApplyingDrive(null);
+      setResumeUrl('');
+      setApplyNotes('');
+    },
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to submit application. Please check eligibility.');
+    },
   });
 
   // Filtered drives
@@ -206,6 +247,16 @@ export function StudentPlacementsPage() {
           >
             Internship
           </button>
+          <button
+            onClick={() => setActiveTab('my_applications')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'my_applications'
+                ? 'bg-purple-600 text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            My Applications ({myApplications.length})
+          </button>
         </div>
 
         <div className="relative w-full md:w-72">
@@ -220,8 +271,87 @@ export function StudentPlacementsPage() {
         </div>
       </div>
 
-      {/* Drives Grid */}
-      {isLoading ? (
+      {/* Drives Grid or Applications List */}
+      {activeTab === 'my_applications' ? (
+        isLoadingApps ? (
+          <LoadingState message="Loading your placement applications..." />
+        ) : myApplications.length === 0 ? (
+          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+            <Briefcase size={40} className="mx-auto text-slate-300 mb-3" />
+            <h3 className="text-base font-semibold text-slate-800">No Applications Submitted Yet</h3>
+            <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
+              You haven't applied to any placement drives yet. Switch to "Eligible for Me" to explore and submit applications!
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {myApplications.map((app) => (
+              <div
+                key={app.id}
+                className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-700 font-bold text-base shrink-0">
+                      {app.company_name?.charAt(0).toUpperCase() || 'P'}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-slate-900 text-sm">
+                        {app.company_name} — {app.job_role}
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Applied on {new Date(app.applied_at).toLocaleDateString()} at{' '}
+                        {new Date(app.applied_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                  {app.notes && (
+                    <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded border border-slate-100 mt-2">
+                      <span className="font-semibold text-slate-700">Notes: </span>
+                      {app.notes}
+                    </p>
+                  )}
+                  {app.resume_url && (
+                    <div className="text-xs text-blue-600 mt-1">
+                      <a href={app.resume_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
+                        <FileText size={12} />
+                        View Attached Resume
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${
+                      app.status === 'SELECTED'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : app.status === 'SHORTLISTED' || app.status === 'INTERVIEW_SCHEDULED'
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : app.status === 'REJECTED'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        : 'bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    {app.status.replace('_', ' ')}
+                  </span>
+                  {app.drive_id && (
+                    <button
+                      onClick={() => {
+                        const targetDrive = drives.find((d) => d.id === app.drive_id);
+                        if (targetDrive) setSelectedDrive(targetDrive);
+                      }}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold"
+                    >
+                      Drive Details
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : isLoading ? (
         <LoadingState message="Loading campus placement drives..." />
       ) : filteredDrives.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
@@ -240,6 +370,8 @@ export function StudentPlacementsPage() {
           {filteredDrives.map((drive) => {
             const elig = drive.eligibility;
             const isDeadlineOver = drive.is_deadline_passed;
+            const hasApplied = appliedMap.has(drive.id);
+            const myApp = appliedMap.get(drive.id);
 
             return (
               <div
@@ -259,7 +391,14 @@ export function StudentPlacementsPage() {
                         <p className="text-xs text-slate-500 line-clamp-1">{drive.job_role}</p>
                       </div>
                     </div>
-                    {renderEligibilityBadge(elig?.status)}
+                    {hasApplied ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                        <CheckCircle2 size={13} className="text-blue-600" />
+                        Applied ({myApp?.status})
+                      </span>
+                    ) : (
+                      renderEligibilityBadge(elig?.status)
+                    )}
                   </div>
 
                   <div className="space-y-2 text-xs text-slate-600 mb-4 mt-2">
@@ -327,14 +466,22 @@ export function StudentPlacementsPage() {
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
                   <button
                     onClick={() => setSelectedDrive(drive)}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition"
                   >
                     View Details & Rounds
                     <ArrowRight size={14} />
                   </button>
+                  {!hasApplied && elig?.status === 'ELIGIBLE' && !isDeadlineOver && (
+                    <button
+                      onClick={() => setApplyingDrive(drive)}
+                      className="py-2 px-3 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition shrink-0"
+                    >
+                      Apply
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -517,22 +664,109 @@ export function StudentPlacementsPage() {
                   Close
                 </button>
 
+                {appliedMap.has(selectedDrive.id) ? (
+                  <span className="px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5">
+                    <CheckCircle2 size={13} className="text-blue-600" />
+                    Application Submitted ({appliedMap.get(selectedDrive.id)?.status})
+                  </span>
+                ) : (
+                  !selectedDrive.is_deadline_passed &&
+                  selectedDrive.eligibility?.status === 'ELIGIBLE' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = selectedDrive;
+                        setSelectedDrive(null);
+                        setApplyingDrive(target);
+                      }}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs"
+                    >
+                      <Send size={13} />
+                      Apply for Drive
+                    </button>
+                  )
+                )}
+
                 {selectedDrive.application_link && !selectedDrive.is_deadline_passed && (
                   <a
                     href={selectedDrive.application_link}
                     target="_blank"
                     rel="noreferrer"
-                    className={`px-4 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition ${
-                      selectedDrive.eligibility?.status === 'NOT_ELIGIBLE'
-                        ? 'bg-slate-200 text-slate-500 pointer-events-none cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
-                    }`}
+                    className="px-4 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
                   >
-                    Apply Now
+                    External Link
                     <ExternalLink size={13} />
                   </a>
                 )}
               </div>
+            </div>
+          </div>
+        </FormModal>
+      )}
+
+      {/* Apply Form Modal */}
+      {applyingDrive && (
+        <FormModal
+          isOpen={!!applyingDrive}
+          onClose={() => setApplyingDrive(null)}
+          title={`Apply: ${applyingDrive.company_name}`}
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-blue-900">
+              <div className="font-bold text-sm">{applyingDrive.job_role}</div>
+              <div className="text-slate-600 mt-0.5">
+                {applyingDrive.title} — {applyingDrive.compensation_details || 'Compensation undisclosed'}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                Resume / Portfolio Link (Google Drive, LinkedIn, or Cloud Storage)
+              </label>
+              <input
+                type="url"
+                placeholder="https://drive.google.com/... or https://..."
+                value={resumeUrl}
+                onChange={(e) => setResumeUrl(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">
+                Candidate Notes / Cover Letter Remarks (Optional)
+              </label>
+              <textarea
+                rows={3}
+                placeholder="Add any relevant achievements, preferred domains, or notes for the recruitment team..."
+                value={applyNotes}
+                onChange={(e) => setApplyNotes(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setApplyingDrive(null)}
+                className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg font-semibold hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={applyMutation.isPending}
+                onClick={() =>
+                  applyMutation.mutate({
+                    driveId: applyingDrive.id,
+                    payload: { resume_url: resumeUrl || undefined, notes: applyNotes || undefined },
+                  })
+                }
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold inline-flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Send size={13} />
+                {applyMutation.isPending ? 'Submitting...' : 'Submit Application'}
+              </button>
             </div>
           </div>
         </FormModal>

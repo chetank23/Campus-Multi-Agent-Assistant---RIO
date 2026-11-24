@@ -23,6 +23,7 @@ from sqlalchemy import (
     JSON,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -126,6 +127,9 @@ class PlacementDrive(Base):
     schedules: Mapped[List["PlacementSchedule"]] = relationship(
         "PlacementSchedule", back_populates="drive", cascade="all, delete-orphan", order_by="PlacementSchedule.round_order"
     )
+    applications: Mapped[List["PlacementApplication"]] = relationship(
+        "PlacementApplication", back_populates="drive", cascade="all, delete-orphan", order_by="PlacementApplication.applied_at.desc()"
+    )
     coordinator: Mapped["User"] = relationship("User", foreign_keys=[coordinator_id])
     creator: Mapped["User"] = relationship("User", foreign_keys=[created_by])
     updater: Mapped[Optional["User"]] = relationship("User", foreign_keys=[updated_by])
@@ -210,4 +214,40 @@ class StudentAcademicRecord(Base):
 
     student: Mapped["Student"] = relationship("Student", foreign_keys=[student_id])
     verifier: Mapped[Optional["User"]] = relationship("User", foreign_keys=[verified_by])
+
+
+class PlacementApplication(Base):
+    __tablename__ = "placement_applications"
+    __table_args__ = (
+        UniqueConstraint("drive_id", "student_id", name="uq_placement_application_drive_student"),
+        Index("ix_placement_applications_drive_status", "drive_id", "status"),
+        Index("ix_placement_applications_student", "student_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    drive_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("placement_drives.id", name="fk_placement_applications_drive_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    student_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("students.id", name="fk_placement_applications_student_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String(30), default="APPLIED", server_default="'APPLIED'", nullable=False
+    )
+    resume_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    applied_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=utc_now, server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=utc_now, server_default=func.now(), onupdate=utc_now, nullable=False
+    )
+
+    drive: Mapped["PlacementDrive"] = relationship("PlacementDrive", back_populates="applications")
+    student: Mapped["Student"] = relationship("Student", foreign_keys=[student_id])
+
 

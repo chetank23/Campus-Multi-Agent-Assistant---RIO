@@ -6,54 +6,17 @@
  * Built-in deduplication prevents toast spamming on rapid double-clicks.
  */
 
-import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, Loader2, X } from 'lucide-react';
+import {
+  ToastContext,
+  type ToastType,
+  type ToastItem,
+  type ToastOptions,
+  type ToastContextValue,
+} from './ToastContextCore';
 
-export type ToastType = 'success' | 'error' | 'warning' | 'info' | 'progress';
-
-export interface ToastItem {
-  id: string;
-  key?: string;
-  type: ToastType;
-  title?: string;
-  message: string;
-  duration?: number;
-  progress?: number;
-  action?: {
-    label: string;
-    onClick: () => void;
-  };
-  createdAt: number;
-}
-
-export interface ToastOptions {
-  id?: string;
-  key?: string;
-  title?: string;
-  duration?: number;
-  progress?: number;
-  action?: {
-    label: string;
-    onClick: () => void;
-  };
-}
-
-export interface ToastContextValue {
-  toasts: ToastItem[];
-  showToast: (type: ToastType, message: string, options?: ToastOptions) => string;
-  updateToast: (id: string, updates: Partial<ToastItem>) => void;
-  dismissToast: (id: string) => void;
-  clearToasts: () => void;
-  toast: {
-    success: (message: string, options?: ToastOptions) => string;
-    error: (message: string, options?: ToastOptions) => string;
-    warning: (message: string, options?: ToastOptions) => string;
-    info: (message: string, options?: ToastOptions) => string;
-    progress: (message: string, options?: ToastOptions) => string;
-  };
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null);
+export type { ToastType, ToastItem, ToastOptions, ToastContextValue };
 
 const DEDUPE_WINDOW_MS = 2500;
 
@@ -134,13 +97,16 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [dismissToast]
   );
 
-  const toast = useRef({
-    success: (msg: string, opt?: ToastOptions) => showToast('success', msg, opt),
-    error: (msg: string, opt?: ToastOptions) => showToast('error', msg, opt),
-    warning: (msg: string, opt?: ToastOptions) => showToast('warning', msg, opt),
-    info: (msg: string, opt?: ToastOptions) => showToast('info', msg, opt),
-    progress: (msg: string, opt?: ToastOptions) => showToast('progress', msg, opt),
-  }).current;
+  const toast = useMemo(
+    () => ({
+      success: (msg: string, opt?: ToastOptions) => showToast('success', msg, opt),
+      error: (msg: string, opt?: ToastOptions) => showToast('error', msg, opt),
+      warning: (msg: string, opt?: ToastOptions) => showToast('warning', msg, opt),
+      info: (msg: string, opt?: ToastOptions) => showToast('info', msg, opt),
+      progress: (msg: string, opt?: ToastOptions) => showToast('progress', msg, opt),
+    }),
+    [showToast]
+  );
 
   // Clean dedupe cache every 30s
   useEffect(() => {
@@ -172,13 +138,6 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 };
 
-export function useToast(): ToastContextValue {
-  const ctx = useContext(ToastContext);
-  if (!ctx) {
-    throw new Error('useToast must be used within a ToastProvider');
-  }
-  return ctx;
-}
 
 // ── Toast Container Component ───────────────────────────────────────────────
 

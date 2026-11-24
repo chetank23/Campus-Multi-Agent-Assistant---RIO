@@ -25,6 +25,7 @@ from backend.schemas.events import (
     CapabilityRevokeRequest,
     ClubCoordinatorItem,
     ClubCreateRequest,
+    ClubMembershipResponse,
     ClubResponse,
     ClubUpdateRequest,
     EventResponse,
@@ -33,10 +34,14 @@ from backend.services.event_service import (
     assign_capability,
     create_club,
     get_club,
+    join_club,
+    leave_club,
     list_capabilities,
+    list_club_members,
     list_clubs,
     list_events_for_user,
     list_faculty_assigned_clubs,
+    list_user_club_memberships,
     revoke_capability,
     update_club,
 )
@@ -128,6 +133,21 @@ def get_clubs(
     return [_format_club_response(db, c) for c in clubs]
 
 
+
+
+@router.get(
+    "/clubs/my-memberships",
+    response_model=List[ClubMembershipResponse],
+    summary="List caller's active club memberships",
+)
+def get_my_club_memberships(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> List[ClubMembershipResponse]:
+    """Lists clubs the authenticated user is currently a member of."""
+    return list_user_club_memberships(db=db, user=current_user)
+
+
 @router.get(
     "/clubs/{club_id}",
     response_model=ClubResponse,
@@ -146,6 +166,51 @@ def get_club_detail(
             detail=f"Club #{club_id} not found.",
         )
     return _format_club_response(db, club)
+
+
+@router.post(
+    "/clubs/{club_id}/join",
+    response_model=ClubMembershipResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Join a campus club as a member",
+)
+def join_club_endpoint(
+    club_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ClubMembershipResponse:
+    """Adds the authenticated user as an active club member."""
+    return join_club(db=db, user=current_user, club_id=club_id)
+
+
+@router.post(
+    "/clubs/{club_id}/leave",
+    summary="Leave a campus club",
+)
+def leave_club_endpoint(
+    club_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Dict[str, str]:
+    """Deactivates user's membership in the specified club."""
+    return leave_club(db=db, user=current_user, club_id=club_id)
+
+
+@router.get(
+    "/clubs/{club_id}/members",
+    response_model=List[ClubMembershipResponse],
+    summary="List active members of a club",
+)
+def get_club_members(
+    club_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> List[ClubMembershipResponse]:
+    """Lists registered members of the club."""
+    return list_club_members(db=db, club_id=club_id)
+
+
+
 
 
 @router.get(

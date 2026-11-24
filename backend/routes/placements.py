@@ -21,6 +21,9 @@ from backend.models.identity import User
 from backend.routes.auth import get_current_user
 from backend.schemas.placements import (
     CdcDashboardStats,
+    PlacementApplicationCreate,
+    PlacementApplicationResponse,
+    PlacementApplicationStatusUpdate,
     PlacementDriveActionReason,
     PlacementDriveCreateRequest,
     PlacementDriveResponse,
@@ -31,17 +34,22 @@ from backend.schemas.placements import (
     StudentEligibilityResult,
 )
 from backend.services.placement_service import (
+    apply_to_placement_drive,
     cancel_placement_drive,
     close_placement_drive,
     create_placement_drive,
+    delete_placement_drive,
     evaluate_student_eligibility,
     get_cdc_dashboard_stats,
     get_placement_drive_detail,
     get_student_academic_record,
+    list_drive_applications,
     list_placement_drives_for_user,
+    list_student_applications,
     postpone_placement_drive,
     publish_placement_drive,
     require_cdc_coordinator,
+    update_application_status,
     update_placement_drive,
     upsert_student_academic_record,
     validate_placement_drive,
@@ -381,4 +389,100 @@ def get_academic_record(
         "verified_by_name": rec.verifier.name if rec.verifier else None,
         "updated_at": rec.updated_at.isoformat(),
     }
+
+
+# ---------------------------------------------------------------------------
+# 6. Placement Applications Workflow
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/drives/{drive_id}/apply",
+    response_model=PlacementApplicationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Apply for a published placement drive (Student only)",
+)
+def apply_for_drive(
+    drive_id: int,
+    payload: PlacementApplicationCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PlacementApplicationResponse:
+    """Submits a student application with deterministic eligibility verification."""
+    if current_user.role != "STUDENT":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only students can submit placement drive applications.",
+        )
+    return apply_to_placement_drive(db=db, student_user=current_user, drive_id=drive_id, payload=payload)
+
+
+@router.get(
+    "/my-applications",
+    response_model=List[PlacementApplicationResponse],
+    summary="Get all placement applications submitted by authenticated student",
+)
+def get_my_applications(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> List[PlacementApplicationResponse]:
+    """Retrieves all drive applications submitted by the caller."""
+    if current_user.role != "STUDENT":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only students have access to personal placement applications.",
+        )
+    return list_student_applications(db=db, student_user=current_user)
+
+
+@router.get(
+    "/drives/{drive_id}/applications",
+    response_model=List[PlacementApplicationResponse],
+    summary="List all applications submitted for a placement drive (CDC Coordinator / Admin)",
+)
+def get_drive_applications(
+    drive_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> List[PlacementApplicationResponse]:
+    """Lists all applicants for a drive with student profiles and academic records."""
+    return list_drive_applications(db=db, coordinator_user=current_user, drive_id=drive_id)
+
+
+@router.patch(
+    "/applications/{application_id}/status",
+    response_model=PlacementApplicationResponse,
+    summary="Update application selection status (CDC Coordinator / Admin)",
+)
+def update_application_status_endpoint(
+    application_id: int,
+    payload: PlacementApplicationStatusUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PlacementApplicationResponse:
+    """Updates candidate status across selection rounds (SHORTLISTED, SELECTED, REJECTED, etc.)."""
+    return update_application_status(
+        db=db,
+        coordinator_user=current_user,
+        application_id=application_id,
+        new_status=payload.status,
+        notes=payload.notes,
+    )
+
+
+@router.delete(
+    "/drives/{drive_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete a placement drive (CDC Coordinator / Admin)",
+)
+def delete_drive(
+    drive_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Dict[str, str]:
+    """Permanently deletes a placement drive, cascading schedules and applications."""
+    delete_placement_drive(db=db, coordinator_user=current_user, drive_id=drive_id)
+    return {"message": "Placement drive deleted successfully"}
+
+
+
 

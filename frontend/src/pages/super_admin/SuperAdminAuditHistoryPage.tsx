@@ -16,8 +16,10 @@ export const SuperAdminAuditHistoryPage: React.FC = () => {
   const { data: auditLogs, isLoading, refetch } = useQuery({
     queryKey: ['super-admin', 'audit-history'],
     queryFn: async () => {
-      const { data } = await apiClient.get<any[]>('/audit-logs');
-      return data;
+      const { data } = await apiClient.get<any>('/admin/audit-logs', {
+        params: { limit: 100 },
+      });
+      return Array.isArray(data) ? data : (data?.items || []);
     },
     refetchInterval: 15_000,
   });

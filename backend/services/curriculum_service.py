@@ -1067,9 +1067,14 @@ def store_curriculum_document(
     os.makedirs(STORAGE_DIR, exist_ok=True)
     file_hash = hashlib.sha256(file_bytes).hexdigest()
 
-    # Save to disk using file_hash to prevent collision or overwriting
-    safe_filename = f"{file_hash[:16]}_{re.sub(r'[^a-zA-Z0-9_.-]', '_', filename)}"
-    file_path = os.path.join(STORAGE_DIR, safe_filename)
+    # Save to disk using file_hash to prevent collision or overwriting, sanitizing basename
+    base_name = os.path.basename(filename)
+    safe_base = re.sub(r'[^a-zA-Z0-9_.-]', '_', base_name)
+    safe_filename = f"{file_hash[:16]}_{safe_base}"
+    file_path = os.path.abspath(os.path.join(STORAGE_DIR, safe_filename))
+    storage_root = os.path.abspath(STORAGE_DIR)
+    if not file_path.startswith(storage_root):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid destination path.")
 
     with open(file_path, "wb") as f:
         f.write(file_bytes)

@@ -302,9 +302,30 @@ async def upload_curriculum_document_endpoint(
             detail="Only official institutional PDF syllabus documents are permitted."
         )
 
-    content = await file.read()
+    MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB institutional limit
+    chunks = []
+    total_bytes = 0
+    while True:
+        chunk = await file.read(1024 * 64)
+        if not chunk:
+            break
+        total_bytes += len(chunk)
+        if total_bytes > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail="File size exceeds maximum institutional syllabus limit of 25 MB."
+            )
+        chunks.append(chunk)
+
+    content = b"".join(chunks)
     if len(content) == 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
+
+    if not content.startswith(b"%PDF-"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file signature: uploaded file is not a valid PDF document."
+        )
 
     doc = curriculum_service.store_curriculum_document(
         db,
@@ -474,6 +495,28 @@ def acknowledge_release_endpoint(
     return curriculum_service.acknowledge_curriculum_release(
         db, release_id=release_id, admin_user_id=current_user.id, notes=notes
     )
+
+
+@admin_curriculum_router.get("/versions", response_model=List[CurriculumVersionSummary])
+def list_admin_curriculum_versions_endpoint(
+    department_id: Optional[int] = Query(None),
+    program_id: Optional[int] = Query(None),
+    regulation_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),
+    current_user: User = Depends(require_role("ADMIN", "SUPER_ADMIN")),
+    db: Session = Depends(get_db),
+):
+    dept_id = department_id
+    if dept_id is None and current_user.role != "SUPER_ADMIN" and current_user.department_id is not None:
+        dept_id = current_user.department_id
+    versions = curriculum_service.list_curriculum_versions(
+        db, department_id=dept_id, program_id=program_id, regulation_id=regulation_id, status=status
+    )
+    if not versions and department_id is None and dept_id is not None:
+        versions = curriculum_service.list_curriculum_versions(
+            db, department_id=None, program_id=program_id, regulation_id=regulation_id, status=status
+        )
+    return versions
 
 
 @admin_curriculum_router.get("/offerings", response_model=List[SectionCourseOfferingResponse])

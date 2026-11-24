@@ -158,6 +158,24 @@ export interface StudentAcademicRecordItem {
   updated_at: string;
 }
 
+export interface PlacementApplicationItem {
+  id: number;
+  drive_id: number;
+  drive_title: string;
+  company_name: string;
+  job_role: string;
+  student_id: number;
+  student_name: string;
+  student_usn: string;
+  student_email?: string | null;
+  department_name?: string | null;
+  status: 'APPLIED' | 'SHORTLISTED' | 'INTERVIEW_SCHEDULED' | 'OFFERED' | 'SELECTED' | 'REJECTED' | 'WITHDRAWN' | string;
+  resume_url?: string | null;
+  notes?: string | null;
+  applied_at: string;
+  updated_at: string;
+}
+
 export const placementsApi = {
   // Drives Listing & Detail
   listDrives: async (params?: {
@@ -247,6 +265,32 @@ export const placementsApi = {
 
   getAcademicRecord: async (studentId: number) => {
     const res = await apiClient.get<StudentAcademicRecordItem>(`/placements/academic-records/${studentId}`);
+    return res.data;
+  },
+
+  // Applications Workflow
+  applyForDrive: async (driveId: number, payload: { resume_url?: string; notes?: string }) => {
+    const res = await apiClient.post<PlacementApplicationItem>(`/placements/drives/${driveId}/apply`, payload);
+    return res.data;
+  },
+
+  getMyApplications: async () => {
+    const res = await apiClient.get<PlacementApplicationItem[]>('/placements/my-applications');
+    return res.data;
+  },
+
+  getDriveApplications: async (driveId: number) => {
+    const res = await apiClient.get<PlacementApplicationItem[]>(`/placements/drives/${driveId}/applications`);
+    return res.data;
+  },
+
+  updateApplicationStatus: async (applicationId: number, payload: { status: string; notes?: string }) => {
+    const res = await apiClient.patch<PlacementApplicationItem>(`/placements/applications/${applicationId}/status`, payload);
+    return res.data;
+  },
+
+  deleteDrive: async (driveId: number) => {
+    const res = await apiClient.delete<{ message: string }>(`/placements/drives/${driveId}`);
     return res.data;
   },
 };

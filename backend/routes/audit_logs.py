@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from backend.database import get_db
 from backend.dependencies import require_role
@@ -12,9 +12,11 @@ from backend.models.identity import User
 from backend.models.workflow import AuditLog
 
 router = APIRouter(prefix="/admin/audit-logs", tags=["Audit Logs"])
+root_router = APIRouter(prefix="/audit-logs", tags=["Audit Logs"])
 
 
-@router.get("")
+@router.get("", include_in_schema=False)
+@router.get("/")
 def list_audit_logs(
     response: Response,
     user_id: Optional[int] = Query(None, gt=0),
@@ -30,7 +32,7 @@ def list_audit_logs(
 ):
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
-    query = db.query(AuditLog)
+    query = db.query(AuditLog).options(joinedload(AuditLog.user))
     if user_id is not None:
         query = query.filter(AuditLog.user_id == user_id)
     if action:
@@ -61,6 +63,7 @@ def list_audit_logs(
             {
                 "id": row.id,
                 "user_id": row.user_id,
+                "user_name": row.user.name if row.user else None,
                 "action": row.action,
                 "entity_type": row.entity_type,
                 "entity_id": row.entity_id,
@@ -81,3 +84,34 @@ def list_audit_logs(
         "skip": skip,
         "limit": limit,
     }
+
+
+@root_router.get("", include_in_schema=False)
+@root_router.get("/")
+def list_audit_logs_root_alias(
+    response: Response,
+    user_id: Optional[int] = Query(None, gt=0),
+    action: Optional[str] = Query(None, min_length=1, max_length=150),
+    entity_type: Optional[str] = Query(None, min_length=1, max_length=50),
+    lifecycle_status: Optional[str] = Query(None, max_length=50),
+    since: Optional[datetime] = Query(None),
+    until: Optional[datetime] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    admin_user: User = Depends(require_role("ADMIN")),
+    db: Session = Depends(get_db),
+):
+    return list_audit_logs(
+        response=response,
+        user_id=user_id,
+        action=action,
+        entity_type=entity_type,
+        lifecycle_status=lifecycle_status,
+        since=since,
+        until=until,
+        skip=skip,
+        limit=limit,
+        admin_user=admin_user,
+        db=db,
+    )
+

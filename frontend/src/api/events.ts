@@ -96,6 +96,30 @@ export interface EventUpdatePayload {
   requires_approval?: boolean;
 }
 
+export interface EventRegistrationItem {
+  id: number;
+  event_id: number;
+  user_id: number;
+  status: string;
+  notes?: string | null;
+  registered_at: string;
+  user_name?: string | null;
+  user_email?: string | null;
+  event_title?: string | null;
+}
+
+export interface ClubMembershipItem {
+  id: number;
+  club_id: number;
+  user_id: number;
+  role: string;
+  status: string;
+  joined_at: string;
+  user_name?: string | null;
+  user_email?: string | null;
+  club_name?: string | null;
+}
+
 export interface VenueConflictItem {
   type: 'TIMETABLE' | 'RESOURCE_BOOKING' | 'CAMPUS_EVENT';
   id?: number | null;
@@ -279,6 +303,56 @@ export const eventsApi = {
       `/admin/capabilities/${id}/revoke`,
       { reason }
     );
+    return res.data;
+  },
+
+  // Event Registrations
+  registerForEvent: async (
+    eventId: number,
+    notes?: string
+  ): Promise<EventRegistrationItem> => {
+    const res = await apiClient.post<EventRegistrationItem>(
+      `/events/${eventId}/register`,
+      { notes }
+    );
+    return res.data;
+  },
+
+  cancelEventRegistration: async (eventId: number): Promise<void> => {
+    await apiClient.post(`/events/${eventId}/cancel-registration`);
+  },
+
+  getMyEventRegistrations: async (): Promise<EventRegistrationItem[]> => {
+    const res = await apiClient.get<EventRegistrationItem[]>('/events/my-registrations');
+    return res.data;
+  },
+
+  getEventRegistrations: async (eventId: number): Promise<EventRegistrationItem[]> => {
+    const res = await apiClient.get<EventRegistrationItem[]>(
+      `/events/${eventId}/registrations`
+    );
+    return res.data;
+  },
+
+  // Club Memberships
+  joinClub: async (clubId: number, role?: string): Promise<ClubMembershipItem> => {
+    const res = await apiClient.post<ClubMembershipItem>(`/clubs/${clubId}/join`, {
+      role,
+    });
+    return res.data;
+  },
+
+  leaveClub: async (clubId: number): Promise<void> => {
+    await apiClient.post(`/clubs/${clubId}/leave`);
+  },
+
+  getClubMembers: async (clubId: number): Promise<ClubMembershipItem[]> => {
+    const res = await apiClient.get<ClubMembershipItem[]>(`/clubs/${clubId}/members`);
+    return res.data;
+  },
+
+  getMyClubMemberships: async (): Promise<ClubMembershipItem[]> => {
+    const res = await apiClient.get<ClubMembershipItem[]>('/clubs/my-memberships');
     return res.data;
   },
 };

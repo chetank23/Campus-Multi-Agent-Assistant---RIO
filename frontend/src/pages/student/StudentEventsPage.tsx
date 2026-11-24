@@ -6,7 +6,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Sparkles,
   Calendar,
@@ -16,6 +16,9 @@ import {
   Users,
   MapPin,
   ChevronRight,
+  CheckCircle2,
+  UserPlus,
+  UserMinus,
 } from 'lucide-react';
 
 import {
@@ -26,10 +29,14 @@ import {
   LoadingState,
   FormModal,
 } from '@/components/common';
+import { useToast } from '@/context/useToast';
 
 import {
   eventsApi,
   type CampusEventItem,
+  type EventRegistrationItem,
+  type ClubMembershipItem,
+  type ClubItem,
 } from '@/api/events';
 
 const STATUS_VARIANT_MAP: Record<string, StatusVariant> = {
@@ -39,7 +46,10 @@ const STATUS_VARIANT_MAP: Record<string, StatusVariant> = {
 };
 
 export function StudentEventsPage() {
-  const [activeTab, setActiveTab] = useState<'ongoing' | 'today' | 'upcoming' | 'clubs' | 'all'>('ongoing');
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const [activeTab, setActiveTab] = useState<'ongoing' | 'today' | 'upcoming' | 'clubs' | 'my_events' | 'all'>('ongoing');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedEvent, setSelectedEvent] = useState<CampusEventItem | null>(null);
@@ -60,6 +70,82 @@ export function StudentEventsPage() {
     refetchInterval: 30_000,
   });
 
+  const { data: myRegistrations = [] } = useQuery<EventRegistrationItem[]>({
+    queryKey: ['student', 'event-registrations'],
+    queryFn: () => eventsApi.getMyEventRegistrations(),
+    refetchInterval: 60_000,
+  });
+
+  const { data: myClubs = [] } = useQuery<ClubMembershipItem[]>({
+    queryKey: ['student', 'club-memberships'],
+    queryFn: () => eventsApi.getMyClubMemberships(),
+    refetchInterval: 60_000,
+  });
+
+  const { data: allClubs = [], isLoading: isLoadingClubs } = useQuery<ClubItem[]>({
+    queryKey: ['student', 'all-clubs'],
+    queryFn: () => eventsApi.listClubs('ACTIVE'),
+  });
+
+  const registeredEventIds = useMemo(
+    () => new Set(myRegistrations.map((r) => r.event_id)),
+    [myRegistrations]
+  );
+
+  const joinedClubIds = useMemo(
+    () => new Set(myClubs.map((c) => c.club_id)),
+    [myClubs]
+  );
+
+  // Mutations
+  const registerEventMutation = useMutation({
+    mutationFn: (eventId: number) => eventsApi.registerForEvent(eventId),
+    onSuccess: () => {
+      toast.success('Successfully registered for the event!');
+      queryClient.invalidateQueries({ queryKey: ['student', 'event-registrations'] });
+    },
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to register for event.');
+    },
+  });
+
+  const cancelEventMutation = useMutation({
+    mutationFn: (eventId: number) => eventsApi.cancelEventRegistration(eventId),
+    onSuccess: () => {
+      toast.success('Event registration cancelled.');
+      queryClient.invalidateQueries({ queryKey: ['student', 'event-registrations'] });
+    },
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to cancel registration.');
+    },
+  });
+
+  const joinClubMutation = useMutation({
+    mutationFn: (clubId: number) => eventsApi.joinClub(clubId),
+    onSuccess: () => {
+      toast.success('Joined club successfully!');
+      queryClient.invalidateQueries({ queryKey: ['student', 'club-memberships'] });
+    },
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to join club.');
+    },
+  });
+
+  const leaveClubMutation = useMutation({
+    mutationFn: (clubId: number) => eventsApi.leaveClub(clubId),
+    onSuccess: () => {
+      toast.success('Left club.');
+      queryClient.invalidateQueries({ queryKey: ['student', 'club-memberships'] });
+    },
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to leave club.');
+    },
+  });
+
   // Filtered views
   const filteredEvents: CampusEventItem[] = useMemo((): CampusEventItem[] => {
     const now = new Date();
@@ -74,12 +160,14 @@ export function StudentEventsPage() {
         return eventList.filter((e) => e.start_time?.startsWith(todayStr));
       case 'upcoming':
         return eventList.filter((e) => new Date(e.start_time) > now);
+      case 'my_events':
+        return eventList.filter((e) => registeredEventIds.has(e.id));
       case 'clubs':
         return eventList.filter((e) => e.category === 'CLUB_ACTIVITY' || e.club_id != null);
       default:
         return eventList;
     }
-  }, [events, liveEvents, activeTab]);
+  }, [events, liveEvents, activeTab, registeredEventIds]);
 
   return (
     <div className="space-y-6">
@@ -179,6 +267,16 @@ export function StudentEventsPage() {
             >
               All Events ({events.length})
             </button>
+            <button
+              onClick={() => setActiveTab('my_events')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap ${
+                activeTab === 'my_events'
+                  ? 'bg-purple-50 text-purple-700 font-bold border border-purple-200'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              My Registered ({myRegistrations.length})
+            </button>
           </div>
 
           <div className="flex gap-2 w-full sm:w-auto">
@@ -209,6 +307,80 @@ export function StudentEventsPage() {
           </div>
         </div>
 
+        {/* Campus Clubs Directory when Clubs tab is active */}
+        {activeTab === 'clubs' && (
+          <div className="mb-6 space-y-3">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Users size={16} className="text-purple-600" />
+              Campus Clubs & Student Organizations
+            </h3>
+            {isLoadingClubs ? (
+              <LoadingState message="Loading clubs..." />
+            ) : allClubs.length === 0 ? (
+              <p className="text-xs text-slate-400">No active clubs registered.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {allClubs.map((club) => {
+                  const isMember = joinedClubIds.has(club.id);
+                  return (
+                    <div
+                      key={club.id}
+                      className="p-4 bg-purple-50/50 border border-purple-100 rounded-xl flex flex-col justify-between gap-3 shadow-xs"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[11px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">
+                            {club.code}
+                          </span>
+                          {isMember && (
+                            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                              <CheckCircle2 size={11} /> Joined
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="font-bold text-slate-900 text-sm mt-1">{club.name}</h4>
+                        {club.description && (
+                          <p className="text-xs text-slate-600 mt-1 line-clamp-2">{club.description}</p>
+                        )}
+                      </div>
+
+                      <div className="pt-2 border-t border-purple-100 flex justify-end">
+                        {isMember ? (
+                          <button
+                            type="button"
+                            disabled={leaveClubMutation.isPending}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              leaveClubMutation.mutate(club.id);
+                            }}
+                            className="px-3 py-1 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-lg text-xs font-semibold inline-flex items-center gap-1"
+                          >
+                            <UserMinus size={12} />
+                            Leave Club
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={joinClubMutation.isPending}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              joinClubMutation.mutate(club.id);
+                            }}
+                            className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1 shadow-xs"
+                          >
+                            <UserPlus size={12} />
+                            Join Club
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Events Cards Grid */}
         {isLoading ? (
           <div className="py-12 bg-white rounded-xl border border-slate-200">
@@ -221,6 +393,8 @@ export function StudentEventsPage() {
             <p className="text-xs text-slate-500 mt-1">
               {activeTab === 'ongoing'
                 ? 'There are no live campus events currently in session. Check Upcoming for scheduled activities!'
+                : activeTab === 'my_events'
+                ? 'You have not registered for any upcoming events yet.'
                 : 'No published events match your filter criteria.'}
             </p>
           </div>
@@ -241,19 +415,26 @@ export function StudentEventsPage() {
                       <span className="px-2 py-0.5 text-xs font-semibold rounded bg-primary-50 text-primary-700 border border-primary-200">
                         {ev.category}
                       </span>
-                      {isLive ? (
-                        <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 animate-pulse">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          LIVE NOW
-                        </span>
-                      ) : (
-                        <span className="text-xs font-medium text-slate-500">
-                          {new Date(ev.start_time).toLocaleDateString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        {registeredEventIds.has(ev.id) && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            <CheckCircle2 size={11} className="text-emerald-600" /> Registered
+                          </span>
+                        )}
+                        {isLive ? (
+                          <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 animate-pulse">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            LIVE NOW
+                          </span>
+                        ) : (
+                          <span className="text-xs font-medium text-slate-500">
+                            {new Date(ev.start_time).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <h4 className="text-base font-bold text-slate-900 leading-snug hover:text-primary-600">
@@ -370,11 +551,34 @@ export function StudentEventsPage() {
               </div>
             </div>
 
-            <div className="flex justify-end pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <div>
+                {registeredEventIds.has(selectedEvent.id) ? (
+                  <button
+                    type="button"
+                    disabled={cancelEventMutation.isPending}
+                    onClick={() => cancelEventMutation.mutate(selectedEvent.id)}
+                    className="px-4 py-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 font-semibold inline-flex items-center gap-1.5 text-xs"
+                  >
+                    <UserMinus size={13} />
+                    {cancelEventMutation.isPending ? 'Cancelling...' : 'Cancel Registration'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={registerEventMutation.isPending}
+                    onClick={() => registerEventMutation.mutate(selectedEvent.id)}
+                    className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold inline-flex items-center gap-1.5 shadow-xs text-xs"
+                  >
+                    <UserPlus size={13} />
+                    {registerEventMutation.isPending ? 'Registering...' : 'Register for Event'}
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setSelectedEvent(null)}
-                className="px-4 py-1.5 rounded-lg bg-primary-600 text-white font-semibold"
+                className="px-4 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs"
               >
                 Close
               </button>

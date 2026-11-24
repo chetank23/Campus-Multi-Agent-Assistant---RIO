@@ -24,6 +24,9 @@ import {
   GraduationCap,
   Eye,
   Send,
+  Users,
+  Trash2,
+  FileText,
 } from 'lucide-react';
 import { isAxiosError } from 'axios';
 
@@ -36,6 +39,7 @@ import {
   StatusBadge,
   type StatusVariant,
   RefreshButton,
+  LoadingState,
 } from '@/components/common';
 import { useToast } from '@/context/useToast';
 
@@ -43,6 +47,7 @@ import {
   placementsApi,
   type PlacementDriveItem,
   type PlacementScheduleItem,
+  type PlacementApplicationItem,
 } from '@/api/placements';
 import {
   departmentsApi,
@@ -70,6 +75,8 @@ export function AdminPlacementsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedDrive, setSelectedDrive] = useState<PlacementDriveItem | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [applicantModalDrive, setApplicantModalDrive] = useState<PlacementDriveItem | null>(null);
+  const [deleteConfirmDrive, setDeleteConfirmDrive] = useState<PlacementDriveItem | null>(null);
   const [actionModal, setActionModal] = useState<{
     isOpen: boolean;
     type: 'postpone' | 'cancel' | 'publish' | null;
@@ -244,6 +251,38 @@ export function AdminPlacementsPage() {
     onError: (err) => {
       const msg = isAxiosError(err) ? err.response?.data?.detail : String(err);
       toast.error(`Save failed: ${msg}`);
+    },
+  });
+
+  const { data: driveApplications = [], isLoading: isLoadingApplicants } = useQuery<PlacementApplicationItem[]>({
+    queryKey: ['admin', 'drive-applications', applicantModalDrive?.id],
+    queryFn: () => (applicantModalDrive ? placementsApi.getDriveApplications(applicantModalDrive.id) : Promise.resolve([])),
+    enabled: !!applicantModalDrive,
+  });
+
+  const updateAppStatusMutation = useMutation({
+    mutationFn: ({ appId, status, notes }: { appId: number; status: string; notes?: string }) =>
+      placementsApi.updateApplicationStatus(appId, { status, notes }),
+    onSuccess: () => {
+      toast.success('Candidate application status updated.');
+      queryClient.invalidateQueries({ queryKey: ['admin', 'drive-applications', applicantModalDrive?.id] });
+    },
+    onError: (err) => {
+      const msg = isAxiosError(err) ? err.response?.data?.detail : String(err);
+      toast.error(`Status update failed: ${msg}`);
+    },
+  });
+
+  const deleteDriveMutation = useMutation({
+    mutationFn: (driveId: number) => placementsApi.deleteDrive(driveId),
+    onSuccess: () => {
+      toast.success('Placement drive and all related rounds deleted.');
+      queryClient.invalidateQueries({ queryKey: ['admin', 'placement-drives'] });
+      setDeleteConfirmDrive(null);
+    },
+    onError: (err) => {
+      const msg = isAxiosError(err) ? err.response?.data?.detail : String(err);
+      toast.error(`Failed to delete placement drive: ${msg}`);
     },
   });
 
@@ -431,6 +470,20 @@ export function AdminPlacementsPage() {
               <Ban size={16} />
             </button>
           )}
+          <button
+            onClick={() => setApplicantModalDrive(row)}
+            className="p-1 text-purple-600 hover:bg-purple-50 rounded"
+            title="Inspect Applicants"
+          >
+            <Users size={16} />
+          </button>
+          <button
+            onClick={() => setDeleteConfirmDrive(row)}
+            className="p-1 text-red-500 hover:bg-red-50 rounded"
+            title="Delete Drive"
+          >
+            <Trash2 size={16} />
+          </button>
         </div>
       ),
     },
@@ -1038,6 +1091,153 @@ export function AdminPlacementsPage() {
           </div>
         </form>
       </FormModal>
+
+      {/* Applicant Inspection Modal */}
+      {applicantModalDrive && (
+        <FormModal
+          isOpen={!!applicantModalDrive}
+          onClose={() => setApplicantModalDrive(null)}
+          title={`Applicants: ${applicantModalDrive.company_name} — ${applicantModalDrive.job_role}`}
+        >
+          <div className="space-y-4 text-xs">
+            <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg">
+              <div>
+                <span className="font-semibold text-slate-800 text-sm">
+                  {driveApplications.length} Applicant{driveApplications.length === 1 ? '' : 's'} Registered
+                </span>
+                <p className="text-slate-500 mt-0.5">
+                  Review applicant profiles, notes, resumes, and progress candidates through selection rounds.
+                </p>
+              </div>
+            </div>
+
+            {isLoadingApplicants ? (
+              <LoadingState message="Loading candidates..." />
+            ) : driveApplications.length === 0 ? (
+              <div className="p-8 text-center bg-white border border-slate-200 rounded-lg">
+                <Users size={32} className="mx-auto text-slate-300 mb-2" />
+                <p className="font-semibold text-slate-700">No Applications Submitted</p>
+                <p className="text-slate-400 text-[11px] mt-0.5">
+                  Eligible students have not submitted applications for this drive yet.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                {driveApplications.map((app) => (
+                  <div
+                    key={app.id}
+                    className="p-3 bg-white border border-slate-200 rounded-lg shadow-xs space-y-2"
+                  >
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-slate-900 text-xs">
+                          {app.student_name || `Student #${app.student_id}`}
+                        </div>
+                        <div className="text-slate-500 text-[11px] flex items-center gap-2">
+                          <span>{app.student_email || app.student_usn || `ID: ${app.student_id}`}</span>
+                          <span>•</span>
+                          <span>Applied {new Date(app.applied_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={app.status}
+                          disabled={updateAppStatusMutation.isPending}
+                          onChange={(e) =>
+                            updateAppStatusMutation.mutate({
+                              appId: app.id,
+                              status: e.target.value,
+                            })
+                          }
+                          className="px-2.5 py-1 text-xs font-semibold rounded border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                          <option value="APPLIED">APPLIED</option>
+                          <option value="SHORTLISTED">SHORTLISTED</option>
+                          <option value="INTERVIEW_SCHEDULED">INTERVIEW SCHEDULED</option>
+                          <option value="SELECTED">SELECTED</option>
+                          <option value="REJECTED">REJECTED</option>
+                          <option value="WITHDRAWN">WITHDRAWN</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {app.notes && (
+                      <p className="text-slate-600 bg-slate-50 p-2 rounded border border-slate-100 text-[11px]">
+                        <span className="font-semibold text-slate-700">Notes: </span>
+                        {app.notes}
+                      </p>
+                    )}
+
+                    {app.resume_url && (
+                      <div>
+                        <a
+                          href={app.resume_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-600 hover:underline inline-flex items-center gap-1 text-[11px] font-medium"
+                        >
+                          <FileText size={12} />
+                          View Submitted Resume / Link
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setApplicantModalDrive(null)}
+                className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </FormModal>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmDrive && (
+        <FormModal
+          isOpen={!!deleteConfirmDrive}
+          onClose={() => setDeleteConfirmDrive(null)}
+          title="Delete Placement Drive"
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-800">
+              <div className="font-bold text-sm">Are you sure you want to delete this drive?</div>
+              <p className="mt-1">
+                Company: <span className="font-semibold">{deleteConfirmDrive.company_name}</span> ({deleteConfirmDrive.job_role})
+              </p>
+              <p className="mt-1 text-red-600">
+                This will permanently delete the drive, its rounds, and all candidate applications.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmDrive(null)}
+                className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg font-semibold hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteDriveMutation.isPending}
+                onClick={() => deleteDriveMutation.mutate(deleteConfirmDrive.id)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold disabled:opacity-50"
+              >
+                {deleteDriveMutation.isPending ? 'Deleting...' : 'Confirm Delete'}
+              </button>
+            </div>
+          </div>
+        </FormModal>
+      )}
     </div>
   );
 }

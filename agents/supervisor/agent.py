@@ -77,6 +77,9 @@ def classify_intent(message: str) -> str:
     scheduling_patterns = [
         r"\bgenerate\b.*\btimetable\b",
         r"\bcreate\b.*\btimetable\b",
+        r"\bbuild\b.*\btimetable\b",
+        r"\b(?:assign|substitute)\s+faculty\b",
+        r"\bfaculty\s+substitution\b",
         r"\brun\b.*\bsolver\b",
         r"\boptimize\b.*\bschedule\b",
         r"\bnew\b.*\btimetable\b",
@@ -168,6 +171,7 @@ def classify_intent(message: str) -> str:
         r"\bshow\s+my\s+bookings?\b",
         r"\bcancel\b.*\bbooking\b",
         r"\bapprove\b.*\bbooking\b",
+        r"\bconfirm\b.*\bbooking\b",
         r"\breject\b.*\bbooking\b",
         r"\b(check|find|search|show|list)\s+.*?\b(available|free|seminar\s+halls?|labs?|auditoriums?|projectors?|facilities|resources)\b",
         r"\bis\b.*\b(available|free)\b",
@@ -668,11 +672,27 @@ def build_supervisor_graph(db: Session, user: User):
 
 
 def _is_explicit_proposal_action(message: str) -> bool:
-    """Detects whether a message is an explicit proposal action token."""
-    msg = message.lower().strip()
+    """Detects whether a message is an explicit proposal action token or actionable command."""
+    msg = (message or "").lower().strip()
+    if not msg:
+        return False
     if re.search(r"\b(?:confirm|execute|approve|proceed)\s+(?:op_prop_|res_prop_|disrupt_prop_|prop_)[a-zA-Z0-9_-]+\b", msg):
         return True
-    if re.search(r"^(?:yes|confirm|proceed|confirm it|no|cancel|cancel that|discard|never mind|stop|abort)$", msg):
+    if re.search(r"^(?:yes|confirm|proceed|confirm it|approve it|do it|yes proceed|yes, proceed|no|cancel|cancel that|discard|never mind|stop|abort)$", msg):
+        return True
+    if re.search(r"\b(?:approve|confirm|reject|cancel)\s+(?:pending\s+)?booking\b", msg):
+        return True
+    if re.search(r"\b(?:generate|create|build)\s+timetable\b", msg) or re.search(r"\b(?:generate|create|build)\s+(?:a\s+)?timetable\b", msg) or re.search(r"\b(?:generate|create|build)\b.*?\btimetable\b", msg):
+        return True
+    if re.search(r"\b(?:assign|substitute)\s+faculty\b", msg) or re.search(r"\bfaculty\s+substitution\b", msg):
+        return True
+    if re.search(r"\b(?:revise|avoid|reduce)\b.*?\b(?:timetable|schedule|labs?|consecutive)\b", msg):
+        return True
+    if re.search(r"\b(?:show|view|check|inspect)\b.*?\bconflicts?\b", msg):
+        return True
+    if re.search(r"\b(?:faculty|prof|dr\.?)\b.*?\bunavailable\b", msg):
+        return True
+    if re.search(r"\bwhy\b.*?\b(?:infeasible|fail|couldn't|could\s+not|unable|no\s+solution)\b.*?\b(?:timetable|schedule|solver)\b", msg):
         return True
     return False
 

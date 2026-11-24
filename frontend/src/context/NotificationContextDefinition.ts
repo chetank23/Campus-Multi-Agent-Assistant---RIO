@@ -5,6 +5,7 @@ export interface NotificationContextValue {
   notifications: NotificationItem[];
   unreadCount: number;
   isLoading: boolean;
+  isConnected: boolean;
   error: string | null;
   refresh: () => Promise<void>;
   markAsRead: (id: number) => Promise<void>;

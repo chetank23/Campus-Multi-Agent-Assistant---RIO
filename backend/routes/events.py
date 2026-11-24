@@ -29,12 +29,18 @@ from backend.schemas.events import (
     EventVenueCheckRequest,
     EventVenueCheckResponse,
     EventVenueConflictItem,
+    EventRegistrationCreate,
+    EventRegistrationResponse,
 )
 from backend.services.event_service import (
     cancel_event,
+    cancel_event_registration,
     check_venue_availability,
     create_event,
+    list_event_registrations,
     list_events_for_user,
+    list_user_event_registrations,
+    register_for_event,
     review_event,
     submit_event_for_approval,
     update_event,
@@ -165,6 +171,19 @@ def check_venue(
 
 
 @router.get(
+    "/my-registrations",
+    response_model=List[EventRegistrationResponse],
+    summary="List caller's event registrations",
+)
+def get_my_event_registrations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> List[EventRegistrationResponse]:
+    """Returns all event registrations for the authenticated user."""
+    return list_user_event_registrations(db=db, user=current_user)
+
+
+@router.get(
     "/{event_id}",
     response_model=EventResponse,
     summary="Get single event detail",
@@ -277,3 +296,52 @@ def cancel_existing_event(
     event = cancel_event(db=db, canceller=current_user, event_id=event_id, reason=payload.reason)
     events = list_events_for_user(db=db, current_user=current_user)
     return next(e for e in events if e["id"] == event.id)
+
+
+# ---------------------------------------------------------------------------
+# Event Registrations Workflow
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/{event_id}/register",
+    response_model=EventRegistrationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Register for a published campus event",
+)
+def register_for_event_endpoint(
+    event_id: int,
+    payload: Optional[EventRegistrationCreate] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> EventRegistrationResponse:
+    """Registers the authenticated student or faculty member for a published event."""
+    notes = payload.notes if payload else None
+    return register_for_event(db=db, user=current_user, event_id=event_id, notes=notes)
+
+
+@router.post(
+    "/{event_id}/cancel-registration",
+    summary="Cancel active event registration",
+)
+def cancel_event_registration_endpoint(
+    event_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Dict[str, str]:
+    """Cancels the caller's active registration for an event."""
+    return cancel_event_registration(db=db, user=current_user, event_id=event_id)
+
+
+@router.get(
+    "/{event_id}/registrations",
+    response_model=List[EventRegistrationResponse],
+    summary="List all attendees registered for an event (Coordinator / Admin)",
+)
+def get_event_registrations(
+    event_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> List[EventRegistrationResponse]:
+    """Lists registered attendees with timestamps and notes."""
+    return list_event_registrations(db=db, current_user=current_user, event_id=event_id)
+

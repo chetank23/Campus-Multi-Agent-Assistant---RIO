@@ -31,6 +31,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isConnected, setIsConnected] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -105,6 +106,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       eventSourceRef.current = es;
 
       es.addEventListener('connected', (e: MessageEvent) => {
+        setIsConnected(true);
         try {
           const data = JSON.parse(e.data);
           if (typeof data.unread_count === 'number') {
@@ -130,6 +132,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       });
 
       es.onerror = () => {
+        setIsConnected(false);
         // EventSource automatically retries connection
       };
     } catch {
@@ -154,6 +157,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     return () => {
       window.clearInterval(intervalId);
+      setIsConnected(false);
       if (es) {
         es.close();
       }
@@ -201,6 +205,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     notifications: activeNotifications,
     unreadCount: activeUnreadCount,
     isLoading,
+    isConnected,
     error,
     refresh,
     markAsRead,

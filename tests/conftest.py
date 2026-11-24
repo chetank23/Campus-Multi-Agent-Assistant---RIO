@@ -183,6 +183,7 @@ def pytest_configure(config):
     Validates TEST_DATABASE_URL and configures DATABASE_URL to point to test_schema.
     Fails closed immediately if TEST_DATABASE_URL is missing or unsafe.
     """
+    os.environ.setdefault("RIO_CHAT_LLM_ENABLED", "false")
     get_test_urls()
 
 
@@ -192,6 +193,7 @@ def setup_test_database():
     Session-scoped test fixture that initializes the isolated test_schema
     in the validated test database.
     """
+    os.environ.setdefault("RIO_CHAT_LLM_ENABLED", "false")
     clean_url, schema_url = get_test_urls()
 
     # Keep engine references available for cleanup even when setup fails midway.
@@ -201,7 +203,16 @@ def setup_test_database():
         # 1. Connect exclusively to the validated test database to manage test_schema
         engine = create_engine(clean_url, isolation_level="AUTOCOMMIT")
         with engine.connect() as conn:
+            conn.execute(text("""
+                SELECT pg_terminate_backend(pid)
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+                  AND pid <> pg_backend_pid()
+                  AND state = 'idle in transaction';
+            """))
+            conn.commit()
             conn.execute(text("DROP SCHEMA IF EXISTS test_schema CASCADE"))
+            conn.commit()
             conn.execute(text("CREATE SCHEMA test_schema"))
 
         # 2. Run Alembic migrations against the test database with search_path=test_schema
@@ -258,6 +269,13 @@ def setup_test_database():
                 "--password",
                 "Test@1234",
             ],
+            env=sub_env,
+            check=True,
+        )
+
+        # 3c. Seed Placements, Clubs, and Events in test database
+        subprocess.run(
+            [sys.executable, "scripts/seed_placements_and_events.py"],
             env=sub_env,
             check=True,
         )

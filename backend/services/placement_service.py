@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend.models.identity import User
 from backend.models.events import CoordinatorCapability
 from backend.models.academic import Department, Program, Batch, Student
-from backend.models.placements import PlacementDrive, PlacementSchedule, StudentAcademicRecord
+from backend.models.placements import PlacementApplication, PlacementDrive, PlacementSchedule, StudentAcademicRecord
 from backend.models.space_time import Room
 from backend.models.workflow import AuditLog, Notification
 from backend.schemas.placements import (
@@ -37,6 +37,9 @@ from backend.schemas.placements import (
     StudentAcademicRecordUpsert,
     StudentEligibilityResult,
     CdcDashboardStats,
+    PlacementApplicationCreate,
+    PlacementApplicationResponse,
+    PlacementApplicationStatusUpdate,
 )
 from backend.services.event_service import check_user_has_capability
 from backend.services.notification_service import create_bulk_notifications, create_notification
@@ -44,6 +47,29 @@ from backend.services.notification_service import create_bulk_notifications, cre
 
 def utc_now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
+
+
+def _log_placement_audit(
+    db: Session,
+    user_id: int,
+    action: str,
+    entity_id: int,
+    old_val: Optional[Dict[str, Any]] = None,
+    new_val: Optional[Dict[str, Any]] = None,
+) -> None:
+    try:
+        db.add(
+            AuditLog(
+                user_id=user_id,
+                action=action,
+                entity_type="PlacementApplication" if "APPLICATION" in action else "PlacementDrive",
+                entity_id=entity_id,
+                old_value=old_val,
+                new_value=new_val,
+            )
+        )
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -1230,3 +1256,244 @@ def _notify_eligible_students_drive_cancelled(db: Session, drive: PlacementDrive
     ]
     if notifs:
         create_bulk_notifications(db=db, notifications=notifs)
+
+
+# ---------------------------------------------------------------------------
+# 8. Placement Applications Management
+# ---------------------------------------------------------------------------
+
+def _format_placement_application(app: PlacementApplication) -> PlacementApplicationResponse:
+    student = app.student
+    user = student.user if student else None
+    drive = app.drive
+    dept = student.department if student else None
+    return PlacementApplicationResponse(
+        id=app.id,
+        drive_id=app.drive_id,
+        drive_title=drive.title if drive else "",
+        company_name=drive.company_name if drive else "",
+        job_role=drive.job_role if drive else "",
+        student_id=app.student_id,
+        student_name=user.name if user else "Student",
+        student_usn=student.student_id if student else "",
+        student_email=user.email if user else None,
+        department_name=dept.name if dept else None,
+        status=app.status,
+        resume_url=app.resume_url,
+        notes=app.notes,
+        applied_at=app.applied_at.isoformat(),
+        updated_at=app.updated_at.isoformat(),
+    )
+
+
+def apply_to_placement_drive(
+    db: Session,
+    student_user: User,
+    drive_id: int,
+    payload: PlacementApplicationCreate,
+) -> PlacementApplicationResponse:
+    student = db.query(Student).filter(Student.user_id == student_user.id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student profile not found for authenticated user.",
+        )
+
+    drive = db.query(PlacementDrive).filter(PlacementDrive.id == drive_id).first()
+    if not drive:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Placement drive #{drive_id} not found.",
+        )
+
+    if drive.status != "PUBLISHED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Applications are not accepted for drives with status '{drive.status}'.",
+        )
+
+    deadline = drive.application_deadline
+    if deadline.tzinfo is not None:
+        deadline = deadline.replace(tzinfo=None)
+    now_naive = utc_now().replace(tzinfo=None)
+    if deadline < now_naive:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Application deadline for this drive has already passed.",
+        )
+
+    eligibility = evaluate_student_eligibility(db=db, drive=drive, student=student)
+    if not eligibility.is_eligible:
+        reasons_text = "; ".join(eligibility.reasons) if eligibility.reasons else "Eligibility requirements not met."
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"You are not eligible to apply for this drive: {reasons_text}",
+        )
+
+    existing = db.query(PlacementApplication).filter(
+        PlacementApplication.drive_id == drive.id,
+        PlacementApplication.student_id == student.id,
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You have already submitted an application for this placement drive.",
+        )
+
+    app = PlacementApplication(
+        drive_id=drive.id,
+        student_id=student.id,
+        status="APPLIED",
+        resume_url=payload.resume_url,
+        notes=payload.notes,
+        applied_at=utc_now(),
+        updated_at=utc_now(),
+    )
+    db.add(app)
+    db.commit()
+    db.refresh(app)
+
+    _log_placement_audit(
+        db=db,
+        user_id=student_user.id,
+        action="SUBMIT_PLACEMENT_APPLICATION",
+        entity_id=app.id,
+        new_val={"drive_id": drive.id, "status": "APPLIED"},
+    )
+    db.commit()
+
+    return _format_placement_application(app)
+
+
+def list_student_applications(
+    db: Session,
+    student_user: User,
+) -> List[PlacementApplicationResponse]:
+    student = db.query(Student).filter(Student.user_id == student_user.id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student profile not found for authenticated user.",
+        )
+
+    apps = (
+        db.query(PlacementApplication)
+        .options(
+            joinedload(PlacementApplication.drive),
+            joinedload(PlacementApplication.student).joinedload(Student.user),
+            joinedload(PlacementApplication.student).joinedload(Student.department),
+        )
+        .filter(PlacementApplication.student_id == student.id)
+        .order_by(PlacementApplication.applied_at.desc())
+        .all()
+    )
+    return [_format_placement_application(a) for a in apps]
+
+
+def list_drive_applications(
+    db: Session,
+    coordinator_user: User,
+    drive_id: int,
+) -> List[PlacementApplicationResponse]:
+    drive = db.query(PlacementDrive).filter(PlacementDrive.id == drive_id).first()
+    if not drive:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Placement drive #{drive_id} not found.",
+        )
+
+    require_cdc_coordinator(db, coordinator_user)
+
+    apps = (
+        db.query(PlacementApplication)
+        .options(
+            joinedload(PlacementApplication.drive),
+            joinedload(PlacementApplication.student).joinedload(Student.user),
+            joinedload(PlacementApplication.student).joinedload(Student.department),
+        )
+        .filter(PlacementApplication.drive_id == drive.id)
+        .order_by(PlacementApplication.applied_at.desc())
+        .all()
+    )
+    return [_format_placement_application(a) for a in apps]
+
+
+def update_application_status(
+    db: Session,
+    coordinator_user: User,
+    application_id: int,
+    new_status: str,
+    notes: Optional[str] = None,
+) -> PlacementApplicationResponse:
+    require_cdc_coordinator(db, coordinator_user)
+
+    app = (
+        db.query(PlacementApplication)
+        .options(
+            joinedload(PlacementApplication.drive),
+            joinedload(PlacementApplication.student).joinedload(Student.user),
+            joinedload(PlacementApplication.student).joinedload(Student.department),
+        )
+        .filter(PlacementApplication.id == application_id)
+        .first()
+    )
+    if not app:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Application #{application_id} not found.",
+        )
+
+    old_status = app.status
+    app.status = new_status
+    if notes is not None:
+        app.notes = notes
+    app.updated_at = utc_now()
+
+    if app.student and app.student.user_id:
+        create_notification(
+            db=db,
+            user_id=app.student.user_id,
+            title=f"Application Update: {app.drive.company_name}",
+            message=f"Your application status for '{app.drive.title}' has been updated to {new_status}.",
+            type="PLACEMENT_APPLICATION_STATUS",
+            link="/student/placements",
+            entity_type="PlacementApplication",
+            entity_id=app.id,
+        )
+
+    _log_placement_audit(
+        db=db,
+        user_id=coordinator_user.id,
+        action="UPDATE_APPLICATION_STATUS",
+        entity_id=app.id,
+        old_val={"status": old_status},
+        new_val={"status": new_status, "notes": notes},
+    )
+    db.commit()
+    db.refresh(app)
+    return _format_placement_application(app)
+
+
+def delete_placement_drive(
+    db: Session,
+    coordinator_user: User,
+    drive_id: int,
+) -> None:
+    drive = db.query(PlacementDrive).filter(PlacementDrive.id == drive_id).first()
+    if not drive:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Placement drive #{drive_id} not found.",
+        )
+    require_cdc_coordinator(db, coordinator_user)
+
+    _log_placement_audit(
+        db=db,
+        user_id=coordinator_user.id,
+        action="DELETE_PLACEMENT_DRIVE",
+        entity_id=drive.id,
+        old_val={"title": drive.title, "company": drive.company_name},
+    )
+    db.delete(drive)
+    db.commit()
+

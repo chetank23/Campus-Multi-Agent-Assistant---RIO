@@ -31,26 +31,23 @@ from backend.utils.datetime_utils import utc_now
 class NotificationStreamBroker:
     """
     Manages active SSE client subscriber queues per user_id.
-    Thread-safe and asyncio-compatible.
+    Thread-safe and asyncio-compatible across multiple event loops.
     """
     def __init__(self) -> None:
         self._subscribers: Dict[int, Set[asyncio.Queue]] = {}
-        self._lock = asyncio.Lock()
 
     async def subscribe(self, user_id: int) -> asyncio.Queue:
-        async with self._lock:
-            queue: asyncio.Queue = asyncio.Queue()
-            if user_id not in self._subscribers:
-                self._subscribers[user_id] = set()
-            self._subscribers[user_id].add(queue)
-            return queue
+        queue: asyncio.Queue = asyncio.Queue()
+        if user_id not in self._subscribers:
+            self._subscribers[user_id] = set()
+        self._subscribers[user_id].add(queue)
+        return queue
 
     async def unsubscribe(self, user_id: int, queue: asyncio.Queue) -> None:
-        async with self._lock:
-            if user_id in self._subscribers:
-                self._subscribers[user_id].discard(queue)
-                if not self._subscribers[user_id]:
-                    del self._subscribers[user_id]
+        if user_id in self._subscribers:
+            self._subscribers[user_id].discard(queue)
+            if not self._subscribers[user_id]:
+                del self._subscribers[user_id]
 
     def publish_notification(self, user_id: int, notification: Notification) -> None:
         """

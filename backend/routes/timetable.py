@@ -1,6 +1,6 @@
 import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session, joinedload
 
 from backend.database import get_db
@@ -224,6 +224,43 @@ def generate_timetable(
         diagnostics=gen_res.diagnostics,
         score=gen_res.score,
         version_id=gen_res.version_id,
+    )
+
+
+@router.post("/batch-generate")
+def batch_generate_timetable(
+    scope: GenerationScope,
+    async_mode: bool = Query(False, description="Whether to dispatch via Celery background queue"),
+    strategy: str = Query("BALANCED", description="Optimization strategy"),
+    time_limit: int = Query(60, description="Solver time limit in seconds"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    """
+    Department-level multi-section CP-SAT timetable generation.
+    Accounts for shared faculty, shared classrooms/labs, sections, and faculty availability.
+    Supports both synchronous preview execution and asynchronous Celery/Redis queue dispatch.
+    """
+    if async_mode:
+        from backend.tasks.timetable_tasks import batch_generate_timetable_task
+        task = batch_generate_timetable_task.delay(
+            scope.model_dump(),
+            user_id=current_user.id,
+            strategy=strategy,
+            time_limit=time_limit,
+        )
+        return {
+            "status": "QUEUED",
+            "task_id": task.id,
+            "message": "Batch timetable generation task submitted to background queue.",
+        }
+
+    return generate_timetable_preview(
+        db=db,
+        scope=scope,
+        current_user=current_user,
+        strategy=strategy,
+        time_limit=time_limit,
     )
 
 

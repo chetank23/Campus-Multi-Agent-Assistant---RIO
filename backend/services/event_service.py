@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from backend.models.identity import User
 from backend.models.academic import Department, Program, Batch, Student, Faculty
@@ -23,13 +23,16 @@ from backend.models.space_time import Building, Room, TimeSlot
 from backend.models.timetable import TimetableVersion, TimetableEntry
 from backend.models.resources import Resource, ResourceBooking
 from backend.models.workflow import AuditLog, Notification
-from backend.models.events import CoordinatorCapability, Club, CampusEvent
+from backend.models.events import CoordinatorCapability, Club, CampusEvent, ClubMembership, EventRegistration
 from backend.schemas.events import (
     CapabilityAssignRequest,
     ClubCreateRequest,
     ClubUpdateRequest,
     EventCreateRequest,
     EventUpdateRequest,
+    ClubMembershipResponse,
+    EventRegistrationCreate,
+    EventRegistrationResponse,
 )
 from backend.services.notification_service import create_notification, create_bulk_notifications
 from backend.utils.datetime_utils import utc_now
@@ -1361,3 +1364,258 @@ def list_events_for_user(
         })
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# 5. Club Memberships & Event Registrations Management
+# ---------------------------------------------------------------------------
+
+def _format_club_membership(m: ClubMembership) -> ClubMembershipResponse:
+    user = m.user
+    club = m.club
+    return ClubMembershipResponse(
+        id=m.id,
+        club_id=m.club_id,
+        club_name=club.name if club else "",
+        club_code=club.code if club else "",
+        user_id=m.user_id,
+        user_name=user.name if user else "Member",
+        user_email=user.email if user else None,
+        role=m.role,
+        status=m.status,
+        joined_at=m.joined_at.isoformat(),
+    )
+
+
+def _format_event_registration(r: EventRegistration) -> EventRegistrationResponse:
+    user = r.user
+    ev = r.event
+    return EventRegistrationResponse(
+        id=r.id,
+        event_id=r.event_id,
+        event_title=ev.title if ev else "",
+        event_start_time=ev.start_time.isoformat() if ev else "",
+        event_end_time=ev.end_time.isoformat() if ev else "",
+        user_id=r.user_id,
+        user_name=user.name if user else "Attendee",
+        user_email=user.email if user else None,
+        status=r.status,
+        notes=r.notes,
+        registered_at=r.registered_at.isoformat(),
+    )
+
+
+def join_club(db: Session, user: User, club_id: int, role: str = "MEMBER") -> ClubMembershipResponse:
+    club = db.query(Club).filter(Club.id == club_id).first()
+    if not club:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Club #{club_id} not found.")
+
+    if club.status != "ACTIVE":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot join an inactive club.")
+
+    existing = db.query(ClubMembership).filter(
+        ClubMembership.club_id == club.id,
+        ClubMembership.user_id == user.id,
+    ).first()
+
+    if existing:
+        if existing.status == "ACTIVE":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You are already an active member of this club.")
+        existing.status = "ACTIVE"
+        existing.role = role
+        existing.joined_at = utc_now()
+        membership = existing
+    else:
+        membership = ClubMembership(
+            club_id=club.id,
+            user_id=user.id,
+            role=role,
+            status="ACTIVE",
+            joined_at=utc_now(),
+        )
+        db.add(membership)
+
+    db.commit()
+    db.refresh(membership)
+    return _format_club_membership(membership)
+
+
+def leave_club(db: Session, user: User, club_id: int) -> Dict[str, str]:
+    membership = db.query(ClubMembership).filter(
+        ClubMembership.club_id == club_id,
+        ClubMembership.user_id == user.id,
+        ClubMembership.status == "ACTIVE",
+    ).first()
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Active club membership not found.")
+
+    membership.status = "INACTIVE"
+    db.commit()
+    return {"message": "Successfully left the club."}
+
+
+def list_club_members(db: Session, club_id: int) -> List[ClubMembershipResponse]:
+    club = db.query(Club).filter(Club.id == club_id).first()
+    if not club:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Club #{club_id} not found.")
+
+    memberships = (
+        db.query(ClubMembership)
+        .filter(ClubMembership.club_id == club_id, ClubMembership.status == "ACTIVE")
+        .order_by(ClubMembership.joined_at.desc())
+        .all()
+    )
+    return [_format_club_membership(m) for m in memberships]
+
+
+def list_user_club_memberships(db: Session, user: User) -> List[ClubMembershipResponse]:
+    memberships = (
+        db.query(ClubMembership)
+        .filter(ClubMembership.user_id == user.id, ClubMembership.status == "ACTIVE")
+        .order_by(ClubMembership.joined_at.desc())
+        .all()
+    )
+    return [_format_club_membership(m) for m in memberships]
+
+
+def register_for_event(
+    db: Session,
+    user: User,
+    event_id: int,
+    notes: Optional[str] = None,
+) -> EventRegistrationResponse:
+    event = db.query(CampusEvent).filter(CampusEvent.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Campus event #{event_id} not found.")
+
+    if event.status != "PUBLISHED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Registrations are not accepted for events with status '{event.status}'.",
+        )
+
+    end_t = event.end_time
+    if end_t.tzinfo is not None:
+        end_t = end_t.replace(tzinfo=None)
+    if end_t < utc_now():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This event has already concluded.")
+
+    # Target audience validations
+    if event.target_audience == "STUDENT" and user.role != "STUDENT":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This event is restricted to students.")
+    if event.target_audience == "FACULTY" and user.role != "FACULTY":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This event is restricted to faculty members.")
+    if event.target_audience == "DEPARTMENT_ONLY" and user.department_id != event.target_department_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This event is restricted to specific department members.")
+    if event.target_audience == "MEMBERS_ONLY" and event.club_id:
+        is_member = db.query(ClubMembership).filter(
+            ClubMembership.club_id == event.club_id,
+            ClubMembership.user_id == user.id,
+            ClubMembership.status == "ACTIVE",
+        ).first()
+        if not is_member:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This event is restricted to registered club members.")
+
+    existing = db.query(EventRegistration).filter(
+        EventRegistration.event_id == event.id,
+        EventRegistration.user_id == user.id,
+    ).first()
+
+    if existing:
+        if existing.status == "REGISTERED":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You are already registered for this event.")
+        existing.status = "REGISTERED"
+        existing.notes = notes
+        existing.registered_at = utc_now()
+        reg = existing
+    else:
+        reg = EventRegistration(
+            event_id=event.id,
+            user_id=user.id,
+            status="REGISTERED",
+            notes=notes,
+            registered_at=utc_now(),
+        )
+        db.add(reg)
+
+    db.commit()
+    db.refresh(reg)
+
+    create_notification(
+        db=db,
+        user_id=user.id,
+        title=f"Registration Confirmed: {event.title}",
+        message=f"You are registered for '{event.title}' scheduled on {event.start_time.strftime('%b %d, %Y at %I:%M %p')}.",
+        type="EVENT_REGISTRATION",
+        link="/events",
+        entity_type="CampusEvent",
+        entity_id=event.id,
+    )
+    db.commit()
+
+    return _format_event_registration(reg)
+
+
+def cancel_event_registration(db: Session, user: User, event_id: int) -> Dict[str, str]:
+    reg = db.query(EventRegistration).filter(
+        EventRegistration.event_id == event_id,
+        EventRegistration.user_id == user.id,
+        EventRegistration.status == "REGISTERED",
+    ).first()
+    if not reg:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Active registration for this event not found.")
+
+    reg.status = "CANCELLED"
+    db.commit()
+    return {"message": "Registration cancelled successfully."}
+
+
+def list_user_event_registrations(db: Session, user: User) -> List[EventRegistrationResponse]:
+    regs = (
+        db.query(EventRegistration)
+        .options(joinedload(EventRegistration.event), joinedload(EventRegistration.user))
+        .filter(EventRegistration.user_id == user.id)
+        .order_by(EventRegistration.registered_at.desc())
+        .all()
+    )
+    return [_format_event_registration(r) for r in regs]
+
+
+def list_event_registrations(
+    db: Session,
+    current_user: User,
+    event_id: int,
+) -> List[EventRegistrationResponse]:
+    event = db.query(CampusEvent).filter(CampusEvent.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Event #{event_id} not found.")
+
+    # Authorization: ADMIN or event coordinator or club coordinator
+    if current_user.role != "ADMIN" and current_user.id != event.coordinator_id:
+        has_coord = check_user_has_capability(
+            db=db,
+            user=current_user,
+            capability="EVENT_COORDINATOR",
+            scope_type="EVENT",
+            scope_id=event.id,
+        )
+        if not has_coord and event.club_id:
+            has_coord = check_user_has_capability(
+                db=db,
+                user=current_user,
+                capability="CLUB_COORDINATOR",
+                scope_type="CLUB",
+                scope_id=event.club_id,
+            )
+        if not has_coord:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to event registrations.")
+
+    regs = (
+        db.query(EventRegistration)
+        .options(joinedload(EventRegistration.event), joinedload(EventRegistration.user))
+        .filter(EventRegistration.event_id == event_id)
+        .order_by(EventRegistration.registered_at.desc())
+        .all()
+    )
+    return [_format_event_registration(r) for r in regs]
+

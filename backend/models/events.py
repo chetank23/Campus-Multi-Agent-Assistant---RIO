@@ -20,6 +20,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -115,6 +116,9 @@ class Club(Base):
     creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[created_by])
     activities: Mapped[List["CampusEvent"]] = relationship(
         "CampusEvent", back_populates="club", cascade="all, delete-orphan"
+    )
+    memberships: Mapped[List["ClubMembership"]] = relationship(
+        "ClubMembership", back_populates="club", cascade="all, delete-orphan"
     )
 
 
@@ -236,4 +240,72 @@ class CampusEvent(Base):
     department: Mapped[Optional["Department"]] = relationship("Department", foreign_keys=[target_department_id])
     program: Mapped[Optional["Program"]] = relationship("Program", foreign_keys=[target_program_id])
     batch: Mapped[Optional["Batch"]] = relationship("Batch", foreign_keys=[target_batch_id])
+    registrations: Mapped[List["EventRegistration"]] = relationship(
+        "EventRegistration", back_populates="event", cascade="all, delete-orphan"
+    )
+
+
+class ClubMembership(Base):
+    __tablename__ = "club_memberships"
+    __table_args__ = (
+        UniqueConstraint("club_id", "user_id", name="uq_club_membership_club_user"),
+        Index("ix_club_memberships_club", "club_id"),
+        Index("ix_club_memberships_user", "user_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    club_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("clubs.id", name="fk_club_memberships_club_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", name="fk_club_memberships_user_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(
+        String(30), default="MEMBER", server_default="'MEMBER'", nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), default="ACTIVE", server_default="'ACTIVE'", nullable=False
+    )
+    joined_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=utc_now, server_default=func.now(), nullable=False
+    )
+
+    club: Mapped["Club"] = relationship("Club", back_populates="memberships")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+
+
+class EventRegistration(Base):
+    __tablename__ = "event_registrations"
+    __table_args__ = (
+        UniqueConstraint("event_id", "user_id", name="uq_event_registration_event_user"),
+        Index("ix_event_registrations_event", "event_id"),
+        Index("ix_event_registrations_user", "user_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("campus_events.id", name="fk_event_registrations_event_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", name="fk_event_registrations_user_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String(30), default="REGISTERED", server_default="'REGISTERED'", nullable=False
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    registered_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=utc_now, server_default=func.now(), nullable=False
+    )
+
+    event: Mapped["CampusEvent"] = relationship("CampusEvent", back_populates="registrations")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+
 

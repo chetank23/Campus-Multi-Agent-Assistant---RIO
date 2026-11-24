@@ -179,6 +179,7 @@ def mark_all_notifications_as_read(
 async def notification_stream(
     request: Request,
     token: Optional[str] = Query(None),
+    max_events: Optional[int] = Query(None, description="Optional event limit for test/one-shot clients"),
     db: Session = Depends(get_db),
 ):
     """
@@ -200,10 +201,14 @@ async def notification_stream(
     )
 
     async def event_generator() -> AsyncGenerator[str, None]:
+        events_sent = 0
         try:
             # Send initial connected handshake
             init_data = json.dumps({"connected": True, "unread_count": initial_unread})
             yield f"event: connected\ndata: {init_data}\n\n"
+            events_sent += 1
+            if max_events is not None and events_sent >= max_events:
+                return
 
             while True:
                 # Check for client disconnect
@@ -211,13 +216,18 @@ async def notification_stream(
                     break
 
                 try:
-                    # Wait for up to 15 seconds for a notification payload
-                    payload = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    # Wait for notification payload or keepalive timeout
+                    payload = await asyncio.wait_for(queue.get(), timeout=5.0)
                     data = json.dumps(payload)
                     yield f"event: notification\ndata: {data}\n\n"
+                    events_sent += 1
+                    if max_events is not None and events_sent >= max_events:
+                        break
                 except asyncio.TimeoutError:
                     # Send periodic keep-alive heartbeat comment to prevent proxy timeout
                     yield ": ping\n\n"
+        except (asyncio.CancelledError, GeneratorExit):
+            pass
         finally:
             await stream_broker.unsubscribe(user.id, queue)
 

@@ -261,3 +261,36 @@ class CdcDashboardStats(BaseModel):
     cancelled_drives: int
     upcoming_deadlines_count: int
     recent_drives: List[PlacementDriveResponse] = []
+
+
+# ---------------------------------------------------------------------------
+# 7. Placement Application Schemas
+# ---------------------------------------------------------------------------
+
+class PlacementApplicationCreate(BaseModel):
+    resume_url: Optional[str] = Field(default=None, max_length=500)
+    notes: Optional[str] = None
+
+
+class PlacementApplicationStatusUpdate(BaseModel):
+    status: Literal["APPLIED", "SHORTLISTED", "INTERVIEW_SCHEDULED", "OFFERED", "SELECTED", "REJECTED", "WITHDRAWN"]
+    notes: Optional[str] = None
+
+
+class PlacementApplicationResponse(BaseModel):
+    id: int
+    drive_id: int
+    drive_title: str
+    company_name: str
+    job_role: str
+    student_id: int
+    student_name: str
+    student_usn: str
+    student_email: Optional[str] = None
+    department_name: Optional[str] = None
+    status: str
+    resume_url: Optional[str] = None
+    notes: Optional[str] = None
+    applied_at: str
+    updated_at: str
+

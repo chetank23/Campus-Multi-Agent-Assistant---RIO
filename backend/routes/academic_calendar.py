@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import datetime
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from typing import List
 
 from backend.database import get_db
 from backend.models.space_time import AcademicCalendar
@@ -13,10 +14,27 @@ router = APIRouter(prefix="/academic-calendar", tags=["Academic Calendar"])
 @router.get("", response_model=List[AcademicCalendarResponse])
 @router.get("/", response_model=List[AcademicCalendarResponse], include_in_schema=False)
 def get_academic_calendars(
+    academic_year_id: Optional[int] = Query(None),
+    event_type: Optional[str] = Query(None),
+    is_holiday: Optional[bool] = Query(None),
+    from_date: Optional[datetime.date] = Query(None),
+    to_date: Optional[datetime.date] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return db.query(AcademicCalendar).order_by(AcademicCalendar.date.asc()).all()
+    query = db.query(AcademicCalendar)
+    if academic_year_id is not None:
+        query = query.filter(AcademicCalendar.academic_year_id == academic_year_id)
+    if event_type is not None:
+        query = query.filter(AcademicCalendar.event_type.ilike(f"%{event_type}%"))
+    if is_holiday is not None:
+        query = query.filter(AcademicCalendar.is_holiday == is_holiday)
+    if from_date is not None:
+        query = query.filter(AcademicCalendar.date >= from_date)
+    if to_date is not None:
+        query = query.filter(AcademicCalendar.date <= to_date)
+    return query.order_by(AcademicCalendar.date.asc()).all()
+
 
 @router.get("/{ac_id}", response_model=AcademicCalendarResponse)
 def get_academic_calendar(
