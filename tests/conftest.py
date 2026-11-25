@@ -207,13 +207,12 @@ def setup_test_database():
                 SELECT pg_terminate_backend(pid)
                 FROM pg_stat_activity
                 WHERE datname = current_database()
-                  AND pid <> pg_backend_pid()
-                  AND state = 'idle in transaction';
+                  AND pid <> pg_backend_pid();
             """))
             conn.commit()
             conn.execute(text("DROP SCHEMA IF EXISTS test_schema CASCADE"))
             conn.commit()
-            conn.execute(text("CREATE SCHEMA test_schema"))
+            conn.execute(text("CREATE SCHEMA IF NOT EXISTS test_schema"))
 
         # 2. Run Alembic migrations against the test database with search_path=test_schema
         alembic_cfg = Config("alembic.ini")

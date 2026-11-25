@@ -220,6 +220,61 @@ ENTITY_FIELDS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# Approved Role-Based Allowed Entities (Default-Deny Model)
+ROLE_ALLOWED_ENTITIES: Dict[str, set[str]] = {
+    "STUDENT": {
+        "students", "faculty", "departments", "programs", "sections", "batches",
+        "courses", "buildings", "rooms", "time_slots", "timetables", "timetable_entries",
+        "academic_years", "semesters", "notifications",
+    },
+    "FACULTY": {
+        "students", "faculty", "departments", "programs", "sections", "batches",
+        "courses", "course_assignments", "buildings", "rooms", "time_slots",
+        "faculty_availability", "timetables", "timetable_entries", "academic_years",
+        "semesters", "notifications",
+    },
+    "ADMIN": {
+        "users", "students", "faculty", "departments", "programs", "sections", "batches",
+        "courses", "course_assignments", "buildings", "rooms", "time_slots",
+        "faculty_availability", "timetables", "timetable_entries", "academic_years",
+        "semesters", "notifications", "audit_logs",
+    },
+    "SUPER_ADMIN": {
+        "users", "students", "faculty", "departments", "programs", "sections", "batches",
+        "courses", "course_assignments", "buildings", "rooms", "time_slots",
+        "faculty_availability", "timetables", "timetable_entries", "academic_years",
+        "semesters", "notifications", "audit_logs",
+    },
+}
+
+# Private faculty fields denied to students
+STUDENT_DENIED_FACULTY_FIELDS: set[str] = {"contact_number", "max_weekly_load"}
+
+# Approved Join Whitelist
+APPROVED_JOIN_PATHS: Dict[Tuple[str, str], Any] = {
+    ("students", "users"): (Student.user_id == User.id),
+    ("students", "sections"): (Student.section_id == Section.id),
+    ("students", "departments"): (Student.department_id == Department.id),
+    ("faculty", "users"): (Faculty.user_id == User.id),
+    ("faculty", "departments"): (Faculty.department_id == Department.id),
+    ("sections", "departments"): (Section.department_id == Department.id),
+    ("sections", "programs"): (Section.program_id == Program.id),
+    ("courses", "departments"): (Course.department_id == Department.id),
+    ("course_assignments", "courses"): (CourseAssignment.course_id == Course.id),
+    ("course_assignments", "faculty"): (CourseAssignment.faculty_id == Faculty.id),
+    ("course_assignments", "sections"): (CourseAssignment.section_id == Section.id),
+    ("rooms", "buildings"): (Room.building_id == Building.id),
+    ("timetables", "sections"): (Timetable.section_id == Section.id),
+    ("timetables", "academic_years"): (Timetable.academic_year_id == AcademicYear.id),
+    ("timetables", "semesters"): (Timetable.semester_id == Semester.id),
+    ("timetable_entries", "timetables"): (TimetableEntry.timetable_id == Timetable.id),
+    ("timetable_entries", "courses"): (TimetableEntry.course_id == Course.id),
+    ("timetable_entries", "faculty"): (TimetableEntry.faculty_id == Faculty.id),
+    ("timetable_entries", "rooms"): (TimetableEntry.room_id == Room.id),
+    ("timetable_entries", "time_slots"): (TimetableEntry.slot_id == TimeSlot.id),
+    ("timetable_entries", "sections"): (TimetableEntry.section_id == Section.id),
+}
+
 SUPPORTED_OPERATORS = ["==", "!=", ">", ">=", "<", "<=", "like", "ilike", "in"]
 
 DAY_NAME_TO_CODE = {
@@ -256,11 +311,30 @@ def execute_semantic_query_plan(
             "error": f"Invalid query entity '{clean_entity}'. Approved entities are: {list(ENTITY_MODELS.keys())}"
         }
 
-    # 1. Role-based Entity Authorization Guard
-    if user.role in ("STUDENT", "FACULTY") and clean_entity == "audit_logs":
+    # 1. Role-based Entity Authorization Guard (Default-Deny Model)
+    allowed_for_role = ROLE_ALLOWED_ENTITIES.get(user.role, set())
+    if clean_entity not in allowed_for_role:
+        if clean_entity == "audit_logs":
+            return {
+                "error": (
+                    "Access denied: Audit logs require administrative authorization. "
+                    f"Role '{user.role}' is not authorized to query entity '{clean_entity}'."
+                )
+            }
         return {
-            "error": "Access denied: Audit logs require administrative authorization."
+            "error": f"Access denied: Role '{user.role}' is not authorized to query entity '{clean_entity}'."
         }
+
+    # Field-level privacy guard for students inspecting faculty
+    if user.role == "STUDENT" and clean_entity == "faculty":
+        requested_fields = list(fields or [])
+        if filters:
+            requested_fields.extend([filt.get("field", "") for filt in filters])
+        for rf in requested_fields:
+            if rf.strip().lower() in STUDENT_DENIED_FACULTY_FIELDS:
+                return {
+                    "error": f"Access denied: Students are not authorized to view or filter private faculty field '{rf}'."
+                }
 
     model = ENTITY_MODELS[clean_entity]
     entity_field_map = ENTITY_FIELDS[clean_entity]
@@ -268,7 +342,70 @@ def execute_semantic_query_plan(
     # Clamp limit safely
     clamped_limit = max(1, min(100, limit))
 
-    # 2. Build Selection Columns
+    # 2. Mandatory Security & Scope Filtering (Cannot be overridden by model plan)
+    # Computed BEFORE selection and aggregation to guarantee strict boundary isolation
+    where_clauses = []
+
+    if user.role == "STUDENT":
+        if clean_entity == "students":
+            where_clauses.append(Student.user_id == user.id)
+        elif clean_entity == "notifications":
+            where_clauses.append(Notification.user_id == user.id)
+        elif clean_entity == "timetables":
+            where_clauses.append(Timetable.status == "PUBLISHED")
+            stu = db.query(Student).filter(Student.user_id == user.id).first()
+            if stu and stu.section_id:
+                where_clauses.append(Timetable.section_id == stu.section_id)
+            else:
+                where_clauses.append(Timetable.id == -1)
+        elif clean_entity == "timetable_entries":
+            stu = db.query(Student).filter(Student.user_id == user.id).first()
+            if stu and stu.section_id:
+                where_clauses.append(TimetableEntry.section_id == stu.section_id)
+            else:
+                where_clauses.append(TimetableEntry.id == -1)
+            where_clauses.append(TimetableEntry.status == "ACTIVE")
+    elif user.role == "FACULTY":
+        if clean_entity == "notifications":
+            where_clauses.append(Notification.user_id == user.id)
+        elif clean_entity == "timetables":
+            where_clauses.append(Timetable.status == "PUBLISHED")
+        elif clean_entity == "timetable_entries":
+            fac = db.query(Faculty).filter(Faculty.user_id == user.id).first()
+            if fac:
+                te_cond = or_(TimetableEntry.faculty_id == fac.id, TimetableEntry.department_id == user.department_id)
+                where_clauses.append(te_cond)
+            else:
+                where_clauses.append(TimetableEntry.id == -1)
+        elif clean_entity == "students":
+            fac = db.query(Faculty).filter(Faculty.user_id == user.id).first()
+            if fac:
+                ca_sec_ids = [ca[0] for ca in db.query(CourseAssignment.section_id).filter(CourseAssignment.faculty_id == fac.id).all() if ca[0]]
+                te_sec_ids = [te[0] for te in db.query(TimetableEntry.section_id).filter(TimetableEntry.faculty_id == fac.id).all() if te[0]]
+                ct_sec_ids = [sec.id for sec in db.query(Section).filter(Section.class_teacher_id == fac.id).all()]
+                assigned_sec_ids = list(set(ca_sec_ids + te_sec_ids + ct_sec_ids))
+                if assigned_sec_ids:
+                    where_clauses.append(Student.section_id.in_(assigned_sec_ids))
+                else:
+                    where_clauses.append(Student.id == -1)
+            else:
+                where_clauses.append(Student.id == -1)
+        elif clean_entity == "course_assignments":
+            fac = db.query(Faculty).filter(Faculty.user_id == user.id).first()
+            if fac:
+                where_clauses.append(CourseAssignment.faculty_id == fac.id)
+            else:
+                where_clauses.append(CourseAssignment.id == -1)
+    elif user.role == "ADMIN":
+        if user.department_id:
+            if clean_entity in ("students", "faculty", "sections", "courses", "rooms", "timetables", "timetable_entries"):
+                dept_col = getattr(model, "department_id", None)
+                if dept_col is not None:
+                    where_clauses.append(dept_col == user.department_id)
+            elif clean_entity == "users":
+                where_clauses.append(or_(User.department_id == user.department_id, User.department_id == None))  # noqa: E711
+
+    # 3. Build Selection Columns
     select_items = []
     output_headers = []
 
@@ -316,21 +453,33 @@ def execute_semantic_query_plan(
     # Default to all entity fields if neither fields nor aggregations specified
     if not select_items:
         for f_name, col_attr in entity_field_map.items():
+            if user.role == "STUDENT" and clean_entity == "faculty" and f_name in STUDENT_DENIED_FACULTY_FIELDS:
+                continue
             select_items.append(col_attr.label(f_name))
             output_headers.append(f_name)
 
     query = db.query(*select_items).select_from(model)
 
-    # 3. Apply Joins if requested
+    # 4. Apply Whitelisted Joins
     joined_models = set()
     if joins:
         for j in joins:
             j_clean = j.strip().lower()
             if j_clean not in ENTITY_MODELS:
-                continue
+                return {"error": f"Unrecognized join entity '{j_clean}'."}
+            join_pair = (clean_entity, j_clean)
+            reverse_pair = (j_clean, clean_entity)
+            if join_pair in APPROVED_JOIN_PATHS:
+                join_cond = APPROVED_JOIN_PATHS[join_pair]
+            elif reverse_pair in APPROVED_JOIN_PATHS:
+                join_cond = APPROVED_JOIN_PATHS[reverse_pair]
+            else:
+                return {
+                    "error": f"Join between '{clean_entity}' and '{j_clean}' is not authorized in approved schema."
+                }
             j_model = ENTITY_MODELS[j_clean]
             if j_model not in joined_models:
-                query = query.join(j_model)
+                query = query.join(j_model, join_cond)
                 joined_models.add(j_model)
 
     # Auto-join User if name/email is selected or filtered on students or faculty
@@ -348,54 +497,6 @@ def execute_semantic_query_plan(
         if needs_user:
             query = query.join(User, getattr(model, "user_id") == User.id)
             joined_models.add(User)
-
-    # 4. Mandatory Security & Scope Filtering (Cannot be overridden by model plan)
-    where_clauses = []
-
-    if user.role == "STUDENT":
-        if clean_entity == "students":
-            where_clauses.append(Student.user_id == user.id)
-        elif clean_entity == "notifications":
-            where_clauses.append(Notification.user_id == user.id)
-        elif clean_entity in ("timetables", "timetable_entries"):
-            where_clauses.append(Timetable.status == "PUBLISHED")
-            stu = db.query(Student).filter(Student.user_id == user.id).first()
-            if stu and stu.section_id and clean_entity == "timetable_entries":
-                where_clauses.append(TimetableEntry.section_id == stu.section_id)
-        elif clean_entity in ("audit_logs", "faculty_availability"):
-            return {"error": f"Access denied: Students are not authorized to query entity '{clean_entity}'."}
-    elif user.role == "FACULTY":
-        if clean_entity == "notifications":
-            where_clauses.append(Notification.user_id == user.id)
-        elif clean_entity in ("timetables", "timetable_entries"):
-            where_clauses.append(Timetable.status == "PUBLISHED")
-        elif clean_entity == "students":
-            fac = db.query(Faculty).filter(Faculty.user_id == user.id).first()
-            if fac:
-                ca_sec_ids = [ca[0] for ca in db.query(CourseAssignment.section_id).filter(CourseAssignment.faculty_id == fac.id).all() if ca[0]]
-                te_sec_ids = [te[0] for te in db.query(TimetableEntry.section_id).filter(TimetableEntry.faculty_id == fac.id).all() if te[0]]
-                ct_sec_ids = [sec.id for sec in db.query(Section).filter(Section.class_teacher_id == fac.id).all()]
-                assigned_sec_ids = list(set(ca_sec_ids + te_sec_ids + ct_sec_ids))
-                if assigned_sec_ids:
-                    where_clauses.append(Student.section_id.in_(assigned_sec_ids))
-                else:
-                    where_clauses.append(Student.id == -1)
-            else:
-                where_clauses.append(Student.id == -1)
-        elif clean_entity == "course_assignments":
-            fac = db.query(Faculty).filter(Faculty.user_id == user.id).first()
-            if fac:
-                where_clauses.append(CourseAssignment.faculty_id == fac.id)
-            else:
-                where_clauses.append(CourseAssignment.id == -1)
-        elif clean_entity == "audit_logs":
-            return {"error": "Access denied: Audit logs require administrative authorization."}
-    elif user.role == "ADMIN":
-        if user.department_id:
-            if clean_entity in ("students", "faculty", "sections", "courses"):
-                dept_col = getattr(model, "department_id", None)
-                if dept_col is not None:
-                    where_clauses.append(dept_col == user.department_id)
 
     # 5. Model Filters Validation & Compilation
     if filters:

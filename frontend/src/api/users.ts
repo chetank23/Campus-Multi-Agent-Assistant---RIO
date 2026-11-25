@@ -35,8 +35,19 @@ export interface UserAdminUpdate {
 
 export const usersApi = {
   getAll: async (): Promise<UserAdminItem[]> => {
-    const { data } = await apiClient.get<UserListResponse>('/users', { params: { limit: 1000 } });
-    return data.items;
+    // Respect backend maximum pagination limit of 200 by paging through in bounded chunks
+    const pageSize = 200;
+    const firstPage = await usersApi.list({ skip: 0, limit: pageSize });
+    let allItems = [...firstPage.items];
+    const total = firstPage.total;
+    let currentSkip = pageSize;
+    while (allItems.length < total && firstPage.items.length === pageSize) {
+      const nextPage = await usersApi.list({ skip: currentSkip, limit: pageSize });
+      if (!nextPage.items || !nextPage.items.length) break;
+      allItems = allItems.concat(nextPage.items);
+      currentSkip += pageSize;
+    }
+    return allItems;
   },
 
   list: async (params?: {
@@ -47,7 +58,12 @@ export const usersApi = {
     search?: string;
     is_active?: boolean;
   }): Promise<UserListResponse> => {
-    const { data } = await apiClient.get<UserListResponse>('/users', { params });
+    const boundedParams = {
+      ...params,
+      limit: Math.min(Math.max(params?.limit ?? 50, 1), 200),
+      skip: Math.max(params?.skip ?? 0, 0),
+    };
+    const { data } = await apiClient.get<UserListResponse>('/users', { params: boundedParams });
     return data;
   },
 

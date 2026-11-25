@@ -145,16 +145,20 @@ The application will be live at `http://localhost:5173`.
 
 ---
 
-## 🔑 Production-Grade Test Credentials
+## 🔑 Account Provisioning & Roles
 
-The local seed script initializes accounts across all four institutional roles:
+User accounts across institutional roles are provisioned through administrative workflows or development initialization:
 
-| Role | Email | Password | Intended Portal | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Super Admin** | `superadmin@campus.edu` | `Test@1234` | `/super-admin` | Full system oversight & document ingestion |
-| **Admin (CDC)** | `admin@campus.edu` | `Admin#RioLocal26` | `/admin` | Timetables, placements, events & audits |
-| **Faculty** | `aarthy.g@rio-mjp.test` | `Aarthyg#RioLocal26` | `/faculty` | Timetable grid, substitutions & requests |
-| **Student** | `r23eh002@rio-mjp.test` | `R23eh002#RioLocal26` | `/student` | Placements, club memberships & events |
+- **Super Admin**: System governance, regulation management, curriculum ingestion (`/super-admin`). Initial bootstrap account configured via environment variables.
+- **Admin (CDC)**: Institutional timetables, placement drives, campus events, and audit oversight (`/admin`).
+- **Faculty**: Department timetable views, substitution requests, and student mentorship (`/faculty`).
+- **Student**: Personalized published timetable, placement drive applications, and campus event registrations (`/student`).
+
+To seed initial local development test accounts and reference records:
+```powershell
+python scripts/seed_placements_and_events.py
+```
+*Note: In production environments, user credentials and initial administrators must be provisioned via secure directory integration or the Admin Users management portal.*
 
 ---
 

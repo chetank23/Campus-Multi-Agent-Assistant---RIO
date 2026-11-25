@@ -39,6 +39,7 @@ import {
 import { useAuth } from '@/auth/useAuth';
 import {
   sendChatMessage,
+  streamChatMessage,
   getConversations,
   getConversation,
   deleteConversation,
@@ -64,6 +65,8 @@ export const CampusAssistantDrawer: React.FC = () => {
   const [activeTitle, setActiveTitle] = useState<string>('New Conversation');
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [showConvDropdown, setShowConvDropdown] = useState(false);
+  const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const [history, setHistory] = useState<ChatHistoryMessage[]>(() => [
     {
@@ -136,6 +139,15 @@ export const CampusAssistantDrawer: React.FC = () => {
 
   if (!user) return null;
 
+  const handleCancelStreaming = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsLoading(false);
+      setStreamingStatus(null);
+    }
+  };
+
   const handleSendMessage = async (msgText?: string) => {
     const textToSend = (msgText ?? inputMessage).trim();
     if (!textToSend || isLoading) return;
@@ -148,50 +160,151 @@ export const CampusAssistantDrawer: React.FC = () => {
       conversation_id: activeConversationId ?? undefined,
     };
 
-    setHistory((prev) => [...prev, userMsg]);
+    const assistantMsgId = nextMsgId('assistant');
+    const placeholderAssistantMsg: ChatHistoryMessage = {
+      id: assistantMsgId,
+      sender: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      conversation_id: activeConversationId ?? undefined,
+      provider_badge: 'Deterministic Engine',
+    };
+
+    setHistory((prev) => [...prev, userMsg, placeholderAssistantMsg]);
     setInputMessage('');
     setIsLoading(true);
+    setStreamingStatus('Consulting campus records...');
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    let accumulatedText = '';
 
     try {
-      const res = await sendChatMessage(textToSend, activeConversationId ?? undefined);
-
-      if (res.conversation_id && res.conversation_id !== activeConversationId) {
-        setActiveConversationId(res.conversation_id);
-        const snippet = textToSend.slice(0, 30) + (textToSend.length > 30 ? '...' : '');
-        setActiveTitle(snippet);
-        loadConversations();
+      await streamChatMessage(
+        textToSend,
+        activeConversationId ?? undefined,
+        {
+          onStatus: (st) => {
+            setStreamingStatus(st);
+          },
+          onToken: (tok) => {
+            accumulatedText += tok;
+            setHistory((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId
+                  ? { ...m, content: accumulatedText }
+                  : m
+              )
+            );
+          },
+          onDone: (data) => {
+            if (data.conversation_id && data.conversation_id !== activeConversationId) {
+              setActiveConversationId(data.conversation_id);
+              const snippet = textToSend.slice(0, 30) + (textToSend.length > 30 ? '...' : '');
+              setActiveTitle(snippet);
+              loadConversations();
+            }
+            setHistory((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId
+                  ? {
+                      ...m,
+                      content: data.reply || accumulatedText || 'Query processed.',
+                      intent: data.intent,
+                      sources: data.sources,
+                      error: data.error,
+                      proposal: data.proposal,
+                      action_type: data.action_type,
+                      conversation_id: data.conversation_id,
+                      nav_links: data.nav_links,
+                      provider_badge: data.provider_badge,
+                      outcome_state: data.outcome_state,
+                    }
+                  : m
+              )
+            );
+          },
+          onError: (errMsg) => {
+            setHistory((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId
+                  ? {
+                      ...m,
+                      content: accumulatedText ? accumulatedText + `\n\n[Error: ${errMsg}]` : `Error: ${errMsg}`,
+                      error: errMsg,
+                      provider_badge: 'System Notice',
+                    }
+                  : m
+              )
+            );
+          },
+        },
+        controller.signal
+      );
+    } catch {
+      if (controller.signal.aborted) {
+        setHistory((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  content: accumulatedText ? accumulatedText + ' (Cancelled by user)' : 'Request cancelled by user.',
+                  provider_badge: 'System Notice',
+                }
+              : m
+          )
+        );
+      } else {
+        // Fallback to synchronous sendChatMessage
+        try {
+          const res = await sendChatMessage(textToSend, activeConversationId ?? undefined);
+          setHistory((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? {
+                    ...m,
+                    content: res.reply,
+                    intent: res.intent,
+                    sources: res.sources,
+                    error: res.error,
+                    proposal: res.proposal,
+                    action_type: res.action_type,
+                    conversation_id: res.conversation_id,
+                    nav_links: res.nav_links,
+                    provider_badge: res.provider_badge,
+                    outcome_state: res.outcome_state,
+                  }
+                : m
+            )
+          );
+        } catch (syncErr: unknown) {
+          const cleanErr = syncErr instanceof Error ? syncErr.message : String(syncErr);
+          setHistory((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? {
+                    ...m,
+                    content: `Error: ${cleanErr}`,
+                    error: cleanErr,
+                    provider_badge: 'System Notice',
+                  }
+                : m
+            )
+          );
+        }
       }
-
-      const assistantMsg: ChatHistoryMessage = {
-        id: nextMsgId('assistant'),
-        sender: 'assistant',
-        content: res.reply,
-        timestamp: new Date(),
-        intent: res.intent,
-        sources: res.sources,
-        error: res.error,
-        proposal: res.proposal,
-        action_type: res.action_type,
-        conversation_id: res.conversation_id,
-      };
-      setHistory((prev) => [...prev, assistantMsg]);
-    } catch (err: unknown) {
-      const errorObj = err as { response?: { data?: { detail?: unknown } }; message?: string };
-      const errorDetail = errorObj.response?.data?.detail || errorObj.message || 'Unable to connect to the Assistant service.';
-      const cleanError = typeof errorDetail === 'object'
-        ? JSON.stringify(errorDetail)
-        : String(errorDetail);
-
-      const errorMsg: ChatHistoryMessage = {
-        id: nextMsgId('err'),
-        sender: 'assistant',
-        content: `Error: ${cleanError}`,
-        timestamp: new Date(),
-        error: cleanError,
-      };
-      setHistory((prev) => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
+      setStreamingStatus(null);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleRetryLast = () => {
+    // Find the last user message to resend
+    const lastUserMsg = [...history].reverse().find((m) => m.sender === 'user');
+    if (lastUserMsg) {
+      handleSendMessage(lastUserMsg.content);
     }
   };
 
@@ -278,52 +391,15 @@ export const CampusAssistantDrawer: React.FC = () => {
     return <Database size={11} className="text-emerald-700 shrink-0" />;
   };
 
-  // Quick action links based on content context and role
-  const getContextualLinks = (text: string) => {
-    const t = text.toLowerCase();
-    const links: { label: string; to: string; icon: React.ReactNode }[] = [];
-
-    if (t.includes('timetable') || t.includes('schedule') || t.includes('class')) {
-      if (user.role === 'STUDENT') {
-        links.push({ label: 'Open Student Timetable', to: '/student/timetable', icon: <Calendar size={12} /> });
-      } else if (user.role === 'FACULTY') {
-        links.push({ label: 'Open Faculty Timetable', to: '/faculty/timetable', icon: <Calendar size={12} /> });
-      } else if (user.role === 'ADMIN') {
-        links.push({ label: 'Open Timetable Engine', to: '/admin/timetable', icon: <Calendar size={12} /> });
-      }
-    }
-
-    if (t.includes('booking') || t.includes('facility') || t.includes('room') || t.includes('lab')) {
-      if (user.role === 'FACULTY') {
-        links.push({ label: 'Campus Resources', to: '/faculty/resources', icon: <Building2 size={12} /> });
-      } else if (user.role === 'ADMIN') {
-        links.push({ label: 'Manage Resources', to: '/admin/resources', icon: <Building2 size={12} /> });
-      }
-    }
-
-    if (t.includes('course') && user.role === 'STUDENT') {
-      links.push({ label: 'My Enrolled Courses', to: '/student/courses', icon: <BookOpen size={12} /> });
-    }
-
-    if (t.includes('event') || t.includes('club') || t.includes('activity') || t.includes('workshop')) {
-      if (user.role === 'STUDENT') {
-        links.push({ label: 'Campus Events Dashboard', to: '/student/events', icon: <Sparkles size={12} /> });
-      } else if (user.role === 'FACULTY') {
-        links.push({ label: 'Clubs & Events Management', to: '/faculty/events', icon: <Sparkles size={12} /> });
-      } else if (user.role === 'ADMIN') {
-        links.push({ label: 'Events & Club Coordination', to: '/admin/events', icon: <Sparkles size={12} /> });
-      }
-    }
-
-    if (t.includes('placement') || t.includes('job') || t.includes('internship') || t.includes('drive') || t.includes('cdc') || t.includes('hiring')) {
-      if (user.role === 'STUDENT') {
-        links.push({ label: 'Campus Placements Portal', to: '/student/placements', icon: <Briefcase size={12} /> });
-      } else if (user.role === 'ADMIN') {
-        links.push({ label: 'CDC Placements Workspace', to: '/admin/placements', icon: <Briefcase size={12} /> });
-      }
-    }
-
-    return links;
+  // Icon resolver for backend-verified navigation links
+  const getNavLinkIcon = (label: string, to: string) => {
+    const s = (label + ' ' + to).toLowerCase();
+    if (s.includes('timetable') || s.includes('schedule')) return <Calendar size={12} />;
+    if (s.includes('resource') || s.includes('room') || s.includes('facility')) return <Building2 size={12} />;
+    if (s.includes('course')) return <BookOpen size={12} />;
+    if (s.includes('event') || s.includes('club')) return <Sparkles size={12} />;
+    if (s.includes('placement') || s.includes('cdc')) return <Briefcase size={12} />;
+    return <ArrowRight size={12} />;
   };
 
   // Safe formatting without raw markdown asterisks or headings
@@ -497,7 +573,7 @@ export const CampusAssistantDrawer: React.FC = () => {
                 const isUser = msg.sender === 'user';
                 const isErr = isErrorMessage(msg);
                 const timeStr = msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const contextLinks = !isUser ? getContextualLinks(msg.content) : [];
+                const navLinks = !isUser && msg.nav_links && msg.nav_links.length > 0 ? msg.nav_links : [];
 
                 if (isUser) {
                   return (
@@ -528,6 +604,33 @@ export const CampusAssistantDrawer: React.FC = () => {
                             : 'bg-white border border-slate-200/90 text-slate-800'
                         }`}
                       >
+                        {/* Provider Pill Badge & Outcome State */}
+                        <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5 mb-1.5">
+                          <div className="flex items-center gap-1.5">
+                            {msg.provider_badge === 'Live Nemotron' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <Sparkles size={10} className="text-emerald-500" />
+                                Live Nemotron
+                              </span>
+                            ) : msg.provider_badge === 'System Notice' || isErr ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                <AlertCircle size={10} className="text-amber-500" />
+                                System Notice
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                <Database size={10} className="text-blue-500" />
+                                Deterministic Engine
+                              </span>
+                            )}
+                          </div>
+                          {msg.outcome_state && (
+                            <span className="text-[10px] font-mono text-slate-400">
+                              {msg.outcome_state}
+                            </span>
+                          )}
+                        </div>
+
                         {isErr && (
                           <div className="flex items-center gap-1.5 font-bold text-xs text-rose-700">
                             <AlertCircle size={15} />
@@ -539,17 +642,17 @@ export const CampusAssistantDrawer: React.FC = () => {
                           {renderCleanContent(msg.content)}
                         </div>
 
-                        {/* Contextual Deep-Links */}
-                        {contextLinks.length > 0 && (
+                        {/* Verified Backend Navigation Links */}
+                        {navLinks.length > 0 && (
                           <div className="pt-2 border-t border-slate-100 flex items-center gap-2 flex-wrap">
-                            {contextLinks.map((lnk, lIdx) => (
+                            {navLinks.map((lnk, lIdx) => (
                               <Link
                                 key={lIdx}
                                 to={lnk.to}
                                 onClick={() => setIsOpen(false)}
                                 className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 border border-blue-200 transition-colors"
                               >
-                                {lnk.icon}
+                                {getNavLinkIcon(lnk.label, lnk.to)}
                                 <span>{lnk.label}</span>
                                 <ArrowRight size={11} />
                               </Link>
@@ -624,7 +727,15 @@ export const CampusAssistantDrawer: React.FC = () => {
                         )}
 
                         {isErr && (
-                          <div className="pt-1">
+                          <div className="pt-2 border-t border-rose-100 flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={handleRetryLast}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-rose-700 hover:text-rose-900 bg-rose-100/60 hover:bg-rose-100 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+                            >
+                              <RotateCcw size={11} />
+                              <span>Retry</span>
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleSendMessage('help')}
@@ -650,15 +761,24 @@ export const CampusAssistantDrawer: React.FC = () => {
                   <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
                     <Bot size={18} />
                   </div>
-                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs">
+                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs flex-1 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
                       <span className="flex gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '0ms' }} />
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '150ms' }} />
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '300ms' }} />
                       </span>
-                      <span>Consulting verified campus records&hellip;</span>
+                      <span>{streamingStatus || 'Consulting verified campus records...'}</span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={handleCancelStreaming}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 border border-slate-200 transition-colors cursor-pointer"
+                      title="Cancel streaming request"
+                    >
+                      <X size={12} />
+                      <span>Cancel</span>
+                    </button>
                   </div>
                 </div>
               )}

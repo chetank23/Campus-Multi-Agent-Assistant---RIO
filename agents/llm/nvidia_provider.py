@@ -91,9 +91,10 @@ class NvidiaNemotronProvider(BaseLLMProvider):
             or os.environ.get("NVIDIA_MODEL")
             or "nvidia/nemotron-3-ultra-550b-a55b"
         ).strip()
-        self.temperature = float(os.environ.get("NVIDIA_TEMPERATURE", "1"))
-        self.top_p = float(os.environ.get("NVIDIA_TOP_P", "0.95"))
-        self.max_tokens = int(os.environ.get("NVIDIA_MAX_TOKENS", "16384"))
+        self.temperature = float(os.environ.get("RIO_NVIDIA_TEMPERATURE") or os.environ.get("NVIDIA_TEMPERATURE", "0.2"))
+        self.top_p = float(os.environ.get("RIO_NVIDIA_TOP_P") or os.environ.get("NVIDIA_TOP_P", "0.7"))
+        self.max_tokens = int(os.environ.get("RIO_NVIDIA_MAX_TOKENS") or os.environ.get("NVIDIA_MAX_TOKENS", "1024"))
+        self.timeout = float(os.environ.get("RIO_NVIDIA_TIMEOUT_SECONDS") or os.environ.get("NVIDIA_TIMEOUT", "30.0"))
 
     def is_available(self) -> bool:
         """
@@ -198,7 +199,7 @@ CORE OPERATING MANDATES:
         client = OpenAI(
             base_url=self.base_url,
             api_key=self.api_key,
-            timeout=30.0,
+            timeout=self.timeout,
             max_retries=2,
         )
 
@@ -249,17 +250,20 @@ CORE OPERATING MANDATES:
 
         executed_tool_calls: List[Dict[str, Any]] = []
         sources: List[str] = ["NVIDIA Nemotron", "RIO Database Grounding"]
+        tool_results_cache: Dict[str, Any] = {}
 
         max_iterations = 5
         final_text = ""
 
         try:
             for iteration in range(max_iterations):
-                if tools:
+                # On the final iteration, force model to synthesize without calling more tools
+                active_tools = tools if (tools and iteration < max_iterations - 1) else None
+                if active_tools:
                     response = client.chat.completions.create(
                         model=self.model,
                         messages=messages,
-                        tools=tools,
+                        tools=active_tools,
                         tool_choice="auto",
                         temperature=self.temperature,
                         top_p=self.top_p,
@@ -290,7 +294,7 @@ CORE OPERATING MANDATES:
                 msg = choice.message
 
                 # If model requested tool calls, execute them
-                if msg.tool_calls:
+                if msg.tool_calls and active_tools:
                     tool_calls_param: List[ChatCompletionMessageFunctionToolCallParam] = []
                     for tc in msg.tool_calls:
                         if tc.type == "function":
@@ -316,18 +320,33 @@ CORE OPERATING MANDATES:
                         tool_name = tc.function.name
                         try:
                             tool_args = json.loads(tc.function.arguments or "{}")
-                        except Exception:
-                            tool_args = {}
+                        except Exception as json_err:
+                            logger.warning(f"Failed to parse tool call JSON for {tool_name}: {json_err}")
+                            tool_result = {"error": f"Invalid JSON arguments for tool '{tool_name}': {str(json_err)}"}
+                            tool_msg: ChatCompletionToolMessageParam = {
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": json.dumps(tool_result),
+                            }
+                            messages.append(tool_msg)
+                            continue
 
-                        logger.info(f"NVIDIA Nemotron called tool '{tool_name}' with args {tool_args}")
-                        t0 = time.perf_counter()
-                        tool_result = execute_tool(
-                            tool_name=tool_name,
-                            tool_args=tool_args,
-                            user=user,
-                            db=db,
-                        )
-                        elapsed_tool_ms = (time.perf_counter() - t0) * 1000
+                        # Duplicate call caching
+                        call_key = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
+                        if call_key in tool_results_cache:
+                            tool_result = tool_results_cache[call_key]
+                            elapsed_tool_ms = 0.0
+                        else:
+                            logger.info(f"NVIDIA Nemotron called tool '{tool_name}' with args {tool_args}")
+                            t0 = time.perf_counter()
+                            tool_result = execute_tool(
+                                tool_name=tool_name,
+                                tool_args=tool_args,
+                                user=user,
+                                db=db,
+                            )
+                            elapsed_tool_ms = (time.perf_counter() - t0) * 1000
+                            tool_results_cache[call_key] = tool_result
 
                         # Determine record count safely
                         rec_count = 0
@@ -371,7 +390,7 @@ CORE OPERATING MANDATES:
                     # Continue loop to allow model to synthesize tool results
                     continue
 
-                # If no tool calls, model provided the final text response
+                # If no tool calls (or tools suppressed on final turn), model provided final text response
                 raw_content = msg.content or ""
                 final_text = strip_thinking(raw_content)
                 break

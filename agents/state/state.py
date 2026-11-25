@@ -72,6 +72,9 @@ class ChatMessageResponse(BaseModel):
     error: Optional[str] = None
     conversation_id: Optional[int] = None
     diagnostics: Optional[Dict[str, Any]] = None
+    nav_links: List[Dict[str, str]] = Field(default_factory=list)
+    provider_badge: Optional[str] = None
+    outcome_state: Optional[str] = None
 
 
 class ConversationCreateRequest(BaseModel):

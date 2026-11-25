@@ -23,9 +23,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 def seed_placements_and_events():
     load_dotenv(".env")
+    env_name = os.environ.get("ENVIRONMENT", "development").strip().lower()
+    if env_name in ("production", "prod") and "--force-production" not in sys.argv:
+        print("[seed] Safety Check: Refusing to seed mock records in production environment without --force-production.")
+        return
+
     db_url = os.environ.get("DATABASE_URL", "").strip()
     if not db_url:
-        db_url = "postgresql://campus_user:@127.0.0.1:5433/campus_ai_test?options=-csearch_path%3Dtest_schema"
+        print("[seed] Error: DATABASE_URL environment variable is required to execute database seeding.")
+        sys.exit(1)
 
     engine = create_engine(db_url)
     now = datetime.now(timezone.utc)

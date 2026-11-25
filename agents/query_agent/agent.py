@@ -308,7 +308,10 @@ def _extract_intent_and_tool_call(
         return "get_placement_drive_details", {"company_name": comp}
 
     if any(k in msg for k in [
-        "placement", "placements", "placement drive", "placement drives", "cdc", "recruitment drives",
+        "placement", "placements", "palcement", "placment", "placemnt",
+        "placement drive", "placement drives", "palcement activitie", "palcement activities",
+        "placement activities", "placement activity", "placement opportunities", "placement updates",
+        "cdc", "recruitment drives", "recruitment", "campus hiring",
         "companies visiting", "hiring drives", "open placements", "what companies are hiring",
     ]):
         return "list_published_placement_drives", {}

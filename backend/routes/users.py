@@ -51,7 +51,7 @@ def list_users(
     limit: int = Query(50, ge=1, le=200),
     role: Optional[str] = Query(None, pattern="^(ADMIN|FACULTY|STUDENT|SUPER_ADMIN)$"),
     department_id: Optional[int] = Query(None, gt=0),
-    search: Optional[str] = Query(None, min_length=1),
+    search: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
     admin_user: User = Depends(require_role("ADMIN")),
     db: Session = Depends(get_db),
@@ -67,7 +67,7 @@ def list_users(
         query = query.filter(User.department_id == department_id)
     if is_active is not None:
         query = query.filter(User.is_active == is_active)
-    if search:
+    if search and search.strip():
         s = f"%{search.strip()}%"
         query = query.filter((User.name.ilike(s)) | (User.email.ilike(s)))
 

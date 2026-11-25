@@ -12,6 +12,40 @@ Enforces the mandatory plain-English response policy:
 from __future__ import annotations
 
 import re
+import unicodedata
+
+# Unicode transliteration map for symbols, currency, math, and checkmarks
+# Prevents DB encoding crashes (e.g. WIN1252 on Windows) and preserves strict plain English
+UNICODE_TRANSLITERATIONS = {
+    "≥": ">=",
+    "≤": "<=",
+    "≠": "!=",
+    "≈": "~=",
+    "±": "+/-",
+    "×": "x",
+    "÷": "/",
+    "→": "->",
+    "←": "<-",
+    "⇒": "=>",
+    "₹": "Rs. ",
+    "✅": "[Eligible]",
+    "✔": "[Eligible]",
+    "✓": "[Eligible]",
+    "❌": "[Not Eligible]",
+    "✖": "[Not Eligible]",
+    "✗": "[Not Eligible]",
+    "⚠": "[Warning]",
+    "ℹ": "[Info]",
+    "“": '"',
+    "”": '"',
+    "‘": "'",
+    "’": "'",
+    "—": "-",
+    "–": "-",
+    "•": "-",
+    "…": "...",
+    "°": " deg",
+}
 
 # Comprehensive regex matching decorative emojis and pictograms
 EMOJI_PATTERN = re.compile(
@@ -33,23 +67,56 @@ EMOJI_PATTERN = re.compile(
 )
 
 
-def sanitize_plain_english(text: str) -> str:
+def safe_db_text(text: str) -> str:
     """
-    Sanitizes any agent response string into strict, professional plain English:
-    1. Removes all emojis and pictograms.
-    2. Strips markdown headings (#, ##, ###).
-    3. Strips bold and italic asterisks (**text**, *text*).
-    4. Strips code backticks (`code` -> code).
-    5. Preserves legitimate punctuation, dates, times, IDs, and bulleted lists.
-    6. Normalizes consecutive whitespace and empty lines.
+    Safeguards any string before persisting to PostgreSQL text columns.
+    1. Transliterates non-ASCII math symbols (>=, <=, !=), currency (Rs.), quotes, dashes.
+    2. Strips all decorative emojis.
+    3. Transliterates or safely escapes any remaining characters unrepresentable in WIN1252 / ASCII.
     """
     if not text:
         return ""
 
-    # 1. Remove emojis
-    cleaned = EMOJI_PATTERN.sub("", text)
+    # 1. Apply explicit transliterations
+    result = text
+    for char, rep in UNICODE_TRANSLITERATIONS.items():
+        result = result.replace(char, rep)
 
-    # 2. Process line by line
+    # 2. Strip emojis
+    result = EMOJI_PATTERN.sub("", result)
+
+    # 3. Unicode NFKD decomposition and clean charmap safety
+    # Characters that cannot be represented in Windows-1252 or standard Latin are normalized
+    normalized = unicodedata.normalize("NFKD", result)
+    # Encode with replace or ignore to guarantee zero UntranslatableCharacter errors in PostgreSQL
+    safe_encoded = normalized.encode("ascii", "ignore").decode("ascii")
+
+    return safe_encoded
+
+
+def sanitize_plain_english(text: str) -> str:
+    """
+    Sanitizes any agent response string into strict, professional plain English:
+    1. Transliterates math, currency (Rs.), checkmarks, and typographic characters.
+    2. Removes all emojis and pictograms.
+    3. Strips markdown headings (#, ##, ###).
+    4. Strips bold and italic asterisks (**text**, *text*).
+    5. Strips code backticks (`code` -> code).
+    6. Preserves legitimate punctuation, dates, times, IDs, and bulleted lists.
+    7. Normalizes consecutive whitespace and empty lines.
+    """
+    if not text:
+        return ""
+
+    # 1. Transliterate math, currency, and typography first
+    cleaned = text
+    for char, rep in UNICODE_TRANSLITERATIONS.items():
+        cleaned = cleaned.replace(char, rep)
+
+    # 2. Remove emojis
+    cleaned = EMOJI_PATTERN.sub("", cleaned)
+
+    # 3. Process line by line
     lines = cleaned.splitlines()
     processed_lines = []
     for line in lines:
@@ -66,20 +133,20 @@ def sanitize_plain_english(text: str) -> str:
         processed_lines.append(line)
     cleaned = "\n".join(processed_lines)
 
-    # 3. Strip bold/italic asterisks: **word** or *word*
+    # 4. Strip bold/italic asterisks: **word** or *word*
     cleaned = re.sub(r"\*\*([^*]+)\*\*", r"\1", cleaned)
     cleaned = re.sub(r"\*([^*]+)\*", r"\1", cleaned)
     # Any residual lone asterisks
     cleaned = cleaned.replace("**", "").replace("*", "")
 
-    # 4. Strip inline backticks: `code` -> code
+    # 5. Strip inline backticks: `code` -> code
     cleaned = re.sub(r"`([^`]+)`", r"\1", cleaned)
     cleaned = cleaned.replace("`", "")
 
-    # 5. Clean up artificial badges or double colons
+    # 6. Clean up artificial badges or double colons
     cleaned = re.sub(r"[ \t]+", " ", cleaned)
 
-    # 6. Normalize blank lines (max 2 consecutive newlines)
+    # 7. Normalize blank lines (max 2 consecutive newlines)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
 
     return cleaned.strip()

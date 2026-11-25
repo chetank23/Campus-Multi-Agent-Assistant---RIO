@@ -1786,6 +1786,7 @@ def execute_tool(
                 filters=tool_args.get("filters"),
                 group_by=tool_args.get("group_by"),
                 order_by=tool_args.get("order_by"),
+                joins=tool_args.get("joins"),
                 limit=tool_args.get("limit", 25),
             )
 

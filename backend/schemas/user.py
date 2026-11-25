@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 class UserAdminResponse(BaseModel):
     id: int
     name: str
-    email: EmailStr
+    email: str
     role: Literal["ADMIN", "FACULTY", "STUDENT", "SUPER_ADMIN"]
     department_id: Optional[int] = None
     department_name: Optional[str] = None

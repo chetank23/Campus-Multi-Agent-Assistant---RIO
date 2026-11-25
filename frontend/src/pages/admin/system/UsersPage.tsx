@@ -24,6 +24,11 @@ export function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
+
+  // Pagination state
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
 
   // Form Modal state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -120,10 +125,23 @@ export function UsersPage() {
         statusFilter === 'ALL' ||
         (statusFilter === 'ACTIVE' && u.is_active) ||
         (statusFilter === 'INACTIVE' && !u.is_active);
+      const matchesDepartment =
+        departmentFilter === 'ALL' ||
+        (departmentFilter === 'NONE'
+          ? !u.department_id
+          : u.department_id === Number(departmentFilter));
 
-      return matchesSearch && matchesRole && matchesStatus;
+      return matchesSearch && matchesRole && matchesStatus && matchesDepartment;
     });
-  }, [users, searchTerm, roleFilter, statusFilter]);
+  }, [users, searchTerm, roleFilter, statusFilter, departmentFilter]);
+
+  // Total pages and paginated slice with bounds safety
+  const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
+  const safePage = page >= totalPages ? 0 : page;
+  const paginatedData = useMemo(() => {
+    const start = safePage * pageSize;
+    return filteredData.slice(start, start + pageSize);
+  }, [filteredData, safePage, pageSize]);
 
   const openCreateForm = () => {
     setSelectedUser(null);
@@ -334,6 +352,20 @@ export function UsersPage() {
           </select>
 
           <select
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20 max-w-[200px]"
+          >
+            <option value="ALL">All Departments</option>
+            <option value="NONE">No Department</option>
+            {departments?.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name} ({d.department_code})
+              </option>
+            ))}
+          </select>
+
+          <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20"
@@ -348,7 +380,7 @@ export function UsersPage() {
       {/* User Directory Table */}
       <DataTable<UserAdminItem>
         columns={columns}
-        data={filteredData}
+        data={paginatedData}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}
@@ -356,11 +388,66 @@ export function UsersPage() {
         keyExtractor={(row) => row.id}
         searchPlaceholder="Filter listed users…"
         emptyMessage={
-          searchTerm || roleFilter !== 'ALL'
+          searchTerm || roleFilter !== 'ALL' || departmentFilter !== 'ALL'
             ? 'No users match your active filters. Try clearing your search parameters.'
             : 'Create a new user account to get started.'
         }
       />
+
+      {/* Pagination Controls */}
+      {filteredData.length > 0 && (
+        <div className="bg-white px-4 py-3 border border-slate-200 rounded-xl shadow-xs flex flex-wrap items-center justify-between gap-4 text-xs text-slate-600">
+          <div className="flex items-center gap-2">
+            <span>
+              Showing <strong className="font-semibold text-slate-800">{filteredData.length === 0 ? 0 : safePage * pageSize + 1}</strong> to{' '}
+              <strong className="font-semibold text-slate-800">{Math.min((safePage + 1) * pageSize, filteredData.length)}</strong> of{' '}
+              <strong className="font-semibold text-slate-800">{filteredData.length}</strong> user{filteredData.length === 1 ? '' : 's'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="user-page-size" className="text-slate-500">Rows per page:</label>
+              <select
+                id="user-page-size"
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(0);
+                }}
+                className="px-2 py-1 border border-slate-200 rounded text-xs bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <span className="text-slate-500 mr-2">
+                Page {safePage + 1} of {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage(Math.max(0, safePage - 1))}
+                disabled={safePage === 0}
+                className="px-2.5 py-1 text-xs font-medium border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))}
+                disabled={safePage >= totalPages - 1}
+                className="px-2.5 py-1 text-xs font-medium border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create / Edit User Modal */}
       <FormModal

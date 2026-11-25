@@ -227,7 +227,9 @@ def classify_intent(message: str) -> str:
         "auditorium", "seminar", "capacity", "where is", "holiday", "exam", "vacation",
         "academic calendar", "event", "events", "campus events", "club", "clubs", "activity", "activities",
         "workshop", "workshops", "webinar", "webinars", "hackathon", "hackathons", "cultural", "fest",
-        "placement", "placements", "placement drive", "placement drives", "cdc", "recruitment", "eligible drives",
+        "placement", "placements", "palcement", "placment", "placemnt", "placement drive", "placement drives",
+        "palcement activitie", "palcement activities", "placement activities", "placement activity",
+        "cdc", "recruitment", "recruitment drives", "eligible drives", "companies hiring", "placement opportunities", "placement updates",
         "am i eligible", "eligibility", "job role", "package", "ctc", "internship", "hiring",
         "department schedule", "calendar", "department", "section", "student", "students", "srn", "usn", "lunch", "break", "breaks", "semester", "announcement", "announcements", "notice", "notices", "broadcast", "notification", "notifications", "request", "requests",
         "institutional overview", "institution overview", "academic structure", "structural overview", "operational overview", "governance", "audit activity", "audit logs", "audit", "free period", "free periods", "what about", "how about", "who teaches the", "the second", "the first"

@@ -53,6 +53,11 @@ export interface ChatProposalData {
   consequences?: string;
 }
 
+export interface NavLinkItem {
+  label: string;
+  to: string;
+}
+
 export interface ChatMessageResponse {
   reply: string;
   intent?: string;
@@ -65,6 +70,9 @@ export interface ChatMessageResponse {
   error?: string | null;
   conversation_id?: number;
   diagnostics?: Record<string, unknown>;
+  nav_links?: NavLinkItem[];
+  provider_badge?: string;
+  outcome_state?: string;
 }
 
 export interface ChatHistoryMessage {
@@ -78,6 +86,9 @@ export interface ChatHistoryMessage {
   action_type?: string | null;
   error?: string | null;
   conversation_id?: number;
+  nav_links?: NavLinkItem[];
+  provider_badge?: string;
+  outcome_state?: string;
 }
 
 export interface ConversationItem {
@@ -107,6 +118,103 @@ export interface ConversationDetail {
   created_at: string;
   updated_at: string;
   messages: ChatMessageDetail[];
+}
+
+export interface StreamEventData {
+  event: 'token' | 'status' | 'done' | 'error';
+  token?: string;
+  status?: string;
+  reply?: string;
+  error?: string;
+  nav_links?: NavLinkItem[];
+  provider_badge?: string;
+  outcome_state?: string;
+  conversation_id?: number;
+  intent?: string;
+  sources?: string[];
+  tool_calls?: ChatToolCall[];
+  proposal?: ChatProposalData | null;
+  action_type?: string | null;
+  success?: boolean;
+}
+
+/**
+ * Sends a message and streams SSE token chunks and events from the backend.
+ */
+export async function streamChatMessage(
+  message: string,
+  conversationId: number | undefined,
+  callbacks: {
+    onStatus?: (status: string) => void;
+    onToken?: (token: string) => void;
+    onDone?: (data: StreamEventData) => void;
+    onError?: (error: string) => void;
+  },
+  signal?: AbortSignal
+): Promise<void> {
+  const token = localStorage.getItem('token');
+  const response = await fetch('/api/agents/chat/stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      message: message.trim(),
+      ...(conversationId ? { conversation_id: conversationId } : {}),
+    }),
+    signal,
+  });
+
+  if (!response.ok) {
+    let errDetail = 'Failed to stream message';
+    try {
+      const errJson = await response.json();
+      errDetail = errJson.detail || errDetail;
+    } catch {
+      // fallback
+    }
+    callbacks.onError?.(errDetail);
+    return;
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    callbacks.onError?.('Streaming response body is unavailable');
+    return;
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n\n');
+    buffer = lines.pop() || '';
+
+    for (const block of lines) {
+      const trimmed = block.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      const dataStr = trimmed.slice(5).trim();
+      try {
+        const payload: StreamEventData = JSON.parse(dataStr);
+        if (payload.event === 'status' && payload.status) {
+          callbacks.onStatus?.(payload.status);
+        } else if (payload.event === 'token' && payload.token) {
+          callbacks.onToken?.(payload.token);
+        } else if (payload.event === 'done') {
+          callbacks.onDone?.(payload);
+        } else if (payload.event === 'error') {
+          callbacks.onError?.(payload.error || 'Stream error occurred');
+        }
+      } catch {
+        // Skip unparseable block
+      }
+    }
+  }
 }
 
 /**
