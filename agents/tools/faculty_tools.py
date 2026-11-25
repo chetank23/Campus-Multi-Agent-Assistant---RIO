@@ -295,10 +295,16 @@ def get_available_faculty_data(
     start_time: Union[str, time],
     end_time: Union[str, time],
     department_id: Optional[int] = None,
+    department_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Identifies active faculty members who are genuinely available for a specific date and time interval.
+    Checks all active canonical published timetables across sections, published timetable versions,
+    declared faculty unavailability, and approved substitution/leave commitments.
     """
+    from backend.models.timetable import Timetable
+    from backend.models.substitution import FacultySubstitution
+
     if isinstance(date, str):
         target_date = dt.strptime(date, "%Y-%m-%d").date()
     else:
@@ -321,31 +327,43 @@ def get_available_faculty_data(
 
     busy_faculty_ids: set[int] = set()
 
-    # 1. Published timetable conflicts
-    published_version = (
-        db.query(TimetableVersion)
-        .filter(TimetableVersion.status == "PUBLISHED")
-        .order_by(TimetableVersion.published_at.desc(), TimetableVersion.id.desc())
-        .first()
-    )
-
-    if published_version:
-        tt_conflicts = (
-            db.query(TimetableEntry.faculty_id)
-            .join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id)
-            .filter(
-                TimetableEntry.version_id == published_version.id,
-                or_(TimeSlot.day == day_full, TimeSlot.day == day_3),
-                TimeSlot.start_time < et,
-                TimeSlot.end_time > st,
-                TimetableEntry.status != "CANCELLED",
-            )
-            .distinct()
-            .all()
+    # 1a. Active canonical published timetables across all sections
+    canon_conflicts = (
+        db.query(TimetableEntry.faculty_id)
+        .join(Timetable, TimetableEntry.timetable_id == Timetable.id)
+        .join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id)
+        .filter(
+            Timetable.status == "PUBLISHED",
+            or_(TimeSlot.day == day_full, TimeSlot.day == day_3),
+            TimeSlot.start_time < et,
+            TimeSlot.end_time > st,
+            TimetableEntry.status != "CANCELLED",
         )
-        for row in tt_conflicts:
-            if row[0]:
-                busy_faculty_ids.add(row[0])
+        .distinct()
+        .all()
+    )
+    for row in canon_conflicts:
+        if row[0]:
+            busy_faculty_ids.add(row[0])
+
+    # 1b. Published TimetableVersion entries (for legacy or version-linked published timetables)
+    ver_conflicts = (
+        db.query(TimetableEntry.faculty_id)
+        .join(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
+        .join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id)
+        .filter(
+            TimetableVersion.status == "PUBLISHED",
+            or_(TimeSlot.day == day_full, TimeSlot.day == day_3),
+            TimeSlot.start_time < et,
+            TimeSlot.end_time > st,
+            TimetableEntry.status != "CANCELLED",
+        )
+        .distinct()
+        .all()
+    )
+    for row in ver_conflicts:
+        if row[0]:
+            busy_faculty_ids.add(row[0])
 
     # 2. Declared unavailability
     unavail = (
@@ -364,15 +382,54 @@ def get_available_faculty_data(
         if row[0]:
             busy_faculty_ids.add(row[0])
 
-    # 3. Query candidate active faculty
+    # 3. Approved substitutions / leave restrictions on target_date
+    subs = (
+        db.query(FacultySubstitution, TimeSlot)
+        .join(TimetableEntry, FacultySubstitution.timetable_entry_id == TimetableEntry.id)
+        .join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id)
+        .filter(
+            FacultySubstitution.substitution_date == target_date,
+            FacultySubstitution.status == "APPROVED",
+            TimeSlot.start_time < et,
+            TimeSlot.end_time > st,
+        )
+        .all()
+    )
+    for sub, _slot in subs:
+        if sub.original_faculty_id:
+            busy_faculty_ids.add(sub.original_faculty_id)
+        if sub.substitute_faculty_id:
+            busy_faculty_ids.add(sub.substitute_faculty_id)
+
+    # 4. Query candidate active faculty
     query = (
         db.query(Faculty)
         .join(User, Faculty.user_id == User.id)
         .filter(User.is_active.is_(True))
     )
 
-    if department_id:
-        query = query.filter(Faculty.department_id == department_id)
+    resolved_dept_id = department_id
+    if not resolved_dept_id and department_name:
+        dn = department_name.strip()
+        dn_amp = dn.replace(" and ", " & ").replace(" AND ", " & ")
+        dn_and = dn.replace(" & ", " and ")
+        dept_match = (
+            db.query(Department)
+            .filter(
+                or_(
+                    Department.name.ilike(f"%{dn}%"),
+                    Department.name.ilike(f"%{dn_amp}%"),
+                    Department.name.ilike(f"%{dn_and}%"),
+                    Department.department_code.ilike(f"%{dn}%"),
+                )
+            )
+            .first()
+        )
+        if dept_match:
+            resolved_dept_id = dept_match.id
+
+    if resolved_dept_id:
+        query = query.filter(Faculty.department_id == resolved_dept_id)
 
     all_faculties = query.all()
     available_faculties = [f for f in all_faculties if f.id not in busy_faculty_ids]
@@ -392,6 +449,7 @@ def get_available_faculty_data(
         "date": str(target_date),
         "day": day_full,
         "interval": f"{st.strftime('%H:%M')} - {et.strftime('%H:%M')}",
+        "department_filter": department_name,
         "total_available": len(formatted),
         "total_evaluated": len(all_faculties),
         "available_faculty": formatted,

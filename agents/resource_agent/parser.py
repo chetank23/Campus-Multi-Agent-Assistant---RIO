@@ -84,6 +84,9 @@ def parse_date(text: str, base_date: Optional[datetime.date] = None) -> Optional
     if "tomorrow" in text_lower:
         return today + datetime.timedelta(days=1)
 
+    if "yesterday" in text_lower:
+        return today - datetime.timedelta(days=1)
+
     # ISO Format: YYYY-MM-DD
     iso_match = re.search(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", text)
     if iso_match:
@@ -230,6 +233,20 @@ def parse_time_interval(text: str) -> Tuple[Optional[datetime.time], Optional[da
             start_dt = datetime.datetime.combine(datetime.date.today(), start_t)
             end_dt = start_dt + datetime.timedelta(hours=1)
             return start_t, end_dt.time()
+
+    # Pattern D: Relative time expressions ("right now", "morning", "afternoon", "evening")
+    if re.search(r"\b(?:right\s+now|currently|at\s+this\s+moment)\b", cleaned):
+        now_dt = datetime.datetime.now()
+        start_t = now_dt.time().replace(second=0, microsecond=0)
+        end_dt = now_dt + datetime.timedelta(hours=1)
+        return start_t, end_dt.time()
+
+    if re.search(r"\bmorning\b", cleaned):
+        return datetime.time(9, 0), datetime.time(12, 0)
+    if re.search(r"\bafternoon\b", cleaned):
+        return datetime.time(13, 0), datetime.time(17, 0)
+    if re.search(r"\bevening\b", cleaned):
+        return datetime.time(17, 0), datetime.time(20, 0)
 
     return None, None
 

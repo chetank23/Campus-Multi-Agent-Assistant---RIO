@@ -5,7 +5,7 @@
  * Provides conversation persistence, history listing, session creation, and message exchange.
  */
 
-import { apiClient } from './client';
+import { apiClient, getAccessToken, getApiBaseUrl } from './client';
 
 export interface ChatMessageRequest {
   message: string;
@@ -152,9 +152,11 @@ export async function streamChatMessage(
   },
   signal?: AbortSignal
 ): Promise<void> {
-  const token = localStorage.getItem('token');
-  const response = await fetch('/api/agents/chat/stream', {
+  const token = getAccessToken();
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}/agents/chat/stream`, {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

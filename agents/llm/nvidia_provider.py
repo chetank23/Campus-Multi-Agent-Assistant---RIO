@@ -59,17 +59,48 @@ logger = logging.getLogger("agents.llm.nvidia_provider")
 def strip_thinking(text: Optional[str]) -> str:
     """
     Strips internal model reasoning tokens (<thought>...</thought> or <thinking>...</thinking>)
-    ensuring only user-facing, direct answers are presented.
+    and any leaked <tool_call>...</tool_call> XML blocks, ensuring only user-facing answers are presented.
     """
     if not text:
         return ""
-    # Strip closed thought blocks
+    # Strip closed thought and tool_call blocks
     cleaned = re.sub(r"<thought>[\s\S]*?</thought>", "", text, flags=re.IGNORECASE)
     cleaned = re.sub(r"<thinking>[\s\S]*?</thinking>", "", cleaned, flags=re.IGNORECASE)
-    # Strip any unclosed thought tags at the start of output
-    cleaned = re.sub(r"^<thought>[\s\S]*", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"^<thinking>[\s\S]*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"<tool_call>[\s\S]*?</tool_call>", "", cleaned, flags=re.IGNORECASE)
+    # Strip any unclosed thought or tool_call tags
+    cleaned = re.sub(r"<thought>[\s\S]*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"<thinking>[\s\S]*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"<tool_call>[\s\S]*", "", cleaned, flags=re.IGNORECASE)
     return cleaned.strip()
+
+
+def _parse_text_tool_calls(raw_content: str) -> List[Tuple[str, Dict[str, Any]]]:
+    """
+    Parses XML-style <tool_call><function=NAME><parameter=KEY>VAL</parameter></function></tool_call>
+    blocks if a model emits tool calls in text content instead of structured tool_calls.
+    """
+    if not raw_content or "<tool_call" not in raw_content.lower():
+        return []
+
+    parsed: List[Tuple[str, Dict[str, Any]]] = []
+    for block in re.findall(r"<tool_call>([\s\S]*?)(?:</tool_call>|$)", raw_content, flags=re.IGNORECASE):
+        fn_match = re.search(r"<function=([a-zA-Z0-9_]+)>", block, flags=re.IGNORECASE)
+        if not fn_match:
+            continue
+        fn_name = fn_match.group(1).strip()
+        args: Dict[str, Any] = {}
+        for p_name, p_val in re.findall(
+            r"<parameter=([a-zA-Z0-9_]+)>\s*([\s\S]*?)\s*</parameter>",
+            block,
+            flags=re.IGNORECASE,
+        ):
+            val_str = p_val.strip()
+            try:
+                args[p_name.strip()] = json.loads(val_str)
+            except Exception:
+                args[p_name.strip()] = val_str
+        parsed.append((fn_name, args))
+    return parsed
 
 
 class NvidiaNemotronProvider(BaseLLMProvider):
@@ -137,10 +168,12 @@ CORE OPERATING MANDATES:
 
 2. TOOL CALLING & DATABASE GROUNDING:
    - Every single campus fact MUST be grounded in tool results. Never invent, assume, or synthesize facts.
+   - Always invoke tools using standard function calling; NEVER output raw <tool_call> XML tags in your message content.
+   - For faculty availability questions (e.g. "available faculties", "which faculty are free"): if the user did NOT provide both a date and a time interval, ask "For which date and time interval should I check faculty availability?" instead of calling a directory tool. When date and time are known, call 'get_available_faculty'.
    - For personal upcoming schedule questions (e.g. "When is my next class?"): call 'get_next_class' or 'get_class_status'.
    - For availability / free period questions (e.g. "When am I free?"): call 'get_faculty_free_periods'.
    - For faculty student roster questions (e.g. "Who are my students?"): call 'get_my_students'.
-   - For flexible data querying, filtering, counting, aggregation, joins across entities: call 'execute_semantic_query'.
+   - For flexible data querying, filtering, counting, aggregation, joins across entities: call 'execute_semantic_query' with valid 'entity' and structured fields/filters.
    - If a tool returns an empty result or indicates no records exist, report that honestly to the user. Never manufacture data or fill gaps with pretraining guesses.
 
 3. STRICT ROLE-BASED ACCESS & PERMISSIONS:
@@ -390,8 +423,26 @@ CORE OPERATING MANDATES:
                     # Continue loop to allow model to synthesize tool results
                     continue
 
-                # If no tool calls (or tools suppressed on final turn), model provided final text response
+                # Check if model emitted XML-style <tool_call> in text content
                 raw_content = msg.content or ""
+                text_tool_calls = _parse_text_tool_calls(raw_content) if active_tools else []
+                if text_tool_calls:
+                    observations: List[str] = []
+                    for t_name, t_args in text_tool_calls:
+                        call_key = f"{t_name}:{json.dumps(t_args, sort_keys=True)}"
+                        if call_key in tool_results_cache:
+                            t_res = tool_results_cache[call_key]
+                        else:
+                            t_res = execute_tool(tool_name=t_name, tool_args=t_args, user=user, db=db)
+                            tool_results_cache[call_key] = t_res
+                        executed_tool_calls.append({"tool": t_name, "args": t_args})
+                        if isinstance(t_res, dict) and "source" in t_res:
+                            sources.append(t_res["source"])
+                        observations.append(f"Tool '{t_name}' result:\n{json.dumps(t_res, default=str)}")
+                    messages.append({"role": "user", "content": "\n\n".join(observations) + "\n\nSynthesize a clear, grounded answer from these results without outputting <tool_call> tags."})
+                    continue
+
+                # If no tool calls (or tools suppressed on final turn), model provided final text response
                 final_text = strip_thinking(raw_content)
                 break
 

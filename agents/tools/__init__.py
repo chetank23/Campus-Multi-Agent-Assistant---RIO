@@ -380,7 +380,8 @@ QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                 "date": {"type": "string", "description": "Target date in YYYY-MM-DD format"},
                 "start_time": {"type": "string", "description": "Start time in HH:MM format"},
                 "end_time": {"type": "string", "description": "End time in HH:MM format"},
-                "department_id": {"type": "integer", "description": "Optional department filter"},
+                "department_id": {"type": "integer", "description": "Optional department ID filter"},
+                "department_name": {"type": "string", "description": "Optional department name or code filter (e.g. 'AI & DS', 'AIDS')"},
             },
             "required": ["date", "start_time", "end_time"],
         },
@@ -1290,12 +1291,16 @@ def execute_tool(
             return get_class_status_data(db=db, user=user)
 
         elif tool_name == "get_available_faculty":
+            for req_key in ("date", "start_time", "end_time"):
+                if not tool_args.get(req_key):
+                    return {"error": f"Missing required parameter '{req_key}' for tool 'get_available_faculty'."}
             return get_available_faculty_data(
                 db=db,
                 date=tool_args["date"],
                 start_time=tool_args["start_time"],
                 end_time=tool_args["end_time"],
                 department_id=tool_args.get("department_id"),
+                department_name=tool_args.get("department_name"),
             )
 
         elif tool_name == "get_room_or_lab_details":

@@ -29,7 +29,7 @@ from agents.scheduling_agent.proposal_store import proposal_store
 from agents.resource_agent.proposal_store import resource_proposal_store
 from agents.common.operation_proposal_store import operation_proposal_store
 from agents.action_registry import action_registry
-from agents.common.formatter import sanitize_plain_english
+from agents.common.formatter import sanitize_plain_english, normalize_query_typos
 from agents.resource_agent.parser import (
     parse_date,
     parse_time_interval,
@@ -43,7 +43,7 @@ def classify_intent(message: str) -> str:
     """
     Classifies the user intent into supported and out-of-scope categories.
     """
-    msg = message.lower().strip()
+    msg = normalize_query_typos(message).lower().strip()
 
     # 1. Operation & Resource Confirmation tokens
     m_op = re.search(r"\b(?:confirm|execute|approve|proceed)\s+(op_prop_[a-zA-Z0-9_-]+)\b", msg)
@@ -100,7 +100,8 @@ def classify_intent(message: str) -> str:
         r"\bavoid\b.*?\b(labs?|morning|consecutive)\b",
         r"\brevise\b.*?\b(timetable|proposal|schedule|periods|strategy)\b",
         r"\breduce\b.*?\bconsecutive\b",
-        r"\b(?:faculty|prof|dr\.?)\b.*?\b(unavailable|available|preferred)\b",
+        r"\b(?:mark|set|update|change|make)\b.*?\b(?:faculty|prof|dr\.?)\b.*?\b(unavailable|available|preferred)\b",
+        r"\b(?:faculty|prof|dr\.?)\b.*?\b(unavailable|preferred)\b",
         r"\bunavailable\b.*?\b(monday|tuesday|wednesday|thursday|friday|saturday|afternoon|morning)\b",
         r"\bdisrupt(ion|ions)?\b",
         r"\breschedule\b",
@@ -173,9 +174,10 @@ def classify_intent(message: str) -> str:
         r"\bapprove\b.*\bbooking\b",
         r"\bconfirm\b.*\bbooking\b",
         r"\breject\b.*\bbooking\b",
-        r"\b(check|find|search|show|list)\s+.*?\b(available|free|seminar\s+halls?|labs?|auditoriums?|projectors?|facilities|resources)\b",
-        r"\bis\b.*\b(available|free)\b",
-        r"\bavailability\b",
+        r"\b(check|find|search|show|list)\s+.*?\b(seminar\s+halls?|labs?|auditoriums?|projectors?|facilities|resources)\b",
+        r"\b(check|find|search|show|list)\s+.*?\b(available|free)\s+(?:rooms?|halls?|labs?|auditoriums?|projectors?|facilities|resources)\b",
+        r"\bis\b.*?\b(?:room|hall|lab|auditorium|projector|facility|resource)\b.*?\b(available|free)\b",
+        r"\b(?:room|lab|hall|facility|resource)\s+availability\b",
     ]
     for pat in resource_patterns:
         if re.search(pat, msg):
@@ -221,16 +223,16 @@ def classify_intent(message: str) -> str:
     # 9. Informational Queries supported by Query Agent
     query_patterns = [
         "timetable", "timetables", "published", "schedule", "schedules", "class", "classes", "lecture", "timing", "when is",
-        "ongoing", "upcoming", "next class", "faculty", "professor", "professors", "teacher", "teachers",
+        "ongoing", "upcoming", "next class", "faculty", "faculties", "professor", "professors", "teacher", "teachers",
         "teach", "teaching", "who is", "who teaches", "dr.", "dr ", "prof",
-        "course", "courses", "subject", "subjects", "credits", "syllabus", "room", "rooms", "classroom", "classrooms", "lab", "labs",
-        "auditorium", "seminar", "capacity", "where is", "holiday", "exam", "vacation",
+        "course", "courses", "subject", "subjects", "credits", "syllabus", "curriculum", "room", "rooms", "classroom", "classrooms", "lab", "labs", "building", "buildings", "facility", "facilities", "resource", "resources",
+        "auditorium", "seminar", "capacity", "where is", "holiday", "holidays", "exam", "exams", "examinations", "vacation",
         "academic calendar", "event", "events", "campus events", "club", "clubs", "activity", "activities",
         "workshop", "workshops", "webinar", "webinars", "hackathon", "hackathons", "cultural", "fest",
         "placement", "placements", "palcement", "placment", "placemnt", "placement drive", "placement drives",
         "palcement activitie", "palcement activities", "placement activities", "placement activity",
         "cdc", "recruitment", "recruitment drives", "eligible drives", "companies hiring", "placement opportunities", "placement updates",
-        "am i eligible", "eligibility", "job role", "package", "ctc", "internship", "hiring",
+        "am i eligible", "eligibility", "job role", "package", "ctc", "internship", "internships", "hiring", "available", "free",
         "department schedule", "calendar", "department", "section", "student", "students", "srn", "usn", "lunch", "break", "breaks", "semester", "announcement", "announcements", "notice", "notices", "broadcast", "notification", "notifications", "request", "requests",
         "institutional overview", "institution overview", "academic structure", "structural overview", "operational overview", "governance", "audit activity", "audit logs", "audit", "free period", "free periods", "what about", "how about", "who teaches the", "the second", "the first"
     ]

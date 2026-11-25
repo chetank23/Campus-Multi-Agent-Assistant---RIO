@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.models.identity import User
+from agents.common.formatter import normalize_query_typos
+from agents.resource_agent.parser import parse_date, parse_time_interval
 
 
 @dataclass
@@ -29,8 +31,8 @@ class IntentMatch:
 
 
 def normalize_text(text: str) -> str:
-    """Normalizes whitespace, punctuation, and capitalization."""
-    t = text.lower().strip()
+    """Normalizes whitespace, typos, punctuation, and capitalization."""
+    t = normalize_query_typos(text).lower().strip()
     # Normalize punctuation except hyphens in codes like AIDS-A, SMV-BLK-01
     t = re.sub(r"[^\w\s\-\.]", " ", t)
     t = re.sub(r"\s+", " ", t).strip()
@@ -101,6 +103,14 @@ def extract_entities(text: str) -> Dict[str, Any]:
                 fac_m = None
     if fac_m:
         entities["faculty_name"] = fac_m.group(1).title()
+
+    # 8. Department
+    if any(k in norm for k in ["ai & ds", "ai and ds", "aids", "artificial intelligence and data science"]):
+        entities["department_name"] = "AI & DS"
+    elif re.search(r"\b(cse|computer science)\b", norm):
+        entities["department_name"] = "CSE"
+    elif re.search(r"\b(ece|electronics)\b", norm):
+        entities["department_name"] = "ECE"
 
     return entities
 
@@ -192,6 +202,44 @@ def match_intent(
                 tool_args={},
             )
 
+    # ── Faculty Availability (Read-Only, All Roles) ────────────────────────────
+    # Must be checked BEFORE generic faculty lookup so "available faculties" /
+    # "which faculty are free" never gets routed to profile lookup.
+    is_fac_avail = (
+        any(w in msg for w in ["faculty", "faculties", "professor", "professors", "teacher", "teachers"])
+        and any(w in msg for w in ["available", "free", "availability"])
+        and not any(w in msg for w in ["free period", "free periods", "free slots", "when am i free", "book", "reserve"])
+    )
+    if is_fac_avail:
+        req_date = parse_date(message)
+        start_t, end_t = parse_time_interval(message)
+        if req_date is None or start_t is None or end_t is None:
+            if req_date is not None and (start_t is None or end_t is None):
+                prompt = f"For which time interval on {req_date.isoformat()} should I check faculty availability? (e.g., '2 PM to 3 PM')"
+            else:
+                prompt = "For which date and time interval should I check faculty availability?"
+            return IntentMatch(
+                intent_name="CLARIFICATION_REQUIRED",
+                tool_name="ambiguous_clarification",
+                tool_args={"prompt": prompt},
+                is_ambiguous=True,
+                clarification_prompt=prompt,
+                extracted_entities=entities,
+            )
+        tool_args_avail: Dict[str, Any] = {
+            "date": req_date.isoformat(),
+            "start_time": start_t.strftime("%H:%M"),
+            "end_time": end_t.strftime("%H:%M"),
+        }
+        if entities.get("department_name"):
+            tool_args_avail["department_name"] = entities["department_name"]
+        return IntentMatch(
+            intent_name="FACULTY_AVAILABILITY",
+            tool_name="get_available_faculty",
+            tool_args=tool_args_avail,
+            extracted_entities=entities,
+        )
+
     # ── Admin & Super Admin Shared Lookups ─────────────────────────────────────
     if role in ("ADMIN", "SUPER_ADMIN"):
         # 1. Student directory search
@@ -221,15 +269,16 @@ def match_intent(
                 extracted_entities=entities,
             )
 
-        if any(k in msg for k in ["find faculty", "lookup faculty", "search faculty", "list faculty", "faculty member"]):
+        if any(k in msg for k in ["find faculty", "lookup faculty", "search faculty", "list faculty", "show faculty", "faculty directory", "faculty members", "faculty in", "faculty member"]):
             name_q = entities.get("faculty_name")
-            if not name_q:
-                m = re.search(r"(?:faculty member|faculty|prof\.?|dr\.?)\s+([a-z]+(?:\s+[a-z]+)*)", msg)
+            dept_q = entities.get("department_name")
+            if not name_q and not dept_q:
+                m = re.search(r"(?:faculty member|faculty|prof\.?|dr\.?)\s+(?!in\b|from\b|of\b|all\b|members\b)([a-z]+(?:\s+[a-z]+)*)", msg)
                 name_q = m.group(1).title() if m else None
             return IntentMatch(
                 intent_name="ADMIN_FACULTY_LOOKUP",
                 tool_name="search_faculty_directory",
-                tool_args={"search_query": name_q},
+                tool_args={"search_query": name_q, "department_name": dept_q},
                 extracted_entities=entities,
             )
 
@@ -237,9 +286,10 @@ def match_intent(
         if any(k in msg for k in [
             "which courses belong", "how many subjects are registered", "show subjects for",
             "course assignments", "list courses", "show courses", "show registered courses",
-            "registered courses", "all courses", "list all courses",
+            "registered courses", "all courses", "list all courses", "courses are available",
+            "available courses", "courses offered", "subjects offered", "what courses",
         ]):
-            dept_q = "AI & DS" if any(k in msg for k in ["ai & ds", "aids", "ai and ds"]) else None
+            dept_q = entities.get("department_name")
             return IntentMatch(
                 intent_name="ADMIN_COURSE_LOOKUP",
                 tool_name="search_course_directory",

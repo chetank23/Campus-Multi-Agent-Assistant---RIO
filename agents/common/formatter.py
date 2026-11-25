@@ -67,6 +67,43 @@ EMOJI_PATTERN = re.compile(
 )
 
 
+TYPO_CORRECTIONS = {
+    "palcement": "placement",
+    "placment": "placement",
+    "placemnt": "placement",
+    "palcements": "placements",
+    "placments": "placements",
+    "activitie": "activities",
+    "availble": "available",
+    "avalable": "available",
+    "avaliable": "available",
+    "avialable": "available",
+    "faculity": "faculty",
+    "facultys": "faculty",
+    "faculities": "faculties",
+    "upcomming": "upcoming",
+    "calender": "calendar",
+    "holidyas": "holidays",
+    "holydays": "holidays",
+    "timtable": "timetable",
+    "timetabel": "timetable",
+    "roooms": "rooms",
+    "romms": "rooms",
+    "couses": "courses",
+    "coursess": "courses",
+}
+
+
+def normalize_query_typos(text: str) -> str:
+    """Normalizes common campus query spelling mistakes at word boundaries."""
+    if not text:
+        return ""
+    normalized = text
+    for typo, fix in TYPO_CORRECTIONS.items():
+        normalized = re.sub(rf"\b{re.escape(typo)}\b", fix, normalized, flags=re.IGNORECASE)
+    return normalized
+
+
 def safe_db_text(text: str) -> str:
     """
     Safeguards any string before persisting to PostgreSQL text columns.

@@ -124,17 +124,17 @@ def determine_outcome_state(result: Dict[str, Any]) -> str:
         return "CLARIFICATION_REQUIRED"
     if intent in ("UNSUPPORTED_OPERATION", "PERMISSION_DENIED"):
         return "PERMISSION_DENIED"
-    reply_lower = (result.get("reply") or "").lower()
-    if any(
-        phrase in reply_lower
-        for phrase in [
-            "no published placement drives found",
-            "no records were found",
-            "no matching records",
-            "no classes scheduled",
-            "no upcoming classes",
-            "no free periods found",
-        ]
+    reply_lower = (result.get("reply") or "").lower().strip()
+    empty_phrases = [
+        "no published placement drives found",
+        "no records were found",
+        "no matching records",
+        "no scheduled academic holidays",
+        "no upcoming classes",
+        "no free periods found",
+    ]
+    if any(phrase in reply_lower for phrase in empty_phrases) or (
+        len(reply_lower) < 200 and "no classes scheduled" in reply_lower
     ):
         return "NO_RECORDS_FOUND"
     return "GROUNDED_ANSWER"

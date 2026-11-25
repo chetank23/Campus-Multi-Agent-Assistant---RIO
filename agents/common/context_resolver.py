@@ -52,6 +52,55 @@ def extract_contextual_follow_up(
     last_tool_name = last_tool_calls[0].get("tool") if last_tool_calls else None
     last_tool_args = last_tool_calls[0].get("args", {}) if last_tool_calls else {}
 
+    # ── 0. Faculty Availability Multi-Turn Follow-up ──────────────────────────
+    is_prev_fac_avail = (
+        last_tool_name == "get_available_faculty"
+        or "faculty availability" in last_content.lower()
+        or "for which date and time interval" in last_content.lower()
+        or ("available faculty" in last_content.lower() and last_tool_name == "get_available_faculty")
+    )
+    if is_prev_fac_avail:
+        from agents.resource_agent.parser import parse_date, parse_time_interval
+        from agents.intent.intent_catalog import extract_entities
+
+        req_date = parse_date(message)
+        start_t, end_t = parse_time_interval(message)
+        ents = extract_entities(message)
+        dept_name = ents.get("department_name")
+
+        # Only treat as follow-up if user supplied a date, time, or department/scope refinement
+        if req_date or (start_t and end_t) or dept_name:
+            merged_args: Dict[str, Any] = dict(last_tool_args) if last_tool_name == "get_available_faculty" else {}
+            if req_date:
+                merged_args["date"] = req_date.isoformat()
+            elif not merged_args.get("date") and last_user_msg:
+                prev_d = parse_date(last_user_msg.get("content", ""))
+                if prev_d:
+                    merged_args["date"] = prev_d.isoformat()
+
+            if start_t and end_t:
+                merged_args["start_time"] = start_t.strftime("%H:%M")
+                merged_args["end_time"] = end_t.strftime("%H:%M")
+            elif (not merged_args.get("start_time") or not merged_args.get("end_time")) and last_user_msg:
+                p_st, p_et = parse_time_interval(last_user_msg.get("content", ""))
+                if p_st and p_et:
+                    merged_args["start_time"] = p_st.strftime("%H:%M")
+                    merged_args["end_time"] = p_et.strftime("%H:%M")
+
+            if dept_name:
+                merged_args["department_name"] = dept_name
+
+            if merged_args.get("date") and merged_args.get("start_time") and merged_args.get("end_time"):
+                return "get_available_faculty", merged_args
+            elif merged_args.get("date"):
+                return "ambiguous_clarification", {
+                    "prompt": f"For which time interval on {merged_args['date']} should I check faculty availability? (e.g., '2 PM to 3 PM')"
+                }
+            elif merged_args.get("start_time") and merged_args.get("end_time"):
+                return "ambiguous_clarification", {
+                    "prompt": f"For which date should I check faculty availability from {merged_args['start_time']} to {merged_args['end_time']}?"
+                }
+
     # ── 1. Temporal Follow-Up: "what about tomorrow?", "how about friday?", "on wednesday?"
     day_match = None
     if "today" in msg:

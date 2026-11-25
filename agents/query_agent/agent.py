@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from backend.models.identity import User
 from agents.state.state import AgentState
 from agents.tools import QUERY_TOOL_DEFINITIONS, execute_tool
-from agents.common.formatter import sanitize_plain_english
+from agents.common.formatter import sanitize_plain_english, normalize_query_typos
 
 
 def _extract_intent_and_tool_call(
@@ -44,7 +44,7 @@ def _extract_intent_and_tool_call(
     if im.tool_name:
         return im.tool_name, im.tool_args
 
-    msg = message.lower().strip()
+    msg = normalize_query_typos(message).lower().strip()
 
     # Priority A. Identity & Profile: "who am i", "what is my srn", "my srn"
     if any(k in msg for k in ["who am i", "what is my srn", "my srn", "my student id", "what is my roll"]):
@@ -177,11 +177,13 @@ def _extract_intent_and_tool_call(
     start_time_arg = time_match.group(1) if time_match else None
 
     # 6. Room & Lab Availability queries
-    is_lab = any(k in msg for k in ["lab", "labs", "laboratory", "laboratories"])
+    is_lab = bool(re.search(r"\b(?:lab|labs|laboratory|laboratories)\b", msg))
     if any(k in msg for k in [
         "available room", "available rooms", "free room", "free rooms", "room availability",
-        "which rooms are free", "find available room", "available lab", "available labs",
-        "free lab", "free labs", "lab availability", "which labs are free", "find available lab",
+        "which rooms are free", "which rooms are available", "rooms are free", "rooms are available",
+        "find available room", "available lab", "available labs",
+        "free lab", "free labs", "lab availability", "which labs are free", "which labs are available",
+        "labs are free", "labs are available", "find available lab",
     ]):
         tool = "get_lab_availability" if is_lab else "get_room_availability"
         args: Dict[str, Any] = {}
@@ -198,7 +200,7 @@ def _extract_intent_and_tool_call(
 
     # 8. Faculty specific teaching schedule (for Admin or queries mentioning specific faculty)
     fac_name_match = re.search(
-        r"(?:faculty|prof\.?|professor|dr\.?)\s+([a-zA-Z\s]+?)(?:'s|\s+timetable|\s+schedule|\s*$)",
+        r"(?:faculty|prof\.?|professor|dr\.?)\s+(?!timetable\b|schedule\b)([a-zA-Z\s]+?)(?:'s|\s+timetable|\s+schedule|\s*$)",
         message,
         re.IGNORECASE,
     )
@@ -209,14 +211,25 @@ def _extract_intent_and_tool_call(
             args["day"] = day_match
         return "get_faculty_timetable", args
 
+    if any(k in msg for k in ["faculty timetable", "faculty schedule", "teaching schedule"]):
+        if user.role == "FACULTY":
+            return "get_my_timetable", {"day": day_match} if day_match else {}
+        return "ambiguous_clarification", {
+            "prompt": "Which faculty member's teaching timetable would you like to view? Please provide their name (e.g., 'Dr. Nimrita Koul timetable')."
+        }
+
     # 9. Faculty Directory Profile / Faculty Information
-    if any(k in msg for k in ["faculty", "professor", "teacher", "who teaches", "profile", "contact for dr", "dr."]):
+    if any(k in msg for k in ["faculty", "faculties", "professor", "professors", "teacher", "who teaches", "profile", "contact for dr", "dr."]):
         match = re.search(r"(?:dr\.?|prof\.?|faculty|professor|who is|about)\s+([a-zA-Z\s]+)", message, re.IGNORECASE)
         query = match.group(1).strip() if match else message
         return "get_faculty_information", {"search_query": query}
 
     # 10. Course Information
-    if any(k in msg for k in ["course", "syllabus", "credits", "subject", "curriculum"]):
+    if any(k in msg for k in ["course", "courses", "syllabus", "credits", "subject", "subjects", "curriculum"]):
+        if any(k in msg for k in ["available", "offered", "list", "show all", "all courses", "what courses"]):
+            if user.role in ("ADMIN", "SUPER_ADMIN"):
+                return "search_course_directory", {}
+            return "get_semester_courses", {"semester_number": 7}
         match = re.search(r"(?:course|subject|credits for|about)\s+([a-zA-Z0-9\s]+)", message, re.IGNORECASE)
         query = match.group(1).strip() if match else message
         return "get_course_information", {"query_str": query}
@@ -1189,6 +1202,7 @@ def run_query_agent(
 
     if tool_name == "ambiguous_clarification":
         return {
+            "intent": "CLARIFICATION_REQUIRED",
             "final_response": tool_args.get("prompt", "Could you please clarify your request?"),
             "tool_calls": [],
             "tool_results": [],

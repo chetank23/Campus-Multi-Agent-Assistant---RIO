@@ -147,10 +147,15 @@ def search_faculty_directory_data(
         )
 
     if department_name:
+        dn = department_name.strip()
+        dn_amp = dn.replace(" and ", " & ").replace(" AND ", " & ")
+        dn_and = dn.replace(" & ", " and ")
         query = query.join(Department, Faculty.department_id == Department.id).filter(
             or_(
-                Department.name.ilike(f"%{department_name}%"),
-                Department.department_code.ilike(f"%{department_name}%"),
+                Department.name.ilike(f"%{dn}%"),
+                Department.name.ilike(f"%{dn_amp}%"),
+                Department.name.ilike(f"%{dn_and}%"),
+                Department.department_code.ilike(f"%{dn}%"),
             )
         )
 

@@ -333,5 +333,40 @@ def format_grounded_answer(
         lines.append(_format_provenance("Published Timetable & Workload Engine", f"Faculty {user_name}", "Published"))
         return sanitize_plain_english("\n".join(lines)), sources
 
+    # ── 12b. Available Faculty ──────────────────────────────────────────────
+    elif tool_name == "get_available_faculty":
+        sources.extend(["Published Academic Timetable", "Faculty Directory"])
+        req_date = tool_result.get("date", "Requested Date")
+        day_name = tool_result.get("day", "")
+        interval = tool_result.get("interval", "")
+        dept_filter = tool_result.get("department_filter")
+        avail_list = tool_result.get("available_faculty", [])
+        total_avail = tool_result.get("total_available", len(avail_list))
+        total_eval = tool_result.get("total_evaluated", total_avail)
+
+        header = f"### Available Faculty on {req_date} ({day_name}) from {interval}"
+        if dept_filter:
+            header += f" — {dept_filter}"
+
+        if not avail_list:
+            return sanitize_plain_english(
+                f"{header}\n\nNo active faculty members are available during {interval} on {req_date} ({day_name}). "
+                f"(Evaluated {total_eval} active faculty member(s).)"
+            ), sources
+
+        lines = [
+            header,
+            f"**Total Available:** {total_avail} of {total_eval} active faculty evaluated",
+            "",
+            "| Faculty Name | Designation | Department | Specialization |",
+            "|:---|:---|:---|:---|",
+        ]
+        for f in avail_list:
+            lines.append(
+                f"| {f.get('name', 'Faculty')} | {f.get('designation', 'Faculty')} | {f.get('department', 'N/A')} | {f.get('specialization', 'General')} |"
+            )
+        lines.append(_format_provenance("Published Timetable & Faculty Registry", dept_filter or "Institutional Scope", "Published"))
+        return sanitize_plain_english("\n".join(lines)), sources
+
     # Fallback to existing formatter logic if unhandled here
     return "", []
