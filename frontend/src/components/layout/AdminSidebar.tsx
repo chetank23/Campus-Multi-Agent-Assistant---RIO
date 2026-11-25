@@ -68,6 +68,25 @@ interface NavSection {
 
 const adminSections: NavSection[] = [
   {
+    id: 'timetable',
+    title: 'TIMETABLE MANAGEMENT',
+    icon: <CalendarDays size={15} className="text-[#2563EB] shrink-0" />,
+    items: [
+      {
+        id: 'timetable-generation',
+        label: 'Timetable Generation',
+        icon: <CalendarDays size={17} className="shrink-0" />,
+        to: '/admin/timetable',
+      },
+      {
+        id: 'generated-timetables',
+        label: 'Generated Timetables',
+        icon: <Layers size={17} className="shrink-0" />,
+        to: '/admin/timetables/generated',
+      },
+    ],
+  },
+  {
     id: 'academic',
     title: 'ACADEMIC MANAGEMENT',
     icon: <Layers size={15} className="text-[#2563EB] shrink-0" />,
@@ -135,25 +154,6 @@ const adminSections: NavSection[] = [
         label: 'Correction Tickets',
         icon: <ClipboardList size={17} className="shrink-0" />,
         to: '/admin/curriculum/requests',
-      },
-    ],
-  },
-  {
-    id: 'timetable',
-    title: 'TIMETABLE MANAGEMENT',
-    icon: <CalendarDays size={15} className="text-[#2563EB] shrink-0" />,
-    items: [
-      {
-        id: 'generated-timetables',
-        label: 'Generated Timetables',
-        icon: <Layers size={17} className="shrink-0" />,
-        to: '/admin/timetables/generated',
-      },
-      {
-        id: 'timetable-management',
-        label: 'Timetable Workspace',
-        icon: <CalendarDays size={17} className="shrink-0" />,
-        to: '/admin/timetable',
       },
     ],
   },
@@ -284,6 +284,21 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
   const isItemActive = (item: NavItem): boolean => {
     if (!item.to) return false;
+    if (item.id === 'timetable-generation' || item.id === 'timetable-management') {
+      return (
+        location.pathname === '/admin/timetable' ||
+        location.pathname === '/admin/timetable/' ||
+        location.pathname === '/admin/timetable/generate'
+      );
+    }
+    if (item.id === 'generated-timetables') {
+      return (
+        location.pathname === '/admin/timetables/generated' ||
+        location.pathname === '/admin/timetable/generated' ||
+        location.pathname === '/admin/timetable/versions' ||
+        location.pathname.startsWith('/admin/timetable/versions/')
+      );
+    }
     if (item.id === 'workspace') {
       return location.pathname === '/admin/timetable/versions';
     }
