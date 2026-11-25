@@ -82,7 +82,7 @@ class Timetable(Base):
     status: Mapped[str] = mapped_column(
         String(20),
         CheckConstraint(
-            "status IN ('DRAFT','PUBLISHED','ARCHIVED')",
+            "status IN ('DRAFT','PUBLISHED','ARCHIVED','RECALLED')",
             name="ck_timetable_status",
         ),
         default="PUBLISHED",
@@ -133,7 +133,7 @@ class TimetableVersion(Base):
     status: Mapped[Optional[str]] = mapped_column(
         String(20),
         CheckConstraint(
-            "status IN ('DRAFT','GENERATED','REVIEWED','VALIDATED','FINALIZED','APPROVED','PUBLISHED','REJECTED','ARCHIVED')",
+            "status IN ('DRAFT','GENERATED','REVIEWED','VALIDATED','FINALIZED','APPROVED','PUBLISHED','RECALLED','REJECTED','ARCHIVED')",
             name="ck_tv_status",
         ),
         nullable=True,
@@ -146,6 +146,21 @@ class TimetableVersion(Base):
     )
     approved_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
     approved_revision: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    recalled_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", name="fk_tv_recalled_by"), nullable=True
+    )
+    recalled_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    recall_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    validation_status: Mapped[Optional[str]] = mapped_column(
+        String(30), default="NOT_VALIDATED", server_default="'NOT_VALIDATED'", nullable=True
+    )
+    validation_errors_count: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0, server_default="0", nullable=True
+    )
+    validation_warnings_count: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0, server_default="0", nullable=True
+    )
+    validated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=utc_now, server_default=func.now()
     )
@@ -188,6 +203,9 @@ class TimetableVersion(Base):
     )
     approver: Mapped[Optional["User"]] = relationship(
         "User", foreign_keys=[approved_by], back_populates="timetable_versions_approved"
+    )
+    recaller: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[recalled_by], back_populates="timetable_versions_recalled"
     )
     timetable_entries: Mapped[list["TimetableEntry"]] = relationship(
         "TimetableEntry", back_populates="version"

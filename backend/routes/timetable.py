@@ -36,6 +36,8 @@ from backend.schemas.timetable import (
     ArrangementSaveRequest,
     ArrangementSaveResponse,
     TimetableChangeHistoryItem,
+    RecallTimetableRequest,
+    ScopeCheckResponse,
 )
 from backend.services.timetable_service import (
     generate_timetable_preview,
@@ -44,6 +46,8 @@ from backend.services.timetable_service import (
     execute_timetable_generation,
     publish_persisted_version_authoritatively,
     resolve_coordinators_for_version,
+    recall_persisted_version,
+    check_academic_scope_existing,
 )
 from backend.utils.datetime_utils import utc_now
 from backend.services.timetable_editor_service import (
@@ -286,37 +290,80 @@ def batch_generate_timetable(
     )
 
 
+@router.get("/scope/check", response_model=ScopeCheckResponse)
+def check_scope_existing_endpoint(
+    academic_year_id: int = Query(..., description="Academic year ID"),
+    semester_id: int = Query(..., description="Semester ID"),
+    department_id: int = Query(..., description="Department ID"),
+    program_id: Optional[int] = Query(None, description="Program ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    """
+    Duplicate prevention preflight check.
+    Checks whether an active or draft timetable already exists for this academic scope.
+    """
+    return check_academic_scope_existing(
+        db=db,
+        academic_year_id=academic_year_id,
+        semester_id=semester_id,
+        department_id=department_id,
+        program_id=program_id,
+    )
+
+
 @router.get("/versions/summary", response_model=TimetableVersionsSummaryResponse)
 def get_versions_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("ADMIN")),
 ):
-    all_versions = db.query(TimetableVersion.status).all()
-    total = len(all_versions)
-    awaiting = sum(1 for (st,) in all_versions if st in ("DRAFT", "GENERATED", "REVIEWED"))
-    approved = sum(1 for (st,) in all_versions if st in ("VALIDATED", "FINALIZED", "APPROVED"))
-    published = sum(1 for (st,) in all_versions if st == "PUBLISHED")
-    archived = sum(1 for (st,) in all_versions if st in ("ARCHIVED", "REJECTED"))
+    all_rows = db.query(TimetableVersion.status, TimetableVersion.validation_status).all()
+    total = len(all_rows)
+    drafts = sum(1 for (st, _) in all_rows if st in ("DRAFT", "GENERATED"))
+    awaiting_val = sum(
+        1 for (st, val_st) in all_rows
+        if st in ("DRAFT", "GENERATED", "REVIEWED") and (val_st in (None, "NOT_VALIDATED", "VALIDATING") or st not in ("VALIDATED", "APPROVED", "PUBLISHED"))
+    )
+    val_failed = sum(1 for (_, val_st) in all_rows if val_st == "FAILED")
+    ready_for_appr = sum(
+        1 for (st, val_st) in all_rows
+        if (st in ("VALIDATED", "FINALIZED") or (val_st in ("PASSED", "PASSED_WITH_WARNINGS") and st in ("DRAFT", "GENERATED", "REVIEWED", "VALIDATED")))
+        and st not in ("APPROVED", "PUBLISHED", "ARCHIVED", "REJECTED", "RECALLED")
+    )
+    approved = sum(1 for (st, _) in all_rows if st == "APPROVED")
+    published = sum(1 for (st, _) in all_rows if st == "PUBLISHED")
+    recalled = sum(1 for (st, _) in all_rows if st == "RECALLED")
+    archived = sum(1 for (st, _) in all_rows if st in ("ARCHIVED", "REJECTED"))
+    awaiting_rev = sum(1 for (st, _) in all_rows if st in ("DRAFT", "GENERATED", "REVIEWED"))
 
     return TimetableVersionsSummaryResponse(
         total_generated=total,
-        awaiting_review=awaiting,
+        drafts=drafts,
+        awaiting_validation=awaiting_val,
+        validation_failed=val_failed,
+        ready_for_approval=ready_for_appr,
         approved=approved,
         published=published,
+        recalled=recalled,
         archived=archived,
+        awaiting_review=awaiting_rev,
     )
 
 
 @router.get("/versions", response_model=List[TimetableVersionResponse])
 def get_versions(
     academic_year_id: Optional[int] = None,
+    department_id: Optional[int] = None,
+    program_id: Optional[int] = None,
+    semester_id: Optional[int] = None,
+    section_id: Optional[int] = None,
+    status: Optional[str] = None,
+    validation_status: Optional[str] = None,
+    search: Optional[str] = None,
+    sort_by: Optional[str] = Query("newest", description="Sorting option: newest, oldest, last_saved, status"),
     response: Response = Response(),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("ADMIN")),
-    department_id: Optional[int] = None,
-    semester_id: Optional[int] = None,
-    status: Optional[str] = None,
-    search: Optional[str] = None,
 ):
     if response:
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
@@ -328,18 +375,42 @@ def get_versions(
             joinedload(TimetableVersion.academic_year),
             joinedload(TimetableVersion.creator),
             joinedload(TimetableVersion.approver),
+            joinedload(TimetableVersion.recaller),
         )
     )
     if academic_year_id:
         query = query.filter(TimetableVersion.academic_year_id == academic_year_id)
     if department_id:
         query = query.filter(TimetableVersion.department_id == department_id)
+    if program_id:
+        query = query.filter(TimetableVersion.program_id == program_id)
     if semester_id:
         query = query.filter(TimetableVersion.semester_id == semester_id)
     if status:
         query = query.filter(TimetableVersion.status == status.upper())
+    if validation_status:
+        query = query.filter(TimetableVersion.validation_status == validation_status.upper())
+    if section_id:
+        sec_ver_ids = (
+            db.query(TimetableEntry.version_id)
+            .filter(
+                TimetableEntry.section_id == section_id,
+                TimetableEntry.status != "CANCELLED",
+            )
+            .distinct()
+        )
+        query = query.filter(TimetableVersion.id.in_(sec_ver_ids))
 
-    versions = query.order_by(TimetableVersion.id.desc()).all()
+    if sort_by == "oldest":
+        query = query.order_by(TimetableVersion.created_at.asc(), TimetableVersion.id.asc())
+    elif sort_by == "last_saved":
+        query = query.order_by(TimetableVersion.last_saved_at.desc().nullslast(), TimetableVersion.id.desc())
+    elif sort_by == "status":
+        query = query.order_by(TimetableVersion.status.asc(), TimetableVersion.id.desc())
+    else:
+        query = query.order_by(TimetableVersion.created_at.desc(), TimetableVersion.id.desc())
+
+    versions = query.all()
 
     depts_map = {d.id: d.name for d in db.query(Department).all()}
     sems_map = {s.id: s.semester_number for s in db.query(Semester).all()}
@@ -372,7 +443,7 @@ def get_versions(
 
         if search:
             q = search.lower().strip()
-            text_blob = f"{v.version_number or ''} {dept_name or ''} {prog_name or ''} {ay_name or ''} {' '.join(sec_names)} {v.status or ''}".lower()
+            text_blob = f"{v.version_number or ''} {dept_name or ''} {prog_name or ''} {ay_name or ''} {' '.join(sec_names)} {v.status or ''} {v.validation_status or ''}".lower()
             if q not in text_blob:
                 continue
 
@@ -386,6 +457,14 @@ def get_versions(
                 approved_by=v.approved_by,
                 approved_at=v.approved_at,
                 approved_revision=v.approved_revision,
+                recalled_by=v.recalled_by,
+                recalled_at=v.recalled_at,
+                recall_reason=v.recall_reason,
+                recalled_by_name=v.recaller.name if v.recaller else None,
+                validation_status=v.validation_status or "NOT_VALIDATED",
+                validation_errors_count=v.validation_errors_count or 0,
+                validation_warnings_count=v.validation_warnings_count or 0,
+                validated_at=v.validated_at,
                 created_at=v.created_at,
                 published_at=v.published_at,
                 reason=v.reason,
@@ -488,19 +567,24 @@ def validate_version(
         raise HTTPException(status_code=404, detail="Version not found")
 
     val_result = validate_persisted_timetable(db, version_id)
+    now_utc = utc_now()
 
     if val_result.is_valid:
         old_status = version.status
         if version.status in ("DRAFT", "GENERATED", "REVIEWED"):
             version.status = "VALIDATED"
         version.validated_revision = version.revision
+        version.validation_status = "PASSED_WITH_WARNINGS" if val_result.warning_count > 0 else "PASSED"
+        version.validation_errors_count = 0
+        version.validation_warnings_count = val_result.warning_count
+        version.validated_at = now_utc
         db.add(AuditLog(
             user_id=current_user.id,
             action="TIMETABLE_VALIDATED",
             entity_type="TimetableVersion",
             entity_id=version.id,
             old_value={"status": old_status},
-            new_value={"status": version.status, "validated_revision": version.revision}
+            new_value={"status": version.status, "validated_revision": version.revision, "validation_status": version.validation_status}
         ))
         db.commit()
         broadcast_version_update(
@@ -513,6 +597,10 @@ def validate_version(
     else:
         old_status = version.status
         version.validated_revision = None
+        version.validation_status = "FAILED"
+        version.validation_errors_count = val_result.blocker_count
+        version.validation_warnings_count = val_result.warning_count
+        version.validated_at = now_utc
         if version.status == "VALIDATED":
             version.status = "REVIEWED"
         db.add(AuditLog(
@@ -521,9 +609,16 @@ def validate_version(
             entity_type="TimetableVersion",
             entity_id=version.id,
             old_value={"status": old_status},
-            new_value={"status": version.status, "blocker_count": val_result.blocker_count}
+            new_value={"status": version.status, "blocker_count": val_result.blocker_count, "validation_status": "FAILED"}
         ))
         db.commit()
+        broadcast_version_update(
+            version_id=version.id,
+            revision=version.revision,
+            status_value=version.status or "REVIEWED",
+            actor_name=current_user.name,
+            event_type="VERSION_VALIDATION_FAILED",
+        )
 
     return val_result
 
@@ -659,6 +754,49 @@ def publish_version(
         "total_entries_published": pub_res.total_entries_published,
         "published_timetables": [tt.model_dump() for tt in pub_res.published_timetables],
         "notifications": dispatch_res,
+    }
+
+
+@router.post("/versions/{version_id}/recall")
+def recall_version(
+    version_id: int,
+    req: RecallTimetableRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    """
+    Recall an active published timetable:
+    - Atomically updates status to RECALLED
+    - Revokes canonical publication so students, faculty and coordinators immediately see it as inactive
+    - Records recaller, recall_at, recall_reason
+    - Logs AuditLog and TimetableChangeHistory
+    - Dispatches notifications to affected coordinators with recall reason
+    - Broadcasts real-time VERSION_RECALLED event
+    """
+    if not req.reason or len(req.reason.strip()) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="A meaningful recall reason (at least 3 characters) is required to recall a timetable.",
+        )
+    ver = recall_persisted_version(
+        db=db,
+        version_id=version_id,
+        reason=req.reason.strip(),
+        current_user=current_user,
+    )
+    broadcast_version_update(
+        version_id=version_id,
+        revision=ver.revision or 1,
+        status_value="RECALLED",
+        actor_name=current_user.name,
+        event_type="VERSION_RECALLED",
+    )
+    return {
+        "message": f"Timetable version #{version_id} has been recalled successfully.",
+        "version_id": version_id,
+        "status": "RECALLED",
+        "recalled_at": ver.recalled_at.isoformat() if ver.recalled_at else None,
+        "recall_reason": ver.recall_reason,
     }
 
 

@@ -20,12 +20,14 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
+  X,
 } from 'lucide-react';
 
 import {
   getTimetableVersion,
   validateTimetableVersion,
   publishTimetableVersion,
+  recallTimetableVersion,
   approveTimetableVersion,
   getTimetableCoordinators,
   getMoveOptions,
@@ -76,6 +78,8 @@ export const AdminTimetableReviewPage: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [showCoordinatorModal, setShowCoordinatorModal] = useState(false);
   const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showRecallModal, setShowRecallModal] = useState(false);
+  const [recallReason, setRecallReason] = useState<string>('');
 
   const notifySuccess = (msg: string) => {
     setStatusMessage(msg);
@@ -229,6 +233,22 @@ export const AdminTimetableReviewPage: React.FC = () => {
     },
     onError: (err) => {
       notifyError(extractErrorMessage(err, 'Publication failed.'));
+    },
+  });
+
+  const recallMutation = useMutation({
+    mutationFn: (reason: string) => recallTimetableVersion(versionId, reason),
+    onSuccess: (data) => {
+      clearError();
+      setShowRecallModal(false);
+      setRecallReason('');
+      queryClient.invalidateQueries({ queryKey: ['timetable', 'version', versionId] });
+      queryClient.invalidateQueries({ queryKey: ['timetable', 'versions'] });
+      queryClient.invalidateQueries({ queryKey: ['timetable-canonical'] });
+      notifySuccess(data.message || 'Timetable recalled successfully. Active publication has been revoked.');
+    },
+    onError: (err) => {
+      notifyError(extractErrorMessage(err, 'Failed to recall timetable.'));
     },
   });
 
@@ -458,6 +478,8 @@ export const AdminTimetableReviewPage: React.FC = () => {
 
   const getStatusBadge = (statusVal?: string | null) => {
     switch (statusVal) {
+      case 'DRAFT':
+        return <StatusBadge label="DRAFT — UNPUBLISHED" variant="neutral" size="md" />;
       case 'GENERATED':
         return <StatusBadge label="GENERATED — UNPUBLISHED" variant="info" size="md" />;
       case 'REVIEWED':
@@ -469,6 +491,8 @@ export const AdminTimetableReviewPage: React.FC = () => {
         return <StatusBadge label="APPROVED — READY TO PUBLISH" variant="success" size="md" />;
       case 'PUBLISHED':
         return <StatusBadge label="PUBLISHED" variant="success" size="md" dot />;
+      case 'RECALLED':
+        return <StatusBadge label="RECALLED — UNPUBLISHED" variant="danger" size="md" />;
       case 'ARCHIVED':
         return <StatusBadge label="ARCHIVED" variant="neutral" size="md" />;
       default:
@@ -478,10 +502,11 @@ export const AdminTimetableReviewPage: React.FC = () => {
 
   const isEditable =
     version.status === 'GENERATED' ||
+    version.status === 'DRAFT' ||
     version.status === 'REVIEWED' ||
     version.status === 'VALIDATED' ||
     version.status === 'APPROVED' ||
-    version.status === 'FINALIZED';
+    version.status === 'RECALLED';
   const currentRevision = version.revision ?? 1;
   const isValidatedAtCurrentRev = version.validated_revision === currentRevision;
 
@@ -525,6 +550,26 @@ export const AdminTimetableReviewPage: React.FC = () => {
             {getStatusBadge(version.status)}
           </div>
         </div>
+
+        {/* Recalled Notice Banner */}
+        {version.status === 'RECALLED' && (
+          <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 flex items-start gap-3 text-xs text-rose-900 shadow-2xs">
+            <RotateCcw size={18} className="text-rose-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold text-rose-900 text-sm">
+                This timetable publication has been RECALLED {version.recalled_at ? `on ${new Date(version.recalled_at).toLocaleString()}` : ''} {version.recalled_by_name ? `by ${version.recalled_by_name}` : ''}.
+              </p>
+              {version.recall_reason && (
+                <p className="text-rose-800 italic">
+                  Recall Reason: &quot;{version.recall_reason}&quot;
+                </p>
+              )}
+              <p className="text-rose-700">
+                Active publications on student, faculty, and coordinator portals have been withdrawn. You can freely edit, revalidate, approve, and republish this timetable version.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Remote Update Banner */}
         {remoteNotice && (
@@ -619,6 +664,20 @@ export const AdminTimetableReviewPage: React.FC = () => {
                 >
                   <Send size={15} />
                   <span>Publish to Coordinators</span>
+                </button>
+              )}
+
+              {version.status === 'PUBLISHED' && (
+                <button
+                  onClick={() => {
+                    setRecallReason('');
+                    setShowRecallModal(true);
+                  }}
+                  data-testid="recall-btn"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-colors shadow-2xs"
+                >
+                  <RotateCcw size={14} />
+                  <span>Recall Publication</span>
                 </button>
               )}
 
@@ -1047,6 +1106,78 @@ export const AdminTimetableReviewPage: React.FC = () => {
                 </div>
               </div>
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* Recall Publication Modal */}
+      {showRecallModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <RotateCcw size={20} className="text-rose-600" />
+                <h3 className="text-base font-bold text-slate-900">Recall Published Timetable</h3>
+              </div>
+              <button
+                onClick={() => setShowRecallModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              You are recalling active publication for <span className="font-bold text-slate-900">Timetable Version V{version.id}</span> ({deptName} - {semName}).
+            </p>
+
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-800 space-y-1">
+              <p className="font-bold">Controlled Recall Safeguards:</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                <li>Students, faculty, and coordinators will immediately lose access to this schedule.</li>
+                <li>The timetable returns to an editable, unvalidated draft status (RECALLED).</li>
+                <li>Historical draft versions and audit logs remain completely preserved.</li>
+                <li>Affected coordinators will receive a recall notification containing your stated reason.</li>
+              </ul>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Mandatory Recall Reason <span className="text-rose-600">*</span>
+              </label>
+              <textarea
+                value={recallReason}
+                onChange={(e) => setRecallReason(e.target.value)}
+                placeholder="State the reason for recalling this published timetable (e.g., Faculty reassignment, Room maintenance clash)..."
+                rows={3}
+                className="w-full text-xs rounded-xl border border-slate-300 p-3 focus:outline-none focus:ring-2 focus:ring-rose-500 text-slate-800 placeholder-slate-400"
+              />
+              <p className="text-[11px] text-slate-400">
+                Minimum 3 characters required. This reason is logged to audit logs and displayed on the timetable history.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => setShowRecallModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => recallMutation.mutate(recallReason.trim())}
+                disabled={recallReason.trim().length < 3 || recallMutation.isPending}
+                data-testid="confirm-recall-btn"
+                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-sm transition-colors ${
+                  recallReason.trim().length >= 3 && !recallMutation.isPending
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : 'bg-slate-300 cursor-not-allowed'
+                }`}
+              >
+                {recallMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+                <span>Confirm Recall</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

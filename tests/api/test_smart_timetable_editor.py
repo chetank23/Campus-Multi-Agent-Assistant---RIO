@@ -53,6 +53,7 @@ def generated_version_id(admin_token):
             "semester_id": sem_id,
             "department_id": dept_id,
             "program_id": prog_id,
+            "force_regenerate": True,
         },
     )
     assert resp.status_code == 200, resp.text
@@ -252,6 +253,29 @@ def test_g_validation_finalize_and_authoritative_publish(admin_token, generated_
         json={"slot_id": e0["slot_id"]},
     )
     assert lock_resp.status_code == 409
+
+    # Ensure coordinator is mapped before publishing
+    with Session(engine) as db:
+        from backend.models.events import CoordinatorCapability
+        from backend.models.identity import User
+        admin_user = db.query(User).filter(User.role == "ADMIN").first()
+        faculty_user = db.query(User).filter(User.role == "FACULTY").first()
+        if admin_user and faculty_user:
+            cap = db.query(CoordinatorCapability).filter(
+                CoordinatorCapability.user_id == faculty_user.id,
+                CoordinatorCapability.capability == "TIMETABLE_COORDINATOR",
+            ).first()
+            if not cap:
+                db.add(CoordinatorCapability(
+                    user_id=faculty_user.id,
+                    capability="TIMETABLE_COORDINATOR",
+                    scope_type="GLOBAL",
+                    is_active=True,
+                    assigned_by=admin_user.id,
+                ))
+            else:
+                cap.is_active = True
+            db.commit()
 
     # Explicit Publish
     pub_resp = client.post(f"/timetable/versions/{generated_version_id}/publish", headers=headers)

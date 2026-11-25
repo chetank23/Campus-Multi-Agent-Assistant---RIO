@@ -51,6 +51,14 @@ class TimetableVersionResponse(BaseModel):
     approved_by: Optional[int] = None
     approved_at: Optional[datetime] = None
     approved_revision: Optional[int] = None
+    recalled_by: Optional[int] = None
+    recalled_at: Optional[datetime] = None
+    recall_reason: Optional[str] = None
+    recalled_by_name: Optional[str] = None
+    validation_status: Optional[str] = "NOT_VALIDATED"
+    validation_errors_count: int = 0
+    validation_warnings_count: int = 0
+    validated_at: Optional[datetime] = None
     created_at: datetime
     published_at: Optional[datetime] = None
     reason: Optional[str] = None
@@ -284,10 +292,25 @@ class PublishPreflightResponse(BaseModel):
 
 class TimetableVersionsSummaryResponse(BaseModel):
     total_generated: int = 0
-    awaiting_review: int = 0
+    drafts: int = 0
+    awaiting_validation: int = 0
+    validation_failed: int = 0
+    ready_for_approval: int = 0
     approved: int = 0
     published: int = 0
+    recalled: int = 0
     archived: int = 0
+    awaiting_review: int = 0  # backwards compatibility
+
+
+class RecallTimetableRequest(BaseModel):
+    reason: str = Field(..., min_length=3, description="Mandatory reason for recalling the timetable.")
+
+
+class ScopeCheckResponse(BaseModel):
+    has_existing: bool = False
+    existing_version: Optional[TimetableVersionResponse] = None
+    message: Optional[str] = None
 
 
 # ── Smart Timetable Editor & Arrangement Schemas ──────────────────────────

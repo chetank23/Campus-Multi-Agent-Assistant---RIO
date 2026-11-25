@@ -131,8 +131,9 @@ def test_3_unapproved_timetable_cannot_be_published(admin_token, test_scope):
     resp = client.post(
         "/timetable/generate",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json=test_scope,
+        json={**test_scope, "force_regenerate": True},
     )
+    assert resp.status_code == 200, resp.text
     version_id = resp.json()["version_id"]
 
     # Direct publish should fail with 400 Bad Request
@@ -152,8 +153,9 @@ def test_4_approve_timetable_lifecycle(admin_token, test_scope):
     gen_resp = client.post(
         "/timetable/generate",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json=test_scope,
+        json={**test_scope, "force_regenerate": True},
     )
+    assert gen_resp.status_code == 200, gen_resp.text
     version_id = gen_resp.json()["version_id"]
 
     # Validate first
@@ -190,8 +192,9 @@ def test_5_editing_after_approval_invalidates_approval(admin_token, test_scope):
     gen_resp = client.post(
         "/timetable/generate",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json=test_scope,
+        json={**test_scope, "force_regenerate": True},
     )
+    assert gen_resp.status_code == 200, gen_resp.text
     version_id = gen_resp.json()["version_id"]
 
     # Approve
@@ -239,7 +242,7 @@ def test_5_editing_after_approval_invalidates_approval(admin_token, test_scope):
         json={
             "expected_revision": init_rev,
             "moves": [{"entry_id": entry_id, "target_slot_id": target_slot_id}],
-            "reason": "Test post-approval invalidation",
+            "note": "Test post-approval invalidation",
         },
     )
     assert save_resp.status_code == 200, save_resp.text
@@ -273,8 +276,9 @@ def test_6_coordinator_resolution_and_preflight(admin_token, test_scope):
     gen_resp = client.post(
         "/timetable/generate",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json=test_scope,
+        json={**test_scope, "force_regenerate": True},
     )
+    assert gen_resp.status_code == 200, gen_resp.text
     version_id = gen_resp.json()["version_id"]
 
     preflight_resp = client.get(
@@ -297,8 +301,9 @@ def test_7_publish_blocked_when_zero_coordinators(admin_token, test_scope):
     gen_resp = client.post(
         "/timetable/generate",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json=test_scope,
+        json={**test_scope, "force_regenerate": True},
     )
+    assert gen_resp.status_code == 200, gen_resp.text
     version_id = gen_resp.json()["version_id"]
 
     with Session(engine) as db:
@@ -354,8 +359,9 @@ def test_8_publish_approved_version_with_coordinators_succeeds(admin_token, test
     gen_resp = client.post(
         "/timetable/generate",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json=test_scope,
+        json={**test_scope, "force_regenerate": True},
     )
+    assert gen_resp.status_code == 200, gen_resp.text
     version_id = gen_resp.json()["version_id"]
 
     # Ensure at least one coordinator is mapped
@@ -434,8 +440,9 @@ def test_9_archive_and_delete_version(admin_token, test_scope):
     gen_resp = client.post(
         "/timetable/generate",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json=test_scope,
+        json={**test_scope, "force_regenerate": True},
     )
+    assert gen_resp.status_code == 200, gen_resp.text
     v1_id = gen_resp.json()["version_id"]
 
     # Archive
@@ -453,8 +460,9 @@ def test_9_archive_and_delete_version(admin_token, test_scope):
     gen2 = client.post(
         "/timetable/generate",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json=test_scope,
+        json={**test_scope, "force_regenerate": True},
     )
+    assert gen2.status_code == 200, gen2.text
     v2_id = gen2.json()["version_id"]
 
     del_resp = client.delete(
@@ -465,3 +473,258 @@ def test_9_archive_and_delete_version(admin_token, test_scope):
     with Session(engine) as db:
         v2 = db.query(TimetableVersion).filter(TimetableVersion.id == v2_id).first()
         assert v2 is None
+
+
+def test_10_duplicate_prevention_blocks_accidental_regeneration(admin_token, test_scope):
+    """
+    Duplicate prevention:
+    Generating a timetable when an active or draft version exists must return 409 Conflict
+    unless force_regenerate=True is explicitly supplied.
+    """
+    # 1. Ensure an active timetable exists for this scope
+    gen1 = client.post(
+        "/timetable/generate",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={**test_scope, "force_regenerate": True},
+    )
+    assert gen1.status_code == 200, gen1.text
+    v1_id = gen1.json()["version_id"]
+    assert v1_id is not None
+
+    # 2. Attempt duplicate generation without force_regenerate -> Must 409 Conflict
+    gen_dup = client.post(
+        "/timetable/generate",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json=test_scope,
+    )
+    assert gen_dup.status_code == 409, gen_dup.text
+    err_body = gen_dup.json()
+    assert "already exists for this academic scope" in err_body["detail"]
+    assert f"Version {v1_id}" in err_body["detail"]
+
+    # 3. Supply force_regenerate=True -> Must succeed and supersede/replace
+    gen_force = client.post(
+        "/timetable/generate",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={**test_scope, "force_regenerate": True},
+    )
+    assert gen_force.status_code == 200, gen_force.text
+    v2_id = gen_force.json()["version_id"]
+    assert v2_id is not None
+    assert v2_id != v1_id
+
+
+def test_11_scope_check_endpoint(admin_token, test_scope):
+    """
+    Preflight scope check endpoint returns has_existing=True and detailed version info
+    when an active timetable exists, and has_existing=False when none exists.
+    """
+    # Active version exists from test_10
+    check_resp = client.get(
+        f"/timetable/scope/check?academic_year_id={test_scope['academic_year_id']}&semester_id={test_scope['semester_id']}&department_id={test_scope['department_id']}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert check_resp.status_code == 200, check_resp.text
+    data = check_resp.json()
+    assert data["has_existing"] is True
+    assert data["existing_version"] is not None
+    assert data["existing_version"]["id"] is not None
+    assert data["existing_version"]["status"] in ("DRAFT", "GENERATED", "REVIEWED", "VALIDATED", "APPROVED", "PUBLISHED")
+
+    # Scope check on non-existent department ID
+    empty_check = client.get(
+        f"/timetable/scope/check?academic_year_id={test_scope['academic_year_id']}&semester_id={test_scope['semester_id']}&department_id=99999",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert empty_check.status_code == 200
+    assert empty_check.json()["has_existing"] is False
+
+
+def test_12_validation_status_tracking(admin_token, test_scope):
+    """
+    Validation status, error counts, warning counts, and validated_at are persisted
+    when calling the validate endpoint.
+    """
+    gen = client.post(
+        "/timetable/generate",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={**test_scope, "force_regenerate": True},
+    )
+    assert gen.status_code == 200
+    vid = gen.json()["version_id"]
+
+    val_resp = client.post(
+        f"/timetable/versions/{vid}/validate",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert val_resp.status_code == 200
+    val_data = val_resp.json()
+
+    with Session(engine) as db:
+        ver = db.query(TimetableVersion).filter(TimetableVersion.id == vid).first()
+        assert ver is not None
+        assert ver.validation_status in ("PASSED", "PASSED_WITH_WARNINGS", "FAILED")
+        assert ver.validated_at is not None
+        if val_data["is_valid"]:
+            assert ver.validation_errors_count == 0
+            assert ver.validation_status in ("PASSED", "PASSED_WITH_WARNINGS")
+        else:
+            assert ver.validation_status == "FAILED"
+            assert ver.validation_errors_count > 0
+
+
+def test_13_recall_published_timetable(admin_token, test_scope):
+    """
+    Recall lifecycle:
+    1. Timetable is approved and published.
+    2. Admin recalls with mandatory reason.
+    3. Version status becomes RECALLED; recaller, recall_at, recall_reason recorded.
+    4. Canonical Timetable status becomes RECALLED; entries unlinked.
+    5. AuditLog created; Coordinator notification dispatched.
+    """
+    # 1. Generate & publish
+    gen = client.post(
+        "/timetable/generate",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={**test_scope, "force_regenerate": True},
+    )
+    vid = gen.json()["version_id"]
+
+    # Ensure coordinator exists
+    with Session(engine) as db:
+        admin_user = db.query(User).filter(User.role == "ADMIN").first()
+        faculty_user = db.query(Faculty).first()
+        assert admin_user and faculty_user
+        cap = db.query(CoordinatorCapability).filter(
+            CoordinatorCapability.user_id == faculty_user.user_id,
+            CoordinatorCapability.capability == "TIMETABLE_COORDINATOR",
+        ).first()
+        if not cap:
+            db.add(CoordinatorCapability(
+                user_id=faculty_user.user_id,
+                capability="TIMETABLE_COORDINATOR",
+                scope_type="GLOBAL",
+                is_active=True,
+                assigned_by=admin_user.id,
+            ))
+            db.commit()
+
+    # Validate, approve & publish
+    client.post(f"/timetable/versions/{vid}/validate", headers={"Authorization": f"Bearer {admin_token}"})
+    client.post(f"/timetable/versions/{vid}/approve", headers={"Authorization": f"Bearer {admin_token}"})
+    pub_res = client.post(f"/timetable/versions/{vid}/publish", headers={"Authorization": f"Bearer {admin_token}"})
+    assert pub_res.status_code == 200, pub_res.text
+
+    # 2. Attempt recall without reason -> Must fail with 422
+    fail_recall = client.post(
+        f"/timetable/versions/{vid}/recall",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reason": "  "},
+    )
+    assert fail_recall.status_code == 422, fail_recall.text
+
+    # 3. Recall with valid reason
+    recall_reason = "Faculty emergency reassignment & laboratory maintenance schedule clash"
+    rec_res = client.post(
+        f"/timetable/versions/{vid}/recall",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reason": recall_reason},
+    )
+    assert rec_res.status_code == 200, rec_res.text
+    rec_data = rec_res.json()
+    assert rec_data["status"] == "RECALLED"
+    assert rec_data["recall_reason"] == recall_reason
+    assert rec_data["recalled_at"] is not None
+
+    # 4. Verify database state
+    with Session(engine) as db:
+        ver = db.query(TimetableVersion).filter(TimetableVersion.id == vid).first()
+        assert ver is not None
+        assert ver.status == "RECALLED"
+        assert ver.recalled_by is not None
+        assert ver.recalled_at is not None
+        assert ver.recall_reason == recall_reason
+
+        # Canonical timetable must be RECALLED and entries unlinked
+        canon = db.query(Timetable).filter(
+            Timetable.academic_year_id == test_scope["academic_year_id"],
+            Timetable.semester_id == test_scope["semester_id"],
+        ).first()
+        if canon:
+            assert canon.status == "RECALLED"
+            # Canonical entries should be unlinked
+            canon_entries = db.query(TimetableEntry).filter(TimetableEntry.timetable_id == canon.id).all()
+            assert len(canon_entries) == 0
+
+        # Coordinator recall notification must exist
+        notif = db.query(Notification).filter(
+            Notification.entity_type == "TimetableVersion",
+            Notification.entity_id == vid,
+            Notification.title.ilike("%Recalled%"),
+        ).first()
+        assert notif is not None
+        assert recall_reason in notif.message
+
+
+def test_14_recalled_timetable_can_be_edited_revalidated_and_republished(admin_token, test_scope):
+    """
+    Recalled timetables can be edited, re-validated, approved, and republished.
+    """
+    # 1. Generate, approve, publish, and recall
+    gen = client.post(
+        "/timetable/generate",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={**test_scope, "force_regenerate": True},
+    )
+    vid = gen.json()["version_id"]
+
+    client.post(f"/timetable/versions/{vid}/validate", headers={"Authorization": f"Bearer {admin_token}"})
+    client.post(f"/timetable/versions/{vid}/approve", headers={"Authorization": f"Bearer {admin_token}"})
+    client.post(f"/timetable/versions/{vid}/publish", headers={"Authorization": f"Bearer {admin_token}"})
+    client.post(
+        f"/timetable/versions/{vid}/recall",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reason": "Curriculum realignment requirement"},
+    )
+
+    # 2. Check move options and save an edit on the RECALLED version
+    with Session(engine) as db:
+        entry = db.query(TimetableEntry).filter(
+            TimetableEntry.version_id == vid,
+            TimetableEntry.status != "CANCELLED",
+        ).first()
+        assert entry is not None
+        entry_id = entry.id
+        cur_rev = entry.version.revision or 1
+
+        other_slot = db.query(TimeSlot).filter(TimeSlot.id != entry.slot_id, TimeSlot.slot_type == "CLASS").first()
+        assert other_slot is not None
+        target_slot_id = other_slot.id
+
+    # Recalled timetables allow arrangement edits!
+    save_res = client.post(
+        f"/timetable/versions/{vid}/arrangements",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={
+            "expected_revision": cur_rev,
+            "moves": [{"entry_id": entry_id, "target_slot_id": target_slot_id}],
+            "reason": "Fix clash after recall",
+        },
+    )
+    assert save_res.status_code == 200, save_res.text
+    assert save_res.json()["status"] == "REVIEWED"
+
+    # 3. Re-validate
+    val_res = client.post(f"/timetable/versions/{vid}/validate", headers={"Authorization": f"Bearer {admin_token}"})
+    assert val_res.status_code == 200
+
+    # 4. Re-approve
+    app_res = client.post(f"/timetable/versions/{vid}/approve", headers={"Authorization": f"Bearer {admin_token}"})
+    assert app_res.status_code == 200
+    assert app_res.json()["status"] == "APPROVED"
+
+    # 5. Re-publish
+    pub_res = client.post(f"/timetable/versions/{vid}/publish", headers={"Authorization": f"Bearer {admin_token}"})
+    assert pub_res.status_code == 200
+    assert pub_res.json()["status"] == "PUBLISHED"
+

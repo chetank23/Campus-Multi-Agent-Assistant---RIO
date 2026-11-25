@@ -20,8 +20,10 @@ import {
   getCanonicalTimetables,
   generateTimetable,
   publishCanonicalTimetable,
+  checkTimetableScope,
   type TimetablePreviewResponse,
   type TimetablePreviewEntry,
+  type ScopeCheckResponse,
 } from '@/api/timetable';
 import { PageHeader, RefreshButton } from '@/components/common';
 import { useToast } from '@/context/useToast';
@@ -76,6 +78,7 @@ export const AdminTimetableManagementPage: React.FC = () => {
   const [previewData, setPreviewData] = useState<TimetablePreviewResponse | null>(null);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishSuccessMsg, setPublishSuccessMsg] = useState<string | null>(null);
+  const [forceRegenerate, setForceRegenerate] = useState<boolean>(false);
 
   // 1. Fetch Academic Years
   const { data: academicYears = [], isLoading: loadingAy } = useQuery({
@@ -104,7 +107,22 @@ export const AdminTimetableManagementPage: React.FC = () => {
     enabled: typeof selectedAyId === 'number' && typeof selectedDeptId === 'number' && typeof selectedSemId === 'number',
   });
 
-  // 5. Fetch Existing Published Timetables for this scope
+  // 5. Duplicate Prevention Preflight Check for this academic scope
+  const {
+    data: scopeCheck,
+    refetch: refetchScopeCheck,
+  } = useQuery<ScopeCheckResponse>({
+    queryKey: ['timetable-scope-check', selectedAyId, selectedSemId, selectedDeptId],
+    queryFn: () =>
+      checkTimetableScope({
+        academic_year_id: Number(selectedAyId),
+        semester_id: Number(selectedSemId),
+        department_id: Number(selectedDeptId),
+      }),
+    enabled: typeof selectedAyId === 'number' && typeof selectedSemId === 'number' && typeof selectedDeptId === 'number',
+  });
+
+  // 6. Fetch Existing Published Timetables for this scope
   const { data: publishedTimetables = [], refetch: refetchPublished } = useQuery({
     queryKey: ['timetable-canonical', selectedAyId, selectedSemId, selectedDeptId],
     queryFn: () =>
@@ -132,10 +150,16 @@ export const AdminTimetableManagementPage: React.FC = () => {
 
   // Generation Mutation (persists as GENERATED draft version and opens Smart Timetable Editor)
   const generateMutation = useMutation({
-    mutationFn: (scope: { academic_year_id: number; semester_id: number; department_id: number; working_days?: 'MON_FRI' | 'MON_SAT' }) =>
-      generateTimetable(scope),
+    mutationFn: (scope: {
+      academic_year_id: number;
+      semester_id: number;
+      department_id: number;
+      working_days?: 'MON_FRI' | 'MON_SAT';
+      force_regenerate?: boolean;
+    }) => generateTimetable(scope),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['timetable', 'versions'] });
+      queryClient.invalidateQueries({ queryKey: ['timetable-scope-check'] });
       if (data.version_id) {
         toast.success(
           `Draft timetable version V${data.version_id} generated (UNPUBLISHED). Opening Smart Timetable Editor...`,
@@ -150,6 +174,9 @@ export const AdminTimetableManagementPage: React.FC = () => {
       const detail = err?.response?.data?.detail;
       const msg = typeof detail === 'string' ? detail : detail?.message || err?.message || 'Failed to generate timetable.';
       toast.error(`Generation failed: ${msg}`);
+      if (err?.response?.status === 409) {
+        refetchScopeCheck();
+      }
     },
   });
 
@@ -213,11 +240,16 @@ export const AdminTimetableManagementPage: React.FC = () => {
     if (typeof selectedAyId !== 'number' || typeof selectedSemId !== 'number' || typeof selectedDeptId !== 'number') {
       return;
     }
+    if (scopeCheck?.has_existing && !forceRegenerate) {
+      toast.error('An active timetable already exists for this scope. Open the existing timetable or check "Allow Regeneration".');
+      return;
+    }
     generateMutation.mutate({
       academic_year_id: selectedAyId,
       semester_id: selectedSemId,
       department_id: selectedDeptId,
       working_days: workingDays,
+      force_regenerate: forceRegenerate,
     });
   };
 
@@ -358,6 +390,43 @@ export const AdminTimetableManagementPage: React.FC = () => {
             </select>
           </div>
         </div>
+
+        {/* Existing Timetable Duplicate Alert Banner */}
+        {isScopeSelected && scopeCheck?.has_existing && scopeCheck.existing_version && (
+          <div className="mt-4 p-4 rounded-xl bg-amber-50/80 border border-amber-300 text-xs text-amber-900 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 font-bold text-amber-900">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                <span>Existing Timetable Found for this Scope (Version V{scopeCheck.existing_version.id})</span>
+              </div>
+              <span className="font-semibold bg-amber-200/70 text-amber-800 px-2 py-0.5 rounded text-[11px]">
+                Status: {scopeCheck.existing_version.status} (Rev {scopeCheck.existing_version.revision || 1})
+              </span>
+            </div>
+            <p className="text-amber-800">
+              An active or draft timetable is already present for this Academic Year, Semester, and Department.
+              To prevent accidental duplicates, you can review the existing timetable or explicitly allow regeneration.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => navigate(`/admin/timetable/versions/${scopeCheck.existing_version!.id}`)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 shadow-2xs"
+              >
+                <span>Open Existing Timetable (V{scopeCheck.existing_version.id})</span>
+              </button>
+              <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-medium text-amber-900">
+                <input
+                  type="checkbox"
+                  checked={forceRegenerate}
+                  onChange={(e) => setForceRegenerate(e.target.checked)}
+                  className="rounded border-amber-400 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                />
+                <span>Allow Regeneration (Overwrite / Replace Active Timetable)</span>
+              </label>
+            </div>
+          </div>
+        )}
 
         {/* Action Button Bar */}
         {isScopeSelected && (

@@ -80,3 +80,6 @@ class User(Base):
     timetable_versions_approved: Mapped[list["TimetableVersion"]] = relationship(
         "TimetableVersion", foreign_keys="TimetableVersion.approved_by", back_populates="approver"
     )
+    timetable_versions_recalled: Mapped[list["TimetableVersion"]] = relationship(
+        "TimetableVersion", foreign_keys="TimetableVersion.recalled_by", back_populates="recaller"
+    )

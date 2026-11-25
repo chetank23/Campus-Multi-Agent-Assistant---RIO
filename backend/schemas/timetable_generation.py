@@ -14,6 +14,7 @@ class GenerationScope(BaseModel):
     time_slot_ids: Optional[List[int]] = None
     curriculum_version_id: Optional[int] = None
     working_days: Optional[str] = "MON_SAT"
+    force_regenerate: Optional[bool] = False
 
 # Internal structures for the optimizer
 class OptSection(BaseModel):

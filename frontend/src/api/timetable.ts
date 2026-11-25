@@ -11,6 +11,7 @@ export interface GenerationScope {
   room_ids?: number[];
   lab_ids?: number[];
   time_slot_ids?: number[];
+  force_regenerate?: boolean;
 }
 
 export interface TimetableEntryResult {
@@ -64,6 +65,14 @@ export interface TimetableVersionResponse {
   approved_by: number | null;
   approved_at?: string | null;
   approved_revision?: number | null;
+  recalled_by?: number | null;
+  recalled_at?: string | null;
+  recall_reason?: string | null;
+  recalled_by_name?: string | null;
+  validation_status?: 'NOT_VALIDATED' | 'VALIDATING' | 'PASSED' | 'PASSED_WITH_WARNINGS' | 'FAILED' | string;
+  validation_errors_count?: number;
+  validation_warnings_count?: number;
+  validated_at?: string | null;
   created_at: string;
   published_at: string | null;
   reason: string | null;
@@ -109,18 +118,33 @@ export interface PublishPreflightResponse {
 
 export interface TimetableVersionsSummaryResponse {
   total_generated: number;
-  awaiting_review: number;
+  drafts: number;
+  awaiting_validation: number;
+  validation_failed: number;
+  ready_for_approval: number;
   approved: number;
   published: number;
+  recalled: number;
   archived: number;
+  awaiting_review?: number;
 }
 
 export interface TimetableVersionFilters {
   academic_year_id?: number;
   department_id?: number;
+  program_id?: number;
   semester_id?: number;
+  section_id?: number;
   status?: string;
+  validation_status?: string;
   search?: string;
+  sort_by?: 'newest' | 'oldest' | 'last_saved' | 'status';
+}
+
+export interface ScopeCheckResponse {
+  has_existing: boolean;
+  existing_version?: TimetableVersionResponse | null;
+  message?: string | null;
 }
 
 export interface TimetableEntryDetailResponse extends TimetableEntryResponse {
@@ -347,6 +371,30 @@ export const finalizeTimetableVersion = async (versionId: number): Promise<{ mes
 
 export const publishTimetableVersion = async (versionId: number): Promise<{ message: string; version_id: number; status: string; total_entries_published?: number }> => {
   const response = await apiClient.post(`/timetable/versions/${versionId}/publish`);
+  return response.data;
+};
+
+export const recallTimetableVersion = async (
+  versionId: number,
+  reason: string,
+): Promise<{
+  message: string;
+  version_id: number;
+  status: string;
+  recalled_at?: string;
+  recall_reason?: string;
+}> => {
+  const response = await apiClient.post(`/timetable/versions/${versionId}/recall`, { reason });
+  return response.data;
+};
+
+export const checkTimetableScope = async (params: {
+  academic_year_id: number;
+  semester_id: number;
+  department_id: number;
+  program_id?: number;
+}): Promise<ScopeCheckResponse> => {
+  const response = await apiClient.get('/timetable/scope/check', { params });
   return response.data;
 };
 

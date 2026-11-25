@@ -19,6 +19,11 @@ import {
   Loader2,
   X,
   AlertCircle,
+  AlertTriangle,
+  RotateCcw,
+  ShieldAlert,
+  ShieldCheck,
+  FileText,
 } from 'lucide-react';
 import {
   getTimetableVersions,
@@ -28,6 +33,7 @@ import {
   archiveTimetableVersion,
   deleteTimetableVersion,
   publishTimetableVersion,
+  recallTimetableVersion,
   getTimetableAcademicYears,
   getTimetableDepartments,
   type TimetableVersionResponse,
@@ -46,12 +52,15 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
   const [selectedDeptId, setSelectedDeptId] = useState<string>('ALL');
   const [selectedAyId, setSelectedAyId] = useState<string>('ALL');
   const [selectedStatusTab, setSelectedStatusTab] = useState<string>('ALL');
-  const [sortBy, setSortBy] = useState<'NEWEST' | 'OLDEST' | 'REVISION'>('NEWEST');
+  const [selectedValidationStatus, setSelectedValidationStatus] = useState<string>('ALL');
+  const [sortBy, setSortBy] = useState<'NEWEST' | 'OLDEST' | 'LAST_SAVED' | 'STATUS'>('NEWEST');
 
   // Modal states
   const [publishModalVersion, setPublishModalVersion] = useState<TimetableVersionResponse | null>(null);
   const [approveModalVersion, setApproveModalVersion] = useState<TimetableVersionResponse | null>(null);
   const [deleteModalVersion, setDeleteModalVersion] = useState<TimetableVersionResponse | null>(null);
+  const [recallModalVersion, setRecallModalVersion] = useState<TimetableVersionResponse | null>(null);
+  const [recallReason, setRecallReason] = useState<string>('');
 
   // Queries
   const { data: summary } = useQuery({
@@ -74,7 +83,7 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
     queryFn: () => getTimetableDepartments(),
   });
 
-  // Preflight coordinator query when modal is open
+  // Preflight coordinator query when publish modal is open
   const {
     data: preflightData,
     isLoading: loadingPreflight,
@@ -90,6 +99,7 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
     onSuccess: (data) => {
       toast.success(data.message || 'Timetable approved successfully.');
       queryClient.invalidateQueries({ queryKey: ['timetable', 'versions'] });
+      queryClient.invalidateQueries({ queryKey: ['timetable', 'versions', 'summary'] });
       setApproveModalVersion(null);
     },
     onError: (err: any) => {
@@ -104,6 +114,7 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
     onSuccess: (data) => {
       toast.success(data.message || 'Timetable published to coordinators and active portals.');
       queryClient.invalidateQueries({ queryKey: ['timetable', 'versions'] });
+      queryClient.invalidateQueries({ queryKey: ['timetable', 'versions', 'summary'] });
       setPublishModalVersion(null);
     },
     onError: (err: any) => {
@@ -113,11 +124,29 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
     },
   });
 
+  const recallMutation = useMutation({
+    mutationFn: ({ versionId, reason }: { versionId: number; reason: string }) =>
+      recallTimetableVersion(versionId, reason),
+    onSuccess: (data) => {
+      toast.success(data.message || 'Timetable recalled successfully.');
+      queryClient.invalidateQueries({ queryKey: ['timetable', 'versions'] });
+      queryClient.invalidateQueries({ queryKey: ['timetable', 'versions', 'summary'] });
+      setRecallModalVersion(null);
+      setRecallReason('');
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail;
+      const msg = typeof detail === 'string' ? detail : detail?.message || err?.message || 'Failed to recall timetable.';
+      toast.error(`Recall failed: ${msg}`);
+    },
+  });
+
   const archiveMutation = useMutation({
     mutationFn: (versionId: number) => archiveTimetableVersion(versionId),
     onSuccess: (data) => {
       toast.success(data.message || 'Timetable archived.');
       queryClient.invalidateQueries({ queryKey: ['timetable', 'versions'] });
+      queryClient.invalidateQueries({ queryKey: ['timetable', 'versions', 'summary'] });
     },
     onError: (err: any) => {
       const detail = err?.response?.data?.detail;
@@ -131,6 +160,7 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
     onSuccess: (data) => {
       toast.success(data.message || 'Timetable version deleted.');
       queryClient.invalidateQueries({ queryKey: ['timetable', 'versions'] });
+      queryClient.invalidateQueries({ queryKey: ['timetable', 'versions', 'summary'] });
       setDeleteModalVersion(null);
     },
     onError: (err: any) => {
@@ -154,14 +184,36 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
       result = result.filter((v) => v.academic_year_id === ayIdNum);
     }
 
+    if (selectedValidationStatus !== 'ALL') {
+      result = result.filter((v) => (v.validation_status || 'NOT_VALIDATED').toUpperCase() === selectedValidationStatus);
+    }
+
     if (selectedStatusTab !== 'ALL') {
-      if (selectedStatusTab === 'REVIEW') {
-        result = result.filter((v) => ['DRAFT', 'GENERATED', 'REVIEWED'].includes((v.status || '').toUpperCase()));
-      } else if (selectedStatusTab === 'APPROVED') {
-        result = result.filter((v) => ['VALIDATED', 'FINALIZED', 'APPROVED'].includes((v.status || '').toUpperCase()));
-      } else if (selectedStatusTab === 'PUBLISHED') {
+      const tab = selectedStatusTab.toUpperCase();
+      if (tab === 'DRAFT') {
+        result = result.filter((v) => ['DRAFT', 'GENERATED'].includes((v.status || '').toUpperCase()));
+      } else if (tab === 'AWAITING_VALIDATION') {
+        result = result.filter(
+          (v) =>
+            ['DRAFT', 'GENERATED', 'REVIEWED'].includes((v.status || '').toUpperCase()) &&
+            (!v.validation_status || v.validation_status === 'NOT_VALIDATED' || v.validation_status === 'VALIDATING'),
+        );
+      } else if (tab === 'VALIDATION_FAILED') {
+        result = result.filter((v) => (v.validation_status || '').toUpperCase() === 'FAILED');
+      } else if (tab === 'READY_FOR_APPROVAL') {
+        result = result.filter(
+          (v) =>
+            (['VALIDATED', 'FINALIZED'].includes((v.status || '').toUpperCase()) ||
+              ['PASSED', 'PASSED_WITH_WARNINGS'].includes((v.validation_status || '').toUpperCase())) &&
+            !['APPROVED', 'PUBLISHED', 'ARCHIVED', 'REJECTED', 'RECALLED'].includes((v.status || '').toUpperCase()),
+        );
+      } else if (tab === 'APPROVED') {
+        result = result.filter((v) => (v.status || '').toUpperCase() === 'APPROVED');
+      } else if (tab === 'PUBLISHED') {
         result = result.filter((v) => (v.status || '').toUpperCase() === 'PUBLISHED');
-      } else if (selectedStatusTab === 'ARCHIVED') {
+      } else if (tab === 'RECALLED') {
+        result = result.filter((v) => (v.status || '').toUpperCase() === 'RECALLED');
+      } else if (tab === 'ARCHIVED') {
         result = result.filter((v) => ['ARCHIVED', 'REJECTED'].includes((v.status || '').toUpperCase()));
       }
     }
@@ -174,9 +226,12 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
         const progStr = v.program_name || '';
         const ayStr = v.academic_year_name || '';
         const statusStr = v.status || '';
+        const valStatusStr = v.validation_status || '';
         const secStr = (v.section_names || []).join(' ');
         const creatorStr = v.created_by_name || '';
-        const full = `${idStr} ${deptStr} ${progStr} ${ayStr} ${statusStr} ${secStr} ${creatorStr}`.toLowerCase();
+        const recallerStr = v.recalled_by_name || '';
+        const reasonStr = v.recall_reason || '';
+        const full = `${idStr} ${deptStr} ${progStr} ${ayStr} ${statusStr} ${valStatusStr} ${secStr} ${creatorStr} ${recallerStr} ${reasonStr}`.toLowerCase();
         return full.includes(q);
       });
     }
@@ -185,16 +240,24 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
       result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     } else if (sortBy === 'OLDEST') {
       result.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    } else if (sortBy === 'REVISION') {
-      result.sort((a, b) => (b.revision || 1) - (a.revision || 1));
+    } else if (sortBy === 'LAST_SAVED') {
+      result.sort((a, b) => {
+        const timeA = a.last_saved_at ? new Date(a.last_saved_at).getTime() : new Date(a.created_at).getTime();
+        const timeB = b.last_saved_at ? new Date(b.last_saved_at).getTime() : new Date(b.created_at).getTime();
+        return timeB - timeA;
+      });
+    } else if (sortBy === 'STATUS') {
+      result.sort((a, b) => (a.status || '').localeCompare(b.status || ''));
     }
 
     return result;
-  }, [versions, selectedDeptId, selectedAyId, selectedStatusTab, searchQuery, sortBy]);
+  }, [versions, selectedDeptId, selectedAyId, selectedValidationStatus, selectedStatusTab, searchQuery, sortBy]);
 
   const renderStatusBadge = (status: string | null) => {
     const s = (status || 'DRAFT').toUpperCase();
     switch (s) {
+      case 'DRAFT':
+        return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">DRAFT</span>;
       case 'GENERATED':
         return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">GENERATED</span>;
       case 'REVIEWED':
@@ -203,9 +266,11 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
         return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">VALIDATED</span>;
       case 'FINALIZED':
       case 'APPROVED':
-        return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">APPROVED</span>;
+        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200"><ShieldCheck size={11} /> APPROVED</span>;
       case 'PUBLISHED':
         return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200"><CheckCircle2 size={11} /> PUBLISHED</span>;
+      case 'RECALLED':
+        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200"><RotateCcw size={11} /> RECALLED</span>;
       case 'ARCHIVED':
         return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">ARCHIVED</span>;
       default:
@@ -213,11 +278,41 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
     }
   };
 
+  const renderValidationBadge = (version: TimetableVersionResponse) => {
+    const vStat = (version.validation_status || 'NOT_VALIDATED').toUpperCase();
+    if (vStat === 'PASSED') {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+          <CheckCircle2 size={11} /> Conflict-Free (Passed)
+        </span>
+      );
+    }
+    if (vStat === 'PASSED_WITH_WARNINGS') {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+          <AlertTriangle size={11} /> Warnings ({version.validation_warnings_count || 0})
+        </span>
+      );
+    }
+    if (vStat === 'FAILED') {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
+          <AlertCircle size={11} /> Conflicts ({version.validation_errors_count || 0} Blocker{version.validation_errors_count !== 1 ? 's' : ''})
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded">
+        <Clock size={11} /> Not Validated
+      </span>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Generated Timetables"
-        subtitle="Review, approve, and authoritatively publish generated academic timetables to related department coordinators."
+        subtitle="Review, validate, approve, publish to coordinators, or recall academic timetables across departments."
         breadcrumbs={[
           { label: 'Admin', href: '/admin' },
           { label: 'Timetable', href: '/admin/timetable' },
@@ -234,70 +329,183 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
         }
       />
 
-      {/* 4 Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Generated</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{summary?.total_generated ?? versions.length}</p>
-            <p className="text-xs text-slate-400 mt-0.5">Persisted drafts & versions</p>
+      {/* 9 Backend-Calculated Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3">
+        {/* 1. Total Generated */}
+        <button
+          onClick={() => setSelectedStatusTab('ALL')}
+          className={`p-3 rounded-xl border text-left transition-all ${
+            selectedStatusTab === 'ALL'
+              ? 'bg-blue-50/70 border-blue-400 shadow-xs ring-1 ring-blue-400'
+              : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total</span>
+            <Layers size={14} className="text-blue-600" />
           </div>
-          <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-            <Layers size={20} />
-          </div>
-        </div>
+          <p className="text-xl font-bold text-slate-900 mt-1">{summary?.total_generated ?? versions.length}</p>
+          <p className="text-[10px] text-slate-400 truncate mt-0.5">All versions</p>
+        </button>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-amber-700 uppercase tracking-wider">Awaiting Review</p>
-            <p className="text-2xl font-bold text-amber-700 mt-1">{summary?.awaiting_review ?? 0}</p>
-            <p className="text-xs text-slate-400 mt-0.5">Draft, Generated, Reviewed</p>
+        {/* 2. Drafts */}
+        <button
+          onClick={() => setSelectedStatusTab('DRAFT')}
+          className={`p-3 rounded-xl border text-left transition-all ${
+            selectedStatusTab === 'DRAFT'
+              ? 'bg-slate-100 border-slate-400 shadow-xs ring-1 ring-slate-400'
+              : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Drafts</span>
+            <FileText size={14} className="text-slate-600" />
           </div>
-          <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-            <Clock size={20} />
-          </div>
-        </div>
+          <p className="text-xl font-bold text-slate-800 mt-1">{summary?.drafts ?? 0}</p>
+          <p className="text-[10px] text-slate-400 truncate mt-0.5">Initial drafts</p>
+        </button>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-indigo-700 uppercase tracking-wider">Validated / Approved</p>
-            <p className="text-2xl font-bold text-indigo-700 mt-1">{summary?.approved ?? 0}</p>
-            <p className="text-xs text-slate-400 mt-0.5">Ready for publication</p>
+        {/* 3. Awaiting Validation */}
+        <button
+          onClick={() => setSelectedStatusTab('AWAITING_VALIDATION')}
+          className={`p-3 rounded-xl border text-left transition-all ${
+            selectedStatusTab === 'AWAITING_VALIDATION'
+              ? 'bg-amber-50/80 border-amber-400 shadow-xs ring-1 ring-amber-400'
+              : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider truncate">Unvalidated</span>
+            <Clock size={14} className="text-amber-600" />
           </div>
-          <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-            <FileCheck2 size={20} />
-          </div>
-        </div>
+          <p className="text-xl font-bold text-amber-700 mt-1">{summary?.awaiting_validation ?? 0}</p>
+          <p className="text-[10px] text-amber-600/70 truncate mt-0.5">Needs validation</p>
+        </button>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-teal-700 uppercase tracking-wider">Live Published</p>
-            <p className="text-2xl font-bold text-teal-700 mt-1">{summary?.published ?? 0}</p>
-            <p className="text-xs text-slate-400 mt-0.5">Active on portals</p>
+        {/* 4. Validation Failed */}
+        <button
+          onClick={() => setSelectedStatusTab('VALIDATION_FAILED')}
+          className={`p-3 rounded-xl border text-left transition-all ${
+            selectedStatusTab === 'VALIDATION_FAILED'
+              ? 'bg-red-50/80 border-red-400 shadow-xs ring-1 ring-red-400'
+              : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider truncate">Failed</span>
+            <AlertCircle size={14} className="text-red-600" />
           </div>
-          <div className="w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
-            <CheckCircle2 size={20} />
+          <p className="text-xl font-bold text-red-700 mt-1">{summary?.validation_failed ?? 0}</p>
+          <p className="text-[10px] text-red-600/70 truncate mt-0.5">Has conflicts</p>
+        </button>
+
+        {/* 5. Ready for Approval */}
+        <button
+          onClick={() => setSelectedStatusTab('READY_FOR_APPROVAL')}
+          className={`p-3 rounded-xl border text-left transition-all ${
+            selectedStatusTab === 'READY_FOR_APPROVAL'
+              ? 'bg-indigo-50/80 border-indigo-400 shadow-xs ring-1 ring-indigo-400'
+              : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider truncate">Validated</span>
+            <FileCheck2 size={14} className="text-indigo-600" />
           </div>
-        </div>
+          <p className="text-xl font-bold text-indigo-700 mt-1">{summary?.ready_for_approval ?? 0}</p>
+          <p className="text-[10px] text-indigo-600/70 truncate mt-0.5">Ready to approve</p>
+        </button>
+
+        {/* 6. Approved */}
+        <button
+          onClick={() => setSelectedStatusTab('APPROVED')}
+          className={`p-3 rounded-xl border text-left transition-all ${
+            selectedStatusTab === 'APPROVED'
+              ? 'bg-emerald-50/80 border-emerald-400 shadow-xs ring-1 ring-emerald-400'
+              : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider truncate">Approved</span>
+            <ShieldCheck size={14} className="text-emerald-600" />
+          </div>
+          <p className="text-xl font-bold text-emerald-700 mt-1">{summary?.approved ?? 0}</p>
+          <p className="text-[10px] text-emerald-600/70 truncate mt-0.5">Ready to publish</p>
+        </button>
+
+        {/* 7. Published */}
+        <button
+          onClick={() => setSelectedStatusTab('PUBLISHED')}
+          className={`p-3 rounded-xl border text-left transition-all ${
+            selectedStatusTab === 'PUBLISHED'
+              ? 'bg-teal-50/80 border-teal-400 shadow-xs ring-1 ring-teal-400'
+              : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-teal-700 uppercase tracking-wider truncate">Published</span>
+            <CheckCircle2 size={14} className="text-teal-600" />
+          </div>
+          <p className="text-xl font-bold text-teal-700 mt-1">{summary?.published ?? 0}</p>
+          <p className="text-[10px] text-teal-600/70 truncate mt-0.5">Live on portals</p>
+        </button>
+
+        {/* 8. Recalled */}
+        <button
+          onClick={() => setSelectedStatusTab('RECALLED')}
+          className={`p-3 rounded-xl border text-left transition-all ${
+            selectedStatusTab === 'RECALLED'
+              ? 'bg-rose-50/80 border-rose-400 shadow-xs ring-1 ring-rose-400'
+              : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider truncate">Recalled</span>
+            <RotateCcw size={14} className="text-rose-600" />
+          </div>
+          <p className="text-xl font-bold text-rose-700 mt-1">{summary?.recalled ?? 0}</p>
+          <p className="text-[10px] text-rose-600/70 truncate mt-0.5">Unpublished</p>
+        </button>
+
+        {/* 9. Archived */}
+        <button
+          onClick={() => setSelectedStatusTab('ARCHIVED')}
+          className={`p-3 rounded-xl border text-left transition-all ${
+            selectedStatusTab === 'ARCHIVED'
+              ? 'bg-slate-200 border-slate-400 shadow-xs ring-1 ring-slate-400'
+              : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider truncate">Archived</span>
+            <Archive size={14} className="text-slate-600" />
+          </div>
+          <p className="text-xl font-bold text-slate-700 mt-1">{summary?.archived ?? 0}</p>
+          <p className="text-[10px] text-slate-400 truncate mt-0.5">Historical</p>
+        </button>
       </div>
 
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
-        {/* Status Tabs */}
-        <div className="flex flex-wrap items-center gap-1 border-b border-slate-100 pb-3">
+        {/* Status Quick Filter Tabs */}
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 pb-3">
           {[
             { id: 'ALL', label: 'All Versions' },
-            { id: 'REVIEW', label: 'Awaiting Review' },
-            { id: 'APPROVED', label: 'Approved & Validated' },
+            { id: 'DRAFT', label: 'Drafts' },
+            { id: 'AWAITING_VALIDATION', label: 'Needs Validation' },
+            { id: 'VALIDATION_FAILED', label: 'Has Conflicts' },
+            { id: 'READY_FOR_APPROVAL', label: 'Ready for Approval' },
+            { id: 'APPROVED', label: 'Approved' },
             { id: 'PUBLISHED', label: 'Published' },
+            { id: 'RECALLED', label: 'Recalled' },
             { id: 'ARCHIVED', label: 'Archived' },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setSelectedStatusTab(tab.id)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
                 selectedStatusTab === tab.id
-                  ? 'bg-slate-900 text-white'
+                  ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
@@ -307,11 +515,11 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
         </div>
 
         {/* Filter Controls Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
           <SearchBar
             value={searchQuery}
             onChange={setSearchQuery}
-            placeholder="Search department, semester, V#..."
+            placeholder="Search dept, section, reason, V#..."
             className="w-full"
           />
 
@@ -342,20 +550,33 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
           </select>
 
           <select
+            value={selectedValidationStatus}
+            onChange={(e) => setSelectedValidationStatus(e.target.value)}
+            className="w-full text-xs font-medium rounded-lg border border-slate-300 px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="ALL">All Validation Statuses</option>
+            <option value="PASSED">Passed (Conflict-Free)</option>
+            <option value="PASSED_WITH_WARNINGS">Passed with Warnings</option>
+            <option value="FAILED">Failed (Has Conflicts)</option>
+            <option value="NOT_VALIDATED">Not Validated</option>
+          </select>
+
+          <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
             className="w-full text-xs font-medium rounded-lg border border-slate-300 px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="NEWEST">Sort: Newest Generated</option>
             <option value="OLDEST">Sort: Oldest Generated</option>
-            <option value="REVISION">Sort: Highest Revision</option>
+            <option value="LAST_SAVED">Sort: Recently Modified</option>
+            <option value="STATUS">Sort: Status</option>
           </select>
         </div>
       </div>
 
       {/* Main Content List / Table */}
       {isLoading ? (
-        <LoadingState message="Loading generated timetables and approval status..." />
+        <LoadingState message="Loading generated timetables, validations, and publication states..." />
       ) : isError ? (
         <ErrorState
           title="Failed to Load Timetables"
@@ -366,7 +587,7 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
           icon={<Calendar size={28} className="text-slate-400" />}
           title="No Matching Timetables Found"
           description={
-            searchQuery || selectedDeptId !== 'ALL' || selectedStatusTab !== 'ALL'
+            searchQuery || selectedDeptId !== 'ALL' || selectedStatusTab !== 'ALL' || selectedValidationStatus !== 'ALL'
               ? 'No timetable versions match the selected search or filter criteria. Try resetting filters.'
               : 'No academic timetables have been generated yet. Click "Generate Timetable" to create a new draft.'
           }
@@ -385,33 +606,37 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
           {filteredVersions.map((v) => {
             const isApproved = ['APPROVED', 'FINALIZED'].includes((v.status || '').toUpperCase());
             const isPublished = (v.status || '').toUpperCase() === 'PUBLISHED';
+            const isRecalled = (v.status || '').toUpperCase() === 'RECALLED';
             const isValidated = (v.status || '').toUpperCase() === 'VALIDATED';
             const isArchived = ['ARCHIVED', 'REJECTED'].includes((v.status || '').toUpperCase());
 
             return (
               <div
                 key={v.id}
-                className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:border-slate-300 transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                className={`bg-white rounded-xl border p-5 shadow-xs transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
+                  isRecalled
+                    ? 'border-rose-200 bg-rose-50/20'
+                    : isPublished
+                    ? 'border-teal-200'
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
               >
                 {/* Left: Info & Scope */}
                 <div className="space-y-2 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-sm font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded">
+                    <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                       V{v.id}
                     </span>
                     {renderStatusBadge(v.status)}
                     <span className="text-xs text-slate-500 font-medium">
-                      Revision {v.revision || 1}
+                      Rev {v.revision || 1}
                     </span>
-                    {v.validated_revision === v.revision ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                        <CheckCircle2 size={11} /> Conflict-free
+                    {renderValidationBadge(v)}
+                    {v.validated_revision !== v.revision && v.status !== 'PUBLISHED' && v.validation_status === 'PASSED' && (
+                      <span className="text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                        Edited after validation
                       </span>
-                    ) : v.status !== 'PUBLISHED' ? (
-                      <span className="text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                        Edits need validation
-                      </span>
-                    ) : null}
+                    )}
                   </div>
 
                   {/* Academic Scope details */}
@@ -420,6 +645,11 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
                       <Building size={14} className="text-slate-400" />
                       {v.department_name || `Dept #${v.department_id || 'All'}`}
                     </span>
+                    {v.program_name && (
+                      <span className="text-slate-600 font-medium">
+                        Program: {v.program_name}
+                      </span>
+                    )}
                     {v.semester_number && (
                       <span className="inline-flex items-center gap-1 text-slate-600">
                         <GraduationCap size={14} className="text-slate-400" />
@@ -442,10 +672,26 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
                     </span>
                   </div>
 
+                  {/* Recall Details Banner if Recalled */}
+                  {isRecalled && (
+                    <div className="bg-rose-50 border border-rose-200 rounded-lg p-2.5 text-xs text-rose-800 space-y-0.5">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <RotateCcw size={12} className="text-rose-600" />
+                        <span>Recalled {v.recalled_at ? `on ${new Date(v.recalled_at).toLocaleString()}` : ''} {v.recalled_by_name ? `by ${v.recalled_by_name}` : ''}</span>
+                      </div>
+                      <p className="text-rose-700 pl-4 italic">
+                        &quot;{v.recall_reason || 'No recall reason provided.'}&quot;
+                      </p>
+                    </div>
+                  )}
+
                   {/* Timestamps and Author */}
                   <div className="flex flex-wrap items-center gap-x-4 text-[11px] text-slate-400">
                     <span>Generated: {new Date(v.created_at).toLocaleDateString()} {new Date(v.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     {v.created_by_name && <span>By: {v.created_by_name}</span>}
+                    {v.last_saved_at && (
+                      <span>Last Modified: {new Date(v.last_saved_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    )}
                     {v.approved_at && (
                       <span className="text-emerald-700 font-medium">
                         Approved: {new Date(v.approved_at).toLocaleDateString()} {v.approved_by_name ? `by ${v.approved_by_name}` : ''}
@@ -459,22 +705,22 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Right: Actions */}
+                {/* Right: Status-Driven Actions */}
                 <div className="flex flex-wrap items-center gap-2 shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
-                  {/* Primary Review / Edit Button */}
+                  {/* Review / Edit Button */}
                   <button
                     onClick={() => navigate(`/admin/timetable/versions/${v.id}`)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
                   >
                     {isPublished ? <Eye size={13} /> : <Edit3 size={13} />}
-                    <span>{isPublished ? 'View Schedule' : 'Review & Edit'}</span>
+                    <span>{isPublished ? 'View Schedule' : isRecalled ? 'Edit Recalled Timetable' : 'Review & Edit'}</span>
                   </button>
 
                   {/* If Validated but not yet Approved: Quick Approve */}
                   {isValidated && (
                     <button
                       onClick={() => setApproveModalVersion(v)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs transition-colors"
                     >
                       <FileCheck2 size={13} />
                       <span>Approve</span>
@@ -485,10 +731,24 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
                   {isApproved && (
                     <button
                       onClick={() => setPublishModalVersion(v)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-600 text-white hover:bg-teal-700 shadow-sm transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-600 text-white hover:bg-teal-700 shadow-xs transition-colors"
                     >
                       <Send size={13} />
                       <span>Publish to Coordinators</span>
+                    </button>
+                  )}
+
+                  {/* If Published: Recall Action */}
+                  {isPublished && (
+                    <button
+                      onClick={() => {
+                        setRecallReason('');
+                        setRecallModalVersion(v);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-colors"
+                    >
+                      <RotateCcw size={13} />
+                      <span>Recall Publication</span>
                     </button>
                   )}
 
@@ -504,7 +764,7 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
                     </button>
                   )}
 
-                  {!isPublished && (
+                  {!isPublished && !isApproved && (
                     <button
                       onClick={() => setDeleteModalVersion(v)}
                       title="Delete draft version"
@@ -687,6 +947,85 @@ export const AdminGeneratedTimetablesPage: React.FC = () => {
                 </div>
               </div>
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* Recall Publication Modal */}
+      {recallModalVersion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <RotateCcw size={20} className="text-rose-600" />
+                <h3 className="text-base font-bold text-slate-900">Recall Published Timetable</h3>
+              </div>
+              <button
+                onClick={() => setRecallModalVersion(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              You are withdrawing active publication for <span className="font-bold text-slate-900">Timetable Version V{recallModalVersion.id}</span> ({recallModalVersion.department_name || 'All'} - Semester {recallModalVersion.semester_number || 'All'}).
+            </p>
+
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-800 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold">
+                <ShieldAlert size={14} className="text-rose-600" />
+                <span>Controlled Recall Safeguards:</span>
+              </div>
+              <ul className="list-disc pl-4 space-y-0.5">
+                <li>Active publication will be immediately revoked across student, faculty and coordinator portals.</li>
+                <li>Historical draft versions and arrangements remain preserved in the system.</li>
+                <li>You can review, edit, revalidate, reapprove, and republish this timetable at any time.</li>
+                <li>Affected coordinators will be notified of this recall and its reason.</li>
+              </ul>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Mandatory Recall Reason <span className="text-rose-600">*</span>
+              </label>
+              <textarea
+                value={recallReason}
+                onChange={(e) => setRecallReason(e.target.value)}
+                placeholder="State the reason for recalling this published timetable (e.g., Faculty allocation change, Room maintenance, Schedule clash)..."
+                rows={3}
+                className="w-full text-xs rounded-xl border border-slate-300 p-3 focus:outline-none focus:ring-2 focus:ring-rose-500 text-slate-800 placeholder-slate-400"
+              />
+              <p className="text-[11px] text-slate-400">
+                Minimum 3 characters required. This reason is logged to audit logs and displayed on the timetable history.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => setRecallModalVersion(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() =>
+                  recallMutation.mutate({
+                    versionId: recallModalVersion.id,
+                    reason: recallReason.trim(),
+                  })
+                }
+                disabled={recallReason.trim().length < 3 || recallMutation.isPending}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-sm transition-colors ${
+                  recallReason.trim().length >= 3 && !recallMutation.isPending
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : 'bg-slate-300 cursor-not-allowed'
+                }`}
+              >
+                {recallMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+                <span>Confirm Recall</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

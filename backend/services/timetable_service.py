@@ -30,9 +30,11 @@ from backend.schemas.timetable_generation import (
 from backend.schemas.timetable import (
     CanonicalTimetableResponse,
     CoordinatorRecipientItem,
+    ScopeCheckResponse,
     TimetableEntryDetailResponse,
     TimetablePreviewEntry,
     TimetablePreviewResponse,
+    TimetableVersionResponse,
     PublishTimetableRequest,
     PublishTimetableResponse,
 )
@@ -83,6 +85,34 @@ def execute_timetable_generation(
             detail="Only administrators are authorized to generate timetables.",
         )
 
+    # 0. Concurrency-protected Duplicate Scope Prevention Check
+    active_statuses = ("DRAFT", "GENERATED", "REVIEWED", "VALIDATED", "FINALIZED", "APPROVED", "PUBLISHED")
+    scope_check_q = (
+        db.query(TimetableVersion)
+        .filter(
+            TimetableVersion.academic_year_id == scope.academic_year_id,
+            TimetableVersion.department_id == scope.department_id,
+            TimetableVersion.semester_id == scope.semester_id,
+            TimetableVersion.status.in_(active_statuses),
+        )
+    )
+    if scope.program_id:
+        scope_check_q = scope_check_q.filter(
+            (TimetableVersion.program_id == scope.program_id) | (TimetableVersion.program_id == None)  # noqa: E711
+        )
+    existing_active = scope_check_q.order_by(TimetableVersion.id.desc()).with_for_update().first()
+    if existing_active:
+        if not getattr(scope, "force_regenerate", False):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A timetable already exists for this academic scope (Version {existing_active.version_number or existing_active.id}, Status: {existing_active.status}). Please review the existing timetable or confirm replacement.",
+            )
+        else:
+            # Controlled replacement: If existing was draft/unapproved, archive it
+            if existing_active.status in ("DRAFT", "GENERATED", "REVIEWED", "VALIDATED"):
+                existing_active.status = "ARCHIVED"
+                db.flush()
+
     # 1. Load and validate input
     optimizer_input = validate_and_load_input(db, scope)
 
@@ -119,6 +149,8 @@ def execute_timetable_generation(
         # 5. Persist as GENERATED version with DRAFT entries (never auto-publish)
         try:
             now_utc = utc_now()
+            warnings_list = [v for v in val_result.violations if v.severity in ("WARNING", "SOFT")]
+            v_status = "PASSED" if not warnings_list else "PASSED_WITH_WARNINGS"
             new_version = TimetableVersion(
                 academic_year_id=scope.academic_year_id,
                 curriculum_version_id=scope.curriculum_version_id,
@@ -128,6 +160,11 @@ def execute_timetable_generation(
                 working_days=getattr(scope, "working_days", None) or "MON_SAT",
                 status="GENERATED",
                 revision=1,
+                validated_revision=None,
+                validation_status="NOT_VALIDATED",
+                validation_errors_count=0,
+                validation_warnings_count=0,
+                validated_at=None,
                 score_summary=score_dict,
                 last_saved_at=now_utc,
                 last_saved_by=current_user.id,
@@ -1221,4 +1258,224 @@ def publish_persisted_version_authoritatively(
         message=f"Timetable version {version.id} published across {len(published_canonical_tts)} section(s).",
         published_timetables=published_canonical_tts,
         total_entries_published=total_entries_count,
+    )
+
+
+def recall_persisted_version(
+    db: Session,
+    version_id: int,
+    reason: str,
+    current_user: User,
+) -> TimetableVersionResponse:
+    """
+    Recalls an active published TimetableVersion:
+    1. Verifies current_user has ADMIN role.
+    2. Validates that reason is provided (min 3 chars).
+    3. Verifies version is currently in PUBLISHED status.
+    4. Atomically in transaction:
+       - Sets version.status = 'RECALLED', recalled_by, recalled_at, recall_reason.
+       - Marks matching canonical Timetable records as RECALLED.
+       - Unlinks TimetableEntry.timetable_id = None for entries in this version.
+       - Logs AuditLog and TimetableChangeHistory.
+       - Notifies coordinators.
+       - Commits.
+    """
+    if current_user.role != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators are authorized to recall timetables.",
+        )
+    if not reason or len(reason.strip()) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A valid recall reason (minimum 3 characters) is required.",
+        )
+
+    version = (
+        db.query(TimetableVersion)
+        .filter(TimetableVersion.id == version_id)
+        .with_for_update()
+        .first()
+    )
+    if not version:
+        raise HTTPException(status_code=404, detail="Timetable version not found")
+
+    if version.status != "PUBLISHED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot recall timetable in status '{version.status}'. Only PUBLISHED timetables can be recalled.",
+        )
+
+    now_utc = utc_now()
+    version.status = "RECALLED"
+    version.recalled_by = current_user.id
+    version.recalled_at = now_utc
+    version.recall_reason = reason.strip()
+
+    # Find canonical timetables matching this version's scope and mark RECALLED
+    canonical_tts = (
+        db.query(Timetable)
+        .filter(
+            Timetable.academic_year_id == version.academic_year_id,
+            Timetable.semester_id == version.semester_id,
+            Timetable.status == "PUBLISHED",
+        )
+        .all()
+    )
+    for c_tt in canonical_tts:
+        c_tt.status = "RECALLED"
+
+    # Unlink canonical timetable_id from entries of this version
+    db.query(TimetableEntry).filter(
+        TimetableEntry.version_id == version.id
+    ).update({"timetable_id": None}, synchronize_session=False)
+
+    # Audit & change history
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="TIMETABLE_RECALLED",
+            entity_type="TimetableVersion",
+            entity_id=version.id,
+            old_value={"status": "PUBLISHED"},
+            new_value={"status": "RECALLED", "reason": reason.strip(), "recalled_by": current_user.id},
+        )
+    )
+    db.add(
+        TimetableChangeHistory(
+            version_id=version.id,
+            revision=version.revision,
+            admin_id=current_user.id,
+            validation_outcome="RECALLED",
+            reason=f"Recalled: {reason.strip()}",
+            created_at=now_utc,
+        )
+    )
+
+    # Notify coordinators
+    coordinators = resolve_coordinators_for_version(db, version)
+    ver_num = version.version_number or str(version.id)
+    d_name = version.department_id and (db.query(Department.name).filter(Department.id == version.department_id).scalar() or "Department")
+    for coord in coordinators:
+        if coord.user_id:
+            db.add(
+                Notification(
+                    user_id=coord.user_id,
+                    title=f"Timetable Recalled: Department Schedule v{ver_num}",
+                    message=f"Timetable v{ver_num} for {d_name} has been recalled by admin. Reason: {reason.strip()}. Active schedule availability has been withdrawn.",
+                    type="TIMETABLE_RECALLED",
+                    link="/faculty/dept-timetable",
+                    entity_type="TimetableVersion",
+                    entity_id=version.id,
+                    is_read=False,
+                )
+            )
+
+    db.commit()
+    db.refresh(version)
+
+    return build_version_summary_response_item(db, version)
+
+
+def check_academic_scope_existing(
+    db: Session,
+    academic_year_id: int,
+    semester_id: int,
+    department_id: int,
+    program_id: Optional[int] = None,
+) -> ScopeCheckResponse:
+    active_statuses = ("DRAFT", "GENERATED", "REVIEWED", "VALIDATED", "FINALIZED", "APPROVED", "PUBLISHED")
+    q = (
+        db.query(TimetableVersion)
+        .filter(
+            TimetableVersion.academic_year_id == academic_year_id,
+            TimetableVersion.department_id == department_id,
+            TimetableVersion.semester_id == semester_id,
+            TimetableVersion.status.in_(active_statuses),
+        )
+    )
+    if program_id:
+        q = q.filter(
+            (TimetableVersion.program_id == program_id) | (TimetableVersion.program_id == None)  # noqa: E711
+        )
+    existing = q.order_by(TimetableVersion.id.desc()).first()
+    if not existing:
+        return ScopeCheckResponse(has_existing=False, existing_version=None)
+
+    resp = build_version_summary_response_item(db, existing)
+    return ScopeCheckResponse(
+        has_existing=True,
+        existing_version=resp,
+        message=f"A timetable already exists for this academic scope (Version {existing.version_number or existing.id}, Status: {existing.status}).",
+    )
+
+
+def build_version_summary_response_item(
+    db: Session,
+    v: TimetableVersion,
+) -> TimetableVersionResponse:
+    ay = v.academic_year or (db.query(AcademicYear).filter(AcademicYear.id == v.academic_year_id).first() if v.academic_year_id else None)
+    dept = db.query(Department).filter(Department.id == v.department_id).first() if v.department_id else None
+    prog = db.query(Program).filter(Program.id == v.program_id).first() if v.program_id else None
+    sem = db.query(Semester).filter(Semester.id == v.semester_id).first() if v.semester_id else None
+
+    creator = v.creator or (db.query(User).filter(User.id == v.created_by).first() if v.created_by else None)
+    approver = v.approver or (db.query(User).filter(User.id == v.approved_by).first() if v.approved_by else None)
+    recaller = v.recaller or (db.query(User).filter(User.id == v.recalled_by).first() if v.recalled_by else None)
+
+    sec_rows = (
+        db.query(Section.section_name)
+        .join(TimetableEntry, TimetableEntry.section_id == Section.id)
+        .filter(
+            TimetableEntry.version_id == v.id,
+            TimetableEntry.status != "CANCELLED",
+        )
+        .distinct()
+        .all()
+    )
+    sec_names = sorted([r[0] for r in sec_rows if r[0]])
+    entry_cnt = db.query(TimetableEntry).filter(
+        TimetableEntry.version_id == v.id,
+        TimetableEntry.status != "CANCELLED",
+    ).count()
+
+    return TimetableVersionResponse(
+        id=v.id,
+        academic_year_id=v.academic_year_id,
+        version_number=v.version_number,
+        status=v.status,
+        created_by=v.created_by,
+        approved_by=v.approved_by,
+        approved_at=v.approved_at,
+        approved_revision=v.approved_revision,
+        recalled_by=v.recalled_by,
+        recalled_at=v.recalled_at,
+        recall_reason=v.recall_reason,
+        recalled_by_name=recaller.name if recaller else None,
+        validation_status=v.validation_status or "NOT_VALIDATED",
+        validation_errors_count=v.validation_errors_count or 0,
+        validation_warnings_count=v.validation_warnings_count or 0,
+        validated_at=v.validated_at,
+        created_at=v.created_at,
+        published_at=v.published_at,
+        reason=v.reason,
+        revision=v.revision or 1,
+        validated_revision=v.validated_revision,
+        last_saved_at=v.last_saved_at,
+        last_saved_by=v.last_saved_by,
+        finalized_by=v.finalized_by,
+        finalized_at=v.finalized_at,
+        working_days=v.working_days or "MON_SAT",
+        score_summary=v.score_summary,
+        department_id=v.department_id,
+        program_id=v.program_id,
+        semester_id=v.semester_id,
+        department_name=dept.name if dept else None,
+        program_name=prog.program_name if prog else None,
+        academic_year_name=ay.name if ay else None,
+        semester_number=sem.semester_number if sem else None,
+        created_by_name=creator.name if creator else None,
+        approved_by_name=approver.name if approver else None,
+        entry_count=entry_cnt,
+        section_names=sec_names,
     )

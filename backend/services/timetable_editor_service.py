@@ -41,7 +41,7 @@ from backend.schemas.timetable import (
 )
 from backend.utils.datetime_utils import utc_now
 
-EDITABLE_STATUSES = {"DRAFT", "GENERATED", "REVIEWED", "VALIDATED", "APPROVED"}
+EDITABLE_STATUSES = {"DRAFT", "GENERATED", "REVIEWED", "VALIDATED", "APPROVED", "RECALLED"}
 
 
 def _norm_day(d: Optional[str]) -> str:
@@ -710,6 +710,11 @@ def build_version_detail_response(db: Session, version_id: int) -> TimetableVers
         au = db.query(User).filter(User.id == version.approved_by).first()
         approver_name = au.name if au else None
 
+    recaller_name = None
+    if version.recalled_by:
+        ru = db.query(User).filter(User.id == version.recalled_by).first()
+        recaller_name = ru.name if ru else None
+
     dept_name = None
     prog_name = None
     sem_num = None
@@ -787,6 +792,14 @@ def build_version_detail_response(db: Session, version_id: int) -> TimetableVers
         approved_by=version.approved_by,
         approved_at=version.approved_at,
         approved_revision=version.approved_revision,
+        recalled_by=version.recalled_by,
+        recalled_at=version.recalled_at,
+        recall_reason=version.recall_reason,
+        recalled_by_name=recaller_name,
+        validation_status=version.validation_status or "NOT_VALIDATED",
+        validation_errors_count=version.validation_errors_count or 0,
+        validation_warnings_count=version.validation_warnings_count or 0,
+        validated_at=version.validated_at,
         created_at=version.created_at,
         published_at=version.published_at,
         reason=version.reason,
@@ -939,6 +952,9 @@ def save_arrangements(
         locked_version.revision = new_revision
         locked_version.status = "REVIEWED"
         locked_version.validated_revision = None  # Invalidate previous validation
+        locked_version.validation_status = "NOT_VALIDATED"
+        locked_version.validation_errors_count = 0
+        locked_version.validation_warnings_count = 0
         locked_version.approved_by = None
         locked_version.approved_at = None
         locked_version.approved_revision = None
