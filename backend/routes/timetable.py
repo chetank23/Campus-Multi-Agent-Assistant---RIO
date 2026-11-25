@@ -402,7 +402,7 @@ def validate_version(
         broadcast_version_update(
             version_id=version.id,
             revision=version.revision,
-            status_value=version.status,
+            status_value=version.status or "VALIDATED",
             actor_name=current_user.name,
             event_type="VERSION_VALIDATED",
         )
@@ -517,7 +517,7 @@ def finalize_version(
     broadcast_version_update(
         version_id=version.id,
         revision=version.revision,
-        status_value=version.status,
+        status_value=version.status or "FINALIZED",
         actor_name=current_user.name,
         event_type="VERSION_FINALIZED",
     )

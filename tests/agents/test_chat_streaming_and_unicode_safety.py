@@ -32,7 +32,7 @@ client = TestClient(app)
 
 
 def _get_db():
-    db_url = os.environ.get("DATABASE_URL")
+    db_url = os.environ.get("DATABASE_URL") or "postgresql://postgres:postgres@localhost:5432/campus_ai_test"
     eng = create_engine(db_url)
     return Session(eng)
 

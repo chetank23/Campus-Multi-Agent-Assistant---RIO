@@ -858,7 +858,8 @@ def publish_persisted_version_authoritatively(
 
     entries_by_sec: Dict[int, List[TimetableEntry]] = defaultdict(list)
     for e in entries:
-        entries_by_sec[e.section_id].append(e)
+        if e.section_id is not None:
+            entries_by_sec[e.section_id].append(e)
 
     now_utc = utc_now()
     published_canonical_tts: List[CanonicalTimetableResponse] = []

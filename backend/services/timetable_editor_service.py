@@ -115,7 +115,8 @@ def _load_version_context(db: Session, version_id: int) -> Tuple[
 
     fa_lookup: Dict[Tuple[int, int], str] = {}
     for fa in db.query(FacultyAvailability).all():
-        fa_lookup[(fa.faculty_id, fa.slot_id)] = fa.availability
+        if fa.faculty_id is not None and fa.slot_id is not None and fa.availability is not None:
+            fa_lookup[(fa.faculty_id, fa.slot_id)] = fa.availability
 
     # Load external active published canonical entries (from other sections/semesters in the same AY)
     # excluding entries belonging to sections already in this version so we don't self-conflict with the
@@ -162,9 +163,16 @@ def _get_logical_block(
     - Otherwise, if the entry is a PRACTICAL/LAB session, detects consecutive same-day
       entries for the same (section, batch, course, faculty, room).
     """
+    def _entry_start_time(e: TimetableEntry) -> datetime.time:
+        if e.slot_id is not None:
+            s = slots_map.get(e.slot_id)
+            if s is not None and s.start_time is not None:
+                return s.start_time
+        return datetime.time.min
+
     if entry.block_group_id:
         grp = [e for e in all_entries if e.block_group_id == entry.block_group_id]
-        grp.sort(key=lambda e: (slots_map[e.slot_id].start_time if e.slot_id in slots_map and slots_map[e.slot_id].start_time else datetime.time.min))
+        grp.sort(key=_entry_start_time)
         return grp or [entry]
 
     course = courses_map.get(entry.course_id) if entry.course_id else None
@@ -190,14 +198,14 @@ def _get_logical_block(
     if len(same_group) <= 1:
         return [entry]
 
-    same_group.sort(key=lambda e: slots_map[e.slot_id].start_time or datetime.time.min)
+    same_group.sort(key=_entry_start_time)
     # Check if they are adjacent in time
     day_slots = sorted(
         [s for s in slots_map.values() if _norm_day(s.day) == base_day and _is_instructional_slot(s)],
         key=lambda s: s.start_time or datetime.time.min,
     )
     slot_idx_map = {s.id: idx for idx, s in enumerate(day_slots)}
-    indices = [slot_idx_map.get(e.slot_id, -99) for e in same_group]
+    indices = [slot_idx_map.get(e.slot_id, -99) if e.slot_id is not None else -99 for e in same_group]
     if all(indices[i] + 1 == indices[i + 1] for i in range(len(indices) - 1)):
         return same_group
     return [entry]
@@ -344,7 +352,8 @@ def _evaluate_moves(
         if not target_slot:
             reasons.append(f"Target time slot #{m.target_slot_id} does not exist.")
         elif not _is_instructional_slot(target_slot):
-            reasons.append(f"Cannot move a class into a {target_slot.slot_type} slot ({target_slot.day} {target_slot.start_time.strftime('%H:%M')}).")
+            slot_time_str = target_slot.start_time.strftime('%H:%M') if target_slot.start_time else "N/A"
+            reasons.append(f"Cannot move a class into a {target_slot.slot_type} slot ({target_slot.day} {slot_time_str}).")
         elif not _is_slot_allowed_by_working_days(target_slot, version.working_days):
             reasons.append(f"Target day {target_slot.day} is outside the configured working-day schedule ({version.working_days}).")
 
@@ -383,7 +392,9 @@ def _evaluate_moves(
         if eff_faculty_id and target_slot:
             fa_status = fa_lookup.get((eff_faculty_id, target_slot.id))
             if fa_status == "UNAVAILABLE":
-                reasons.append(f"{fac_name} has declared UNAVAILABLE for {target_slot.day} {target_slot.start_time.strftime('%H:%M')}-{target_slot.end_time.strftime('%H:%M')}.")
+                st_str = target_slot.start_time.strftime('%H:%M') if target_slot.start_time else "N/A"
+                et_str = target_slot.end_time.strftime('%H:%M') if target_slot.end_time else "N/A"
+                reasons.append(f"{fac_name} has declared UNAVAILABLE for {target_slot.day} {st_str}-{et_str}.")
 
         # Overlap checks against other entries in this version
         if target_slot:
@@ -401,21 +412,21 @@ def _evaluate_moves(
                 # Section overlap (same section & incompatible batch)
                 if other.section_id == entry.section_id:
                     if other.batch_id is None or entry.batch_id is None or other.batch_id == entry.batch_id:
-                        oc = courses_map.get(other.course_id)
+                        oc = courses_map.get(other.course_id) if other.course_id is not None else None
                         oc_label = oc.course_code if oc else f"Entry #{other.id}"
                         reasons.append(f"{sec_name} already has {oc_label} scheduled during this period.")
                         affected.add(other.id)
 
                 # Faculty overlap across all sections in version
                 if eff_faculty_id and other_fac_id == eff_faculty_id:
-                    osec = sections_map.get(other.section_id)
+                    osec = sections_map.get(other.section_id) if other.section_id is not None else None
                     osec_label = osec.section_name if osec else f"Section #{other.section_id}"
                     reasons.append(f"{fac_name} is already teaching {osec_label} during this period.")
                     affected.add(other.id)
 
                 # Room overlap across all sections in version
                 if eff_room_id and other_room_id == eff_room_id:
-                    osec = sections_map.get(other.section_id)
+                    osec = sections_map.get(other.section_id) if other.section_id is not None else None
                     osec_label = osec.section_name if osec else f"Section #{other.section_id}"
                     reasons.append(f"Room {room_name} is already occupied by {osec_label} during this period.")
                     affected.add(other.id)

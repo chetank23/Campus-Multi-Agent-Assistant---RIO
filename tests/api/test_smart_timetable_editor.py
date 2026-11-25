@@ -38,17 +38,21 @@ def generated_version_id(admin_token):
         semester = db.query(Semester).first()
         department = db.query(Department).first()
         program = db.query(Program).first()
-        if not all([ac_year, semester, department, program]):
+        if not (ac_year and semester and department and program):
             pytest.skip("Missing academic seed data")
+        ay_id = ac_year.id
+        sem_id = semester.id
+        dept_id = department.id
+        prog_id = program.id
 
     resp = client.post(
         "/timetable/generate",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={
-            "academic_year_id": ac_year.id,
-            "semester_id": semester.id,
-            "department_id": department.id,
-            "program_id": program.id,
+            "academic_year_id": ay_id,
+            "semester_id": sem_id,
+            "department_id": dept_id,
+            "program_id": prog_id,
         },
     )
     assert resp.status_code == 200, resp.text
@@ -258,6 +262,7 @@ def test_g_validation_finalize_and_authoritative_publish(admin_token, generated_
 
     with Session(engine) as db:
         ver = db.query(TimetableVersion).filter(TimetableVersion.id == generated_version_id).first()
+        assert ver is not None
         assert ver.status == "PUBLISHED"
         active_entries = db.query(TimetableEntry).filter(
             TimetableEntry.version_id == generated_version_id,

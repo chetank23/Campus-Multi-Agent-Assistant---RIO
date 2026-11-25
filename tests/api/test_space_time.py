@@ -245,3 +245,36 @@ def test_delete_academic_calendar(space_time_data, auth_headers):
     new_id = response.json()["id"]
     response = client.delete(f"/academic-calendar/{new_id}", headers=auth_headers)
     assert response.status_code == 200
+
+
+def test_get_academic_calendars_filter_is_holiday(space_time_data, auth_headers):
+    # Create a holiday event
+    resp = client.post(
+        "/academic-calendar/",
+        json={
+            "academic_year_id": space_time_data["ay_id"],
+            "date": "2026-08-15",
+            "event_type": "HOLIDAY",
+            "description": "Independence Day",
+        },
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    holiday_id = resp.json()["id"]
+
+    try:
+        # Filter is_holiday=true
+        res_true = client.get("/academic-calendar/?is_holiday=true", headers=auth_headers)
+        assert res_true.status_code == 200
+        events_true = res_true.json()
+        assert any(e["id"] == holiday_id for e in events_true)
+        assert all(e["event_type"] == "HOLIDAY" for e in events_true)
+
+        # Filter is_holiday=false
+        res_false = client.get("/academic-calendar/?is_holiday=false", headers=auth_headers)
+        assert res_false.status_code == 200
+        events_false = res_false.json()
+        assert not any(e["id"] == holiday_id for e in events_false)
+        assert all(e["event_type"] != "HOLIDAY" for e in events_false)
+    finally:
+        client.delete(f"/academic-calendar/{holiday_id}", headers=auth_headers)

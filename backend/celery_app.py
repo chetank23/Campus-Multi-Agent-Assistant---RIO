@@ -32,7 +32,7 @@ def is_redis_available(url: str = CELERY_BROKER_URL, timeout: float = 0.5) -> bo
     try:
         import redis
         client = redis.from_url(url, socket_connect_timeout=timeout, socket_timeout=timeout)
-        return bool(client.ping())
+        return client.ping()
     except Exception:
         return False
 

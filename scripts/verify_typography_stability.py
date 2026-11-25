@@ -137,7 +137,7 @@ def verify_typography():
 
             logged_in = False
             for pwd in cfg["passwords"]:
-                role_page.fill("input[type='email']", cfg["email"])
+                role_page.fill("input[type='email']", str(cfg["email"]))
                 role_page.fill("input[type='password']", pwd)
                 role_page.click("button[type='submit']")
                 try:
@@ -181,7 +181,7 @@ def verify_typography():
                 }
             """)
 
-            screenshot_path = os.path.join(SCREENSHOT_DIR, cfg["screenshot"])
+            screenshot_path = os.path.join(SCREENSHOT_DIR, str(cfg["screenshot"]))
             role_page.screenshot(path=screenshot_path, full_page=False)
             print(f"  [+] Captured screenshot: {cfg['screenshot']}")
             print(f"  [+] Heading: {dom_typography.get('heading')}")

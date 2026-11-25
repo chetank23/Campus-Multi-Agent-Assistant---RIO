@@ -1262,7 +1262,7 @@ def _notify_eligible_students_drive_cancelled(db: Session, drive: PlacementDrive
 # 8. Placement Applications Management
 # ---------------------------------------------------------------------------
 
-def _format_placement_application(app: PlacementApplication) -> PlacementApplicationResponse:
+def _format_placement_application(app: Any) -> PlacementApplicationResponse:
     student = app.student
     user = student.user if student else None
     drive = app.drive

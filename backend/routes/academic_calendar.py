@@ -28,7 +28,10 @@ def get_academic_calendars(
     if event_type is not None:
         query = query.filter(AcademicCalendar.event_type.ilike(f"%{event_type}%"))
     if is_holiday is not None:
-        query = query.filter(AcademicCalendar.is_holiday == is_holiday)
+        if is_holiday:
+            query = query.filter(AcademicCalendar.event_type == "HOLIDAY")
+        else:
+            query = query.filter(AcademicCalendar.event_type != "HOLIDAY")
     if from_date is not None:
         query = query.filter(AcademicCalendar.date >= from_date)
     if to_date is not None:
