@@ -565,12 +565,14 @@ def test_12_validation_status_tracking(admin_token, test_scope):
         assert ver is not None
         assert ver.validation_status in ("PASSED", "PASSED_WITH_WARNINGS", "FAILED")
         assert ver.validated_at is not None
+        err_count = ver.validation_errors_count
+        assert err_count is not None
         if val_data["is_valid"]:
-            assert ver.validation_errors_count == 0
+            assert err_count == 0
             assert ver.validation_status in ("PASSED", "PASSED_WITH_WARNINGS")
         else:
             assert ver.validation_status == "FAILED"
-            assert ver.validation_errors_count > 0
+            assert err_count > 0
 
 
 def test_13_recall_published_timetable(admin_token, test_scope):
@@ -663,7 +665,9 @@ def test_13_recall_published_timetable(admin_token, test_scope):
             Notification.title.ilike("%Recalled%"),
         ).first()
         assert notif is not None
-        assert recall_reason in notif.message
+        notif_message = notif.message
+        assert isinstance(notif_message, str)
+        assert recall_reason in notif_message
 
 
 def test_14_recalled_timetable_can_be_edited_revalidated_and_republished(admin_token, test_scope):
@@ -689,13 +693,20 @@ def test_14_recalled_timetable_can_be_edited_revalidated_and_republished(admin_t
 
     # 2. Check move options and save an edit on the RECALLED version
     with Session(engine) as db:
+        ver = db.query(TimetableVersion).filter(TimetableVersion.id == vid).first()
+        assert ver is not None
+        cur_rev = ver.revision
+
         entry = db.query(TimetableEntry).filter(
             TimetableEntry.version_id == vid,
             TimetableEntry.status != "CANCELLED",
         ).first()
         assert entry is not None
         entry_id = entry.id
-        cur_rev = entry.version.revision or 1
+        version = entry.version
+        assert version is not None
+        assert version.id == ver.id
+        assert version.revision == cur_rev
 
         other_slot = db.query(TimeSlot).filter(TimeSlot.id != entry.slot_id, TimeSlot.slot_type == "CLASS").first()
         assert other_slot is not None
