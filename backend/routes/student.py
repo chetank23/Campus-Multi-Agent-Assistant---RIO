@@ -76,39 +76,22 @@ def _get_student_my_timetable_handler(
             entries=[],
         )
 
-    # Prefer canonical timetable if one is published for this student's section
-    canonical_tt_query = (
-        db.query(Timetable)
+    query = (
+        db.query(TimetableEntry)
+        .outerjoin(Timetable, TimetableEntry.timetable_id == Timetable.id)
+        .outerjoin(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
         .filter(
-            Timetable.section_id == stu.section_id,
-            Timetable.status == "PUBLISHED",
+            ((Timetable.id != None) & (Timetable.status == "PUBLISHED")) |  # noqa: E711
+            ((TimetableEntry.timetable_id == None) & (TimetableVersion.id != None) & (TimetableVersion.status == "PUBLISHED")),  # noqa: E711
+            TimetableEntry.section_id == stu.section_id,
+            TimetableEntry.status != "CANCELLED",
         )
     )
     if academic_year_id:
-        canonical_tt_query = canonical_tt_query.filter(Timetable.academic_year_id == academic_year_id)
-    canonical_tt = canonical_tt_query.order_by(Timetable.id.desc()).first()
-
-    if canonical_tt:
-        query = (
-            db.query(TimetableEntry)
-            .filter(
-                TimetableEntry.timetable_id == canonical_tt.id,
-                TimetableEntry.section_id == stu.section_id,
-                TimetableEntry.status != "CANCELLED",
-            )
+        query = query.filter(
+            (Timetable.academic_year_id == academic_year_id) |
+            (TimetableVersion.academic_year_id == academic_year_id)
         )
-    else:
-        query = (
-            db.query(TimetableEntry)
-            .join(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
-            .filter(
-                TimetableVersion.status == "PUBLISHED",
-                TimetableEntry.section_id == stu.section_id,
-                TimetableEntry.status != "CANCELLED",
-            )
-        )
-        if academic_year_id:
-            query = query.filter(TimetableVersion.academic_year_id == academic_year_id)
     if stu.batch_id is not None:
         # Include section-wide entries and student's batch entries
         query = query.filter(

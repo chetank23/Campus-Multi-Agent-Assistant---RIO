@@ -18,7 +18,7 @@ from backend.models.identity import User
 from backend.models.academic import Faculty, Student, Department, Section, Batch
 from backend.models.courses import Course
 from backend.models.space_time import Room, TimeSlot
-from backend.models.timetable import TimetableVersion, TimetableEntry
+from backend.models.timetable import Timetable, TimetableVersion, TimetableEntry
 
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -104,6 +104,12 @@ def test_timetables(faculty_users, student_users):
         fac2_id = faculty_users["fac2"]["faculty_id"]
         stu1_sec = student_users["stu1"]["section_id"]
         other_sec = sections[1].id if len(sections) > 1 and sections[1].id != stu1_sec else sections[0].id
+
+        # Clean up any leftover entries from previous test suites for these test entities
+        db.query(TimetableEntry).filter(
+            (TimetableEntry.section_id == stu1_sec) | (TimetableEntry.faculty_id.in_([fac1_id, fac2_id]))
+        ).delete(synchronize_session=False)
+        db.query(Timetable).filter(Timetable.section_id == stu1_sec).update({"status": "ARCHIVED"}, synchronize_session=False)
 
         # 1. PUBLISHED Version
         pub_version = TimetableVersion(

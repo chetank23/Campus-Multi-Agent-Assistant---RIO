@@ -57,7 +57,7 @@ class DisruptionSpec(BaseModel):
 
 class DisruptionImpactItem(BaseModel):
     entry_id: int
-    course_assignment_id: int
+    course_assignment_id: Optional[int] = None
     course_id: Optional[int] = None
     course_code: str
     course_name: str
@@ -91,7 +91,7 @@ class DisruptionImpactAnalysis(BaseModel):
 
 class TimetableDiffItem(BaseModel):
     entry_id: Optional[int] = None
-    course_assignment_id: int
+    course_assignment_id: Optional[int] = None
     course_code: str
     course_name: str
     faculty_name: str
@@ -247,7 +247,7 @@ def analyze_disruption_impact(
             affected_items.append(
                 DisruptionImpactItem(
                     entry_id=e.id,
-                    course_assignment_id=getattr(e, "course_assignment_id", e.id),
+                    course_assignment_id=getattr(e, "course_assignment_id", None) or e.id,
                     course_id=e.course_id,
                     course_code=c_code,
                     course_name=c_name,
