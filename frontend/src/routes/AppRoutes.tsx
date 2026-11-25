@@ -70,6 +70,7 @@ const AdminCurriculumAllocationPage = lazyPage(() => import('@/pages/admin/curri
 const AdminCurriculumReadinessPage = lazyPage(() => import('@/pages/admin/curriculum/AdminCurriculumReadinessPage'), 'AdminCurriculumReadinessPage');
 const AdminCurriculumRequestsPage = lazyPage(() => import('@/pages/admin/curriculum/AdminCurriculumRequestsPage'), 'AdminCurriculumRequestsPage');
 const AdminTimetableManagementPage = lazyPage(() => import('@/pages/admin/timetable/AdminTimetableManagementPage'), 'AdminTimetableManagementPage');
+const AdminGeneratedTimetablesPage = lazyPage(() => import('@/pages/admin/timetable/AdminGeneratedTimetablesPage'), 'AdminGeneratedTimetablesPage');
 const AdminTimetableReviewPage = lazyPage(() => import('@/pages/admin/timetable/AdminTimetableReviewPage'), 'AdminTimetableReviewPage');
 const ResourcesPage = lazyPage(() => import('@/pages/admin/resources/ResourcesPage'), 'ResourcesPage');
 const AdminEventsPage = lazyPage(() => import('@/pages/admin/AdminEventsPage'), 'AdminEventsPage');
@@ -220,7 +221,9 @@ export function AppRoutes() {
 
             {/* Timetable Management */}
             <Route path="/admin/timetable" element={<AdminTimetableManagementPage />} />
-            <Route path="/admin/timetable/versions" element={<Navigate to="/admin/timetable" replace />} />
+            <Route path="/admin/timetables/generated" element={<AdminGeneratedTimetablesPage />} />
+            <Route path="/admin/timetable/generated" element={<AdminGeneratedTimetablesPage />} />
+            <Route path="/admin/timetable/versions" element={<Navigate to="/admin/timetables/generated" replace />} />
             <Route path="/admin/timetable/versions/:id" element={<AdminTimetableReviewPage />} />
             <Route path="/admin/timetable/generate" element={<Navigate to="/admin/timetable" replace />} />
             {/* Resource & Operational Administration */}

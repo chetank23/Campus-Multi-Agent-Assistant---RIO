@@ -62,9 +62,65 @@ export interface TimetableVersionResponse {
   score_summary?: Record<string, unknown> | null;
   created_by: number | null;
   approved_by: number | null;
+  approved_at?: string | null;
+  approved_revision?: number | null;
   created_at: string;
   published_at: string | null;
   reason: string | null;
+  department_name?: string | null;
+  program_name?: string | null;
+  academic_year_name?: string | null;
+  semester_number?: number | null;
+  created_by_name?: string | null;
+  approved_by_name?: string | null;
+  entry_count?: number;
+  section_names?: string[];
+}
+
+export interface CoordinatorRecipientItem {
+  id: number;
+  user_id?: number | null;
+  name: string;
+  email?: string | null;
+  role_or_designation: string;
+  scope_type: string;
+  scope_description: string;
+  department_name?: string | null;
+  section_name?: string | null;
+}
+
+export interface PublishPreflightResponse {
+  version_id: number;
+  academic_year_id?: number | null;
+  academic_year_name?: string | null;
+  department_id?: number | null;
+  department_name?: string | null;
+  semester_id?: number | null;
+  semester_number?: number | null;
+  section_names: string[];
+  status: string;
+  revision: number;
+  approved_revision?: number | null;
+  can_publish: boolean;
+  coordinators: CoordinatorRecipientItem[];
+  coordinator_count: number;
+  blocking_reasons: string[];
+}
+
+export interface TimetableVersionsSummaryResponse {
+  total_generated: number;
+  awaiting_review: number;
+  approved: number;
+  published: number;
+  archived: number;
+}
+
+export interface TimetableVersionFilters {
+  academic_year_id?: number;
+  department_id?: number;
+  semester_id?: number;
+  status?: string;
+  search?: string;
 }
 
 export interface TimetableEntryDetailResponse extends TimetableEntryResponse {
@@ -159,18 +215,18 @@ export interface MoveOptionSlot {
   start_time: string;
   end_time: string;
   slot_type: string;
-  can_move: boolean;
-  blocked_reason?: string | null;
-  warnings: string[];
+  status: 'VALID' | 'WARNING' | 'BLOCKED';
+  reasons: string[];
   alternative_rooms: AlternativeRoomOption[];
+  block_target_slot_ids: number[];
 }
 
 export interface MoveOptionsResponse {
   version_id: number;
   entry_id: number;
   block_entry_ids: number[];
-  revision: number;
-  options: MoveOptionSlot[];
+  is_multi_period_block: boolean;
+  slots: MoveOptionSlot[];
 }
 
 export interface ProposedMoveItem {
@@ -182,49 +238,38 @@ export interface ProposedMoveItem {
 
 export interface MoveOutcomeItem {
   entry_id: number;
-  target_slot_id: number;
-  valid: boolean;
+  status: 'VALID' | 'WARNING' | 'BLOCKED';
   reasons: string[];
-  warnings: string[];
-  affected_entry_ids: number[];
 }
 
 export interface ArrangementValidateResponse {
-  valid: boolean;
+  is_valid: boolean;
   can_save: boolean;
-  current_revision: number;
-  outcomes: MoveOutcomeItem[];
-  conflicts: string[];
-  warnings: string[];
+  move_outcomes: MoveOutcomeItem[];
+  validation_result: ValidationResult;
 }
 
 export interface ArrangementSaveResponse {
-  success: boolean;
   version_id: number;
   revision: number;
+  validated_revision?: number | null;
   status: string;
   last_saved_at: string;
-  saved_count: number;
-  version_detail: TimetableVersionDetailResponse;
+  updated_entries: TimetableEntryDetailResponse[];
+  validation_result: ValidationResult;
 }
 
 export interface TimetableChangeHistoryItem {
   id: number;
   version_id: number;
   revision: number;
+  action_type: string;
   entry_id?: number | null;
-  admin_id: number;
-  admin_name?: string | null;
-  previous_slot_id?: number | null;
-  new_slot_id?: number | null;
-  previous_room_id?: number | null;
-  new_room_id?: number | null;
-  previous_faculty_id?: number | null;
-  new_faculty_id?: number | null;
-  previous_day?: string | null;
-  new_day?: string | null;
-  validation_outcome: string;
-  reason?: string | null;
+  actor_id?: number | null;
+  actor_name?: string | null;
+  old_state?: Record<string, unknown> | null;
+  new_state?: Record<string, unknown> | null;
+  note?: string | null;
   created_at: string;
 }
 
@@ -234,9 +279,49 @@ export const generateTimetable = async (scope: GenerationScope): Promise<Generat
   return response.data;
 };
 
-export const getTimetableVersions = async (academicYearId?: number): Promise<TimetableVersionResponse[]> => {
-  const params = academicYearId ? { academic_year_id: academicYearId } : {};
+export const getTimetableVersions = async (
+  filtersOrAyId?: number | TimetableVersionFilters,
+): Promise<TimetableVersionResponse[]> => {
+  let params: Record<string, unknown> = {};
+  if (typeof filtersOrAyId === 'number') {
+    params = { academic_year_id: filtersOrAyId };
+  } else if (filtersOrAyId) {
+    params = { ...filtersOrAyId };
+  }
   const response = await apiClient.get('/timetable/versions', { params });
+  return response.data;
+};
+
+export const getTimetableVersionsSummary = async (): Promise<TimetableVersionsSummaryResponse> => {
+  const response = await apiClient.get('/timetable/versions/summary');
+  return response.data;
+};
+
+export const approveTimetableVersion = async (
+  versionId: number,
+): Promise<{ message: string; version_id: number; status: string; revision: number; approved_at?: string }> => {
+  const response = await apiClient.post(`/timetable/versions/${versionId}/approve`);
+  return response.data;
+};
+
+export const getTimetableCoordinators = async (
+  versionId: number,
+): Promise<PublishPreflightResponse> => {
+  const response = await apiClient.get(`/timetable/versions/${versionId}/coordinators`);
+  return response.data;
+};
+
+export const archiveTimetableVersion = async (
+  versionId: number,
+): Promise<{ message: string }> => {
+  const response = await apiClient.post(`/timetable/versions/${versionId}/archive`);
+  return response.data;
+};
+
+export const deleteTimetableVersion = async (
+  versionId: number,
+): Promise<{ message: string }> => {
+  const response = await apiClient.delete(`/timetable/versions/${versionId}`);
   return response.data;
 };
 
@@ -284,12 +369,12 @@ export const saveArrangements = async (
   versionId: number,
   expectedRevision: number,
   moves: ProposedMoveItem[],
-  reason?: string,
+  note?: string,
 ): Promise<ArrangementSaveResponse> => {
   const response = await apiClient.post(`/timetable/versions/${versionId}/arrangements`, {
     expected_revision: expectedRevision,
     moves,
-    reason,
+    note,
   });
   return response.data;
 };
@@ -578,11 +663,14 @@ export const getTimetableSemesters = async (academicYearId: number): Promise<Tim
 };
 
 export const getTimetableDepartments = async (
-  academicYearId: number,
-  semesterId: number
+  academicYearId?: number,
+  semesterId?: number
 ): Promise<TimetableDepartmentOption[]> => {
+  const params: Record<string, number> = {};
+  if (academicYearId !== undefined) params.academic_year_id = academicYearId;
+  if (semesterId !== undefined) params.semester_id = semesterId;
   const response = await apiClient.get<TimetableDepartmentOption[]>('/timetable/departments', {
-    params: { academic_year_id: academicYearId, semester_id: semesterId },
+    params,
   });
   return response.data;
 };

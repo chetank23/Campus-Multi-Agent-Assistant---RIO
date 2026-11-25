@@ -25,8 +25,9 @@ import {
 import {
   getTimetableVersion,
   validateTimetableVersion,
-  finalizeTimetableVersion,
   publishTimetableVersion,
+  approveTimetableVersion,
+  getTimetableCoordinators,
   getMoveOptions,
   validateArrangements,
   saveArrangements,
@@ -36,6 +37,7 @@ import {
   type ProposedMoveItem,
   type TimetableEntryDetailResponse,
   type ValidationResult,
+  type PublishPreflightResponse,
 } from '@/api/timetable';
 import { academicYearsApi } from '@/api/academicYears';
 import { semestersApi } from '@/api/semesters';
@@ -72,7 +74,8 @@ export const AdminTimetableReviewPage: React.FC = () => {
   const [errorStatus, setErrorStatus] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [statusMessage, setStatusMessage] = useState<string>('');
-  const [showPublishConfirm, setShowPublishConfirm] = useState(false);
+  const [showCoordinatorModal, setShowCoordinatorModal] = useState(false);
+  const [showApproveModal, setShowApproveModal] = useState(false);
 
   const notifySuccess = (msg: string) => {
     setStatusMessage(msg);
@@ -161,6 +164,7 @@ export const AdminTimetableReviewPage: React.FC = () => {
       setUndoStack([]);
       setRedoStack([]);
       setMoveOptionsMap({});
+      setValidationResult(res.validation_result);
       queryClient.invalidateQueries({ queryKey: ['timetable', 'version', versionId] });
       queryClient.invalidateQueries({ queryKey: ['timetable', 'versions'] });
       if (showHistory) refetchHistory();
@@ -190,18 +194,26 @@ export const AdminTimetableReviewPage: React.FC = () => {
     },
   });
 
-  const finalizeMutation = useMutation({
-    mutationFn: () => finalizeTimetableVersion(versionId),
-    onSuccess: () => {
-      clearError();
-      setIsEditMode(false);
+  const approveMutation = useMutation({
+    mutationFn: () => approveTimetableVersion(versionId),
+    onSuccess: (data) => {
+      notifySuccess(data.message || 'Timetable approved successfully.');
       queryClient.invalidateQueries({ queryKey: ['timetable', 'version', versionId] });
       queryClient.invalidateQueries({ queryKey: ['timetable', 'versions'] });
-      notifySuccess('Timetable finalized and locked.');
+      setShowApproveModal(false);
     },
     onError: (err) => {
-      notifyError(extractErrorMessage(err, 'Finalization failed.'));
+      notifyError(extractErrorMessage(err, 'Failed to approve timetable.'));
     },
+  });
+
+  const {
+    data: preflightData,
+    isLoading: loadingPreflight,
+  } = useQuery<PublishPreflightResponse>({
+    queryKey: ['timetable', 'coordinators', versionId],
+    queryFn: () => getTimetableCoordinators(versionId),
+    enabled: showCoordinatorModal && Number.isFinite(versionId) && versionId > 0,
   });
 
   const publishMutation = useMutation({
@@ -209,10 +221,11 @@ export const AdminTimetableReviewPage: React.FC = () => {
     onSuccess: () => {
       clearError();
       setIsEditMode(false);
+      setShowCoordinatorModal(false);
       queryClient.invalidateQueries({ queryKey: ['timetable', 'version', versionId] });
       queryClient.invalidateQueries({ queryKey: ['timetable', 'versions'] });
       queryClient.invalidateQueries({ queryKey: ['timetable-canonical'] });
-      notifySuccess('Timetable published to Student & Faculty portals.');
+      notifySuccess('Timetable published to related coordinators, student & faculty portals.');
     },
     onError: (err) => {
       notifyError(extractErrorMessage(err, 'Publication failed.'));
@@ -307,19 +320,14 @@ export const AdminTimetableReviewPage: React.FC = () => {
   const pendingEntryIds = useMemo(() => new Set(Object.keys(pendingMoves).map(Number)), [pendingMoves]);
 
   // Drag & Drop handlers
-  const [blockEntryIdsMap, setBlockEntryIdsMap] = useState<Record<number, number[]>>({});
-
   const handleDragStartEntry = useCallback(async (entryId: number) => {
     try {
       const res = await getMoveOptions(versionId, entryId);
       const map: Record<number, MoveOptionSlot> = {};
-      res.options.forEach((s) => {
+      res.slots.forEach((s) => {
         map[s.slot_id] = s;
       });
       setMoveOptionsMap(map);
-      if (res.block_entry_ids && res.block_entry_ids.length > 1) {
-        setBlockEntryIdsMap((prev) => ({ ...prev, [entryId]: res.block_entry_ids }));
-      }
     } catch (err) {
       notifyError(extractErrorMessage(err, 'Failed to check slot availability.'));
     }
@@ -330,8 +338,8 @@ export const AdminTimetableReviewPage: React.FC = () => {
     const entry = workingEntries.find((e) => e.id === entryId);
     if (!entry || entry.slot_id === targetSlotId) return;
 
-    if (slotOption && !slotOption.can_move) {
-      const reason = slotOption.blocked_reason || 'Target slot is blocked due to a conflict.';
+    if (slotOption && slotOption.status === 'BLOCKED') {
+      const reason = slotOption.reasons.join('; ') || 'Target slot is blocked due to a conflict.';
       setErrorStatus('BLOCKED');
       setErrorMessage(reason);
       return;
@@ -340,22 +348,16 @@ export const AdminTimetableReviewPage: React.FC = () => {
     const nextMoves: Record<number, ProposedMoveItem> = { ...pendingMoves };
     const chosenRoomId = slotOption?.alternative_rooms?.[0]?.room_id ?? entry.room_id;
 
-    // Multi-period block support: if entry belongs to a block, shift consecutive slots along timeSlots
-    const blockIds = blockEntryIdsMap[entryId];
-    if (blockIds && blockIds.length > 1 && timeSlots && slotOption) {
-      const targetDay = slotOption.day;
-      const daySlots = timeSlots
-        .filter((s) => s.day.toUpperCase().startsWith(targetDay.toUpperCase().slice(0, 3)) && s.slot_type === 'CLASS')
-        .sort((a, b) => a.start_time.localeCompare(b.start_time));
-      const startIdx = daySlots.findIndex((s) => s.id === targetSlotId);
+    // Multi-period block support
+    if (entry.block_group_id && slotOption && slotOption.block_target_slot_ids.length > 1) {
       const groupEntries = workingEntries
-        .filter((e) => blockIds.includes(e.id))
+        .filter((e) => e.block_group_id === entry.block_group_id)
         .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
-      if (startIdx >= 0 && startIdx + groupEntries.length <= daySlots.length) {
+      if (groupEntries.length === slotOption.block_target_slot_ids.length) {
         groupEntries.forEach((ge, idx) => {
           nextMoves[ge.id] = {
             entry_id: ge.id,
-            target_slot_id: daySlots[startIdx + idx].id,
+            target_slot_id: slotOption.block_target_slot_ids[idx],
             target_room_id: chosenRoomId ?? undefined,
           };
         });
@@ -377,9 +379,9 @@ export const AdminTimetableReviewPage: React.FC = () => {
     try {
       const valRes = await validateArrangements(versionId, Object.values(nextMoves));
       if (!valRes.can_save) {
-        const blockedReasons = valRes.conflicts.length > 0
-          ? valRes.conflicts
-          : valRes.outcomes.filter((m) => !m.valid).flatMap((m) => m.reasons);
+        const blockedReasons = valRes.move_outcomes
+          .filter((m) => m.status === 'BLOCKED')
+          .flatMap((m) => m.reasons);
         const msg = blockedReasons.join('; ') || 'Proposed move violates timetable constraints.';
         setErrorStatus('BLOCKED');
         setErrorMessage(msg);
@@ -390,11 +392,12 @@ export const AdminTimetableReviewPage: React.FC = () => {
       setUndoStack((prev) => [...prev, pendingMoves]);
       setRedoStack([]);
       setPendingMoves(nextMoves);
+      setValidationResult(valRes.validation_result);
       notifySuccess('Class moved in draft. Click "Save Changes" to persist.');
     } catch (err) {
       notifyError(extractErrorMessage(err, 'Failed to validate move.'));
     }
-  }, [pendingMoves, versionId, workingEntries, blockEntryIdsMap, timeSlots]);
+  }, [pendingMoves, versionId, workingEntries]);
 
   const handleUndo = () => {
     if (undoStack.length === 0) return;
@@ -462,7 +465,8 @@ export const AdminTimetableReviewPage: React.FC = () => {
       case 'VALIDATED':
         return <StatusBadge label="VALIDATED — UNPUBLISHED" variant="info" size="md" />;
       case 'FINALIZED':
-        return <StatusBadge label="FINALIZED — READY TO PUBLISH" variant="primary" size="md" />;
+      case 'APPROVED':
+        return <StatusBadge label="APPROVED — READY TO PUBLISH" variant="success" size="md" />;
       case 'PUBLISHED':
         return <StatusBadge label="PUBLISHED" variant="success" size="md" dot />;
       case 'ARCHIVED':
@@ -473,7 +477,11 @@ export const AdminTimetableReviewPage: React.FC = () => {
   };
 
   const isEditable =
-    version.status === 'GENERATED' || version.status === 'REVIEWED' || version.status === 'VALIDATED';
+    version.status === 'GENERATED' ||
+    version.status === 'REVIEWED' ||
+    version.status === 'VALIDATED' ||
+    version.status === 'APPROVED' ||
+    version.status === 'FINALIZED';
   const currentRevision = version.revision ?? 1;
   const isValidatedAtCurrentRev = version.validated_revision === currentRevision;
 
@@ -493,13 +501,12 @@ export const AdminTimetableReviewPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2">
             {/* Sync Connection Pill */}
             <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
-                connectionStatus === 'connected'
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : connectionStatus === 'polling'
-                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'bg-slate-100 text-slate-600 border-slate-200'
-              }`}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${connectionStatus === 'connected'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : connectionStatus === 'polling'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-slate-100 text-slate-600 border-slate-200'
+                }`}
             >
               {connectionStatus === 'connected' ? <Wifi size={12} /> : <WifiOff size={12} />}
               <span>
@@ -555,11 +562,10 @@ export const AdminTimetableReviewPage: React.FC = () => {
                 <button
                   onClick={() => setIsEditMode((v) => !v)}
                   data-testid="toggle-edit-mode-btn"
-                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-colors ${
-                    isEditMode
-                      ? 'bg-indigo-600 text-white border-indigo-600'
-                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                  }`}
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-colors ${isEditMode
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                    }`}
                 >
                   <Edit3 size={14} />
                   <span>{isEditMode ? 'Exit Edit Mode' : 'Edit Timetable'}</span>
@@ -590,52 +596,30 @@ export const AdminTimetableReviewPage: React.FC = () => {
                 </button>
               )}
 
+              {/* Approve Timetable Button */}
               {version.status === 'VALIDATED' && isValidatedAtCurrentRev && pendingCount === 0 && (
                 <button
-                  onClick={() => finalizeMutation.mutate()}
-                  disabled={finalizeMutation.isPending}
-                  data-testid="finalize-btn"
-                  className="academic-btn-primary inline-flex items-center gap-1.5 text-xs font-semibold"
+                  onClick={() => setShowApproveModal(true)}
+                  disabled={approveMutation.isPending}
+                  data-testid="approve-btn"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-colors"
                 >
-                  {finalizeMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={15} />}
-                  <span>Finalize & Lock</span>
+                  {approveMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={15} />}
+                  <span>Approve Timetable</span>
                 </button>
               )}
 
-              {version.status === 'FINALIZED' && (
-                showPublishConfirm ? (
-                  <div className="inline-flex items-center gap-1.5 p-1 bg-emerald-50 rounded-xl border border-emerald-200">
-                    <button
-                      onClick={() => {
-                        setShowPublishConfirm(false);
-                        publishMutation.mutate();
-                      }}
-                      disabled={publishMutation.isPending}
-                      data-testid="confirm-publish-btn"
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
-                    >
-                      {publishMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                      <span>Confirm Publish</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowPublishConfirm(false)}
-                      className="px-2 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-200/60"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowPublishConfirm(true)}
-                    disabled={publishMutation.isPending}
-                    data-testid="publish-btn"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                  >
-                    <Send size={15} />
-                    <span>Publish to Portal</span>
-                  </button>
-                )
+              {/* Publish to Coordinators Button */}
+              {(version.status === 'APPROVED' || version.status === 'FINALIZED') && pendingCount === 0 && (
+                <button
+                  onClick={() => setShowCoordinatorModal(true)}
+                  disabled={publishMutation.isPending}
+                  data-testid="publish-btn"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white shadow-sm transition-colors"
+                >
+                  <Send size={15} />
+                  <span>Publish to Coordinators</span>
+                </button>
               )}
 
               {(version.status === 'PUBLISHED' || version.status === 'FINALIZED' || version.status === 'ARCHIVED') && (
@@ -857,12 +841,12 @@ export const AdminTimetableReviewPage: React.FC = () => {
               {changeHistory.map((item) => (
                 <div key={item.id} className="py-2 flex items-center justify-between gap-4">
                   <div>
-                    <span className="font-bold text-slate-800">{item.validation_outcome}</span>
+                    <span className="font-bold text-slate-800">{item.action_type}</span>
                     <span className="text-slate-500 ml-2">Rev {item.revision}</span>
-                    {item.reason && <span className="text-slate-600 ml-2">• {item.reason}</span>}
+                    {item.note && <span className="text-slate-600 ml-2">• {item.note}</span>}
                   </div>
                   <div className="text-slate-400 shrink-0">
-                    {item.admin_name || 'System'} • {new Date(item.created_at).toLocaleString()}
+                    {item.actor_name || 'System'} • {new Date(item.created_at).toLocaleString()}
                   </div>
                 </div>
               ))}
@@ -897,6 +881,173 @@ export const AdminTimetableReviewPage: React.FC = () => {
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-12">
           <LoadingState message="Loading schedule context (rooms, faculty, time slots)…" />
+        </div>
+      )}
+
+      {/* Approve Confirmation Modal */}
+      {showApproveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={20} className="text-emerald-600" />
+                <h3 className="text-base font-bold text-slate-900">Approve Timetable Version</h3>
+              </div>
+              <button
+                onClick={() => setShowApproveModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-sm text-slate-600">
+              You are approving <span className="font-bold text-slate-900">Version V{version.id}</span> (Revision {currentRevision}).
+            </p>
+
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800 space-y-1">
+              <p className="font-semibold">Approval Safeguards:</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                <li>Authoritative conflict validation will run immediately.</li>
+                <li>Version transitions to <span className="font-semibold">APPROVED</span> status.</li>
+                <li>Enables formal publishing to related department coordinators.</li>
+                <li>Any subsequent edits to classes will automatically invalidate this approval.</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowApproveModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => approveMutation.mutate()}
+                disabled={approveMutation.isPending}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+              >
+                {approveMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                <span>Confirm & Approve</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Coordinator Preflight Publication Modal */}
+      {showCoordinatorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Send size={20} className="text-teal-600" />
+                <h3 className="text-base font-bold text-slate-900">Publish Timetable to Coordinators</h3>
+              </div>
+              <button
+                onClick={() => setShowCoordinatorModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {loadingPreflight ? (
+              <div className="py-8 flex flex-col items-center justify-center space-y-2">
+                <Loader2 size={24} className="text-teal-600 animate-spin" />
+                <p className="text-xs text-slate-500">Resolving authoritative coordinators for this academic scope...</p>
+              </div>
+            ) : preflightData ? (
+              <div className="space-y-4">
+                <div className="bg-slate-50 rounded-xl p-3 text-xs space-y-1 border border-slate-200">
+                  <p className="font-semibold text-slate-800">Academic Scope:</p>
+                  <p className="text-slate-600">
+                    <span className="font-medium">Department:</span> {preflightData.department_name || deptName}
+                    {preflightData.semester_number && ` • Semester ${preflightData.semester_number}`}
+                    {preflightData.section_names.length > 0 && ` • Sections: ${preflightData.section_names.join(', ')}`}
+                  </p>
+                  <p className="text-slate-500">Version V{preflightData.version_id} (Rev {preflightData.revision})</p>
+                </div>
+
+                {!preflightData.can_publish && preflightData.blocking_reasons.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-800 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <AlertCircle size={14} className="text-red-600" />
+                      <span>Publication Blocked:</span>
+                    </div>
+                    <ul className="list-disc pl-4 space-y-0.5">
+                      {preflightData.blocking_reasons.map((reason, idx) => (
+                        <li key={idx}>{reason}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Target Coordinators ({preflightData.coordinator_count})
+                    </span>
+                    <span className="text-[11px] text-slate-500">Authoritative DB resolution</span>
+                  </div>
+
+                  {preflightData.coordinators.length === 0 ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+                      No eligible coordinators mapped for this department/section scope. You must assign at least one coordinator or section class teacher before publishing.
+                    </div>
+                  ) : (
+                    <div className="max-h-48 overflow-y-auto space-y-2 pr-1 border border-slate-200 rounded-xl p-2 bg-slate-50/50">
+                      {preflightData.coordinators.map((c) => (
+                        <div
+                          key={c.id}
+                          className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs flex items-center justify-between text-xs"
+                        >
+                          <div>
+                            <p className="font-bold text-slate-900">{c.name}</p>
+                            <p className="text-[11px] text-slate-500">{c.role_or_designation} • {c.scope_description}</p>
+                          </div>
+                          {c.email && (
+                            <span className="text-[11px] text-slate-400 font-mono">{c.email}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 text-xs text-teal-800 space-y-1">
+                  <p className="font-semibold">Publication Broadcast:</p>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    <li>Updates canonical timetable database records.</li>
+                    <li>Dispatches notifications to all resolved coordinators linking to their department schedule.</li>
+                    <li>Student and faculty schedules synchronize in real-time.</li>
+                  </ul>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    onClick={() => setShowCoordinatorModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => publishMutation.mutate()}
+                    disabled={!preflightData.can_publish || publishMutation.isPending}
+                    data-testid="confirm-publish-btn"
+                    className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-sm transition-colors ${
+                      preflightData.can_publish && !publishMutation.isPending
+                        ? 'bg-teal-600 hover:bg-teal-700'
+                        : 'bg-slate-300 cursor-not-allowed'
+                    }`}
+                  >
+                    {publishMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                    <span>Confirm & Publish to Coordinators</span>
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
     </div>

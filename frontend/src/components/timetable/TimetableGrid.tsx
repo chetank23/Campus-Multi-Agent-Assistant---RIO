@@ -95,30 +95,23 @@ const DroppableSlotTd: React.FC<{
 
   let highlightClass = '';
   let titleText: string | undefined;
-  const moveStatus = !moveOption
-    ? undefined
-    : !moveOption.can_move
-      ? 'BLOCKED'
-      : moveOption.warnings.length > 0
-        ? 'WARNING'
-        : 'VALID';
 
   if (dndEnabled && isDraggingActive && moveOption) {
-    if (moveStatus === 'VALID') {
+    if (moveOption.status === 'VALID') {
       highlightClass = isOver
         ? 'bg-emerald-100 ring-2 ring-emerald-500'
         : 'bg-emerald-50/80 ring-1 ring-inset ring-emerald-300';
       titleText = 'Valid destination — drop to move';
-    } else if (moveStatus === 'WARNING') {
+    } else if (moveOption.status === 'WARNING') {
       highlightClass = isOver
         ? 'bg-amber-100 ring-2 ring-amber-500'
         : 'bg-amber-50/80 ring-1 ring-inset ring-amber-300';
-      titleText = moveOption.warnings.join('; ') || 'Warning';
-    } else if (moveStatus === 'BLOCKED') {
+      titleText = moveOption.reasons.join('; ') || 'Warning';
+    } else if (moveOption.status === 'BLOCKED') {
       highlightClass = isOver
         ? 'bg-red-100 ring-2 ring-red-500'
         : 'bg-red-50/60 ring-1 ring-inset ring-red-200';
-      titleText = moveOption.blocked_reason || 'Blocked destination';
+      titleText = moveOption.reasons.join('; ') || 'Blocked destination';
     }
   } else if (dndEnabled && isOver) {
     highlightClass = 'bg-indigo-50 ring-2 ring-indigo-400';
@@ -129,7 +122,7 @@ const DroppableSlotTd: React.FC<{
       ref={setNodeRef}
       title={titleText}
       data-testid={slotId ? `timetable-slot-${slotId}` : `timetable-slot-${dayKey}-${timeKey}`}
-      data-slot-status={moveStatus}
+      data-slot-status={moveOption?.status}
       className={`p-2 border-r last:border-r-0 border-slate-200 min-h-[110px] align-top transition-colors ${highlightClass}`}
     >
       {children}
@@ -400,162 +393,161 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-      <div className="overflow-x-auto border border-slate-300 rounded-lg shadow-sm bg-white">
-        <table className="w-full border-collapse text-xs">
-          <thead>
-            <tr className="bg-slate-100 border-b border-slate-300 text-slate-700">
-              <th className="w-28 p-3.5 border-r border-slate-300 font-bold text-center uppercase tracking-wider text-xs">Day / Time</th>
-              {sortedSlots.map((slot) => {
-                const start = (slot.start_time || '').slice(0, 5);
-                const end = (slot.end_time || '').slice(0, 5);
-                const isTeaBreak = slot.slot_type === 'BREAK' || (start === '10:20' && end === '10:40');
-                const isLunchBreak = slot.slot_type === 'LUNCH' || (start === '12:30' && end === '13:30');
-                const isBreak = isTeaBreak || isLunchBreak;
-                const label = isTeaBreak ? 'Tea Break: 10:20–10:40' : isLunchBreak ? 'Lunch Break: 12:30–13:30' : `${start}–${end}`;
-
-                return (
-                  <th
-                    key={slot.id}
-                    className={`p-3 border-r last:border-r-0 border-slate-300 font-bold text-center text-xs tracking-tight ${
-                      isBreak ? 'bg-amber-50/90 text-amber-900 w-28' : 'text-slate-900 min-w-[150px]'
-                    }`}
-                  >
-                    <div className="font-bold font-tabular leading-snug">{label}</div>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {DAYS.map((dayKey) => (
-              <tr key={dayKey} className="border-b last:border-b-0 border-slate-200 hover:bg-slate-50/50 transition-colors">
-                {/* Day Header Column */}
-                <td className="w-28 p-3.5 border-r border-slate-300 bg-slate-50/90 font-extrabold text-slate-800 text-center uppercase tracking-wide align-top">
-                  {DAY_LABELS[dayKey] || dayKey}
-                </td>
-
-                {/* Slot Cells */}
+        <div className="overflow-x-auto border border-slate-300 rounded-lg shadow-sm bg-white">
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr className="bg-slate-100 border-b border-slate-300 text-slate-700">
+                <th className="w-28 p-3.5 border-r border-slate-300 font-bold text-center uppercase tracking-wider text-xs">Day / Time</th>
                 {sortedSlots.map((slot) => {
                   const start = (slot.start_time || '').slice(0, 5);
                   const end = (slot.end_time || '').slice(0, 5);
-                  const timeKey = `${start}-${end}`;
-                  const cellEntries = matrix[dayKey]?.[timeKey] || [];
-                  const daySlot = slotLookupByDayTime.get(`${dayKey}::${timeKey}`);
-                  const daySlotId = daySlot?.id ?? null;
-                  const moveOption = daySlotId ? moveOptionsMap[daySlotId] : undefined;
-
-                  // Handle explicit Break/Lunch slots
                   const isTeaBreak = slot.slot_type === 'BREAK' || (start === '10:20' && end === '10:40');
                   const isLunchBreak = slot.slot_type === 'LUNCH' || (start === '12:30' && end === '13:30');
-
-                  if (isLunchBreak) {
-                    return (
-                      <td key={slot.id} className="p-2 border-r last:border-r-0 border-slate-200 bg-amber-50/60 text-amber-800 text-center font-bold text-[11px] tracking-wider uppercase align-middle">
-                        <span className="block px-2 py-1 rounded bg-amber-100/60 font-medium">Lunch Break: 12:30–13:30</span>
-                      </td>
-                    );
-                  }
-                  if (isTeaBreak) {
-                    return (
-                      <td key={slot.id} className="p-2 border-r last:border-r-0 border-slate-200 bg-amber-50/60 text-amber-800 text-center font-bold text-[11px] tracking-wider uppercase align-middle">
-                        <span className="block px-2 py-1 rounded bg-amber-100/60 font-medium">Tea Break: 10:20–10:40</span>
-                      </td>
-                    );
-                  }
+                  const isBreak = isTeaBreak || isLunchBreak;
+                  const label = isTeaBreak ? 'Tea Break: 10:20–10:40' : isLunchBreak ? 'Lunch Break: 12:30–13:30' : `${start}–${end}`;
 
                   return (
-                    <DroppableSlotTd
+                    <th
                       key={slot.id}
-                      slotId={daySlotId}
-                      dayKey={dayKey}
-                      timeKey={timeKey}
-                      dndEnabled={dndEnabled}
-                      isDraggingActive={activeDragEntryId !== null}
-                      moveOption={moveOption}
+                      className={`p-3 border-r last:border-r-0 border-slate-300 font-bold text-center text-xs tracking-tight ${isBreak ? 'bg-amber-50/90 text-amber-900 w-28' : 'text-slate-900 min-w-[150px]'
+                        }`}
                     >
-                      {cellEntries.length === 0 ? (
-                        <div className="h-full min-h-[70px] flex items-center justify-center text-slate-300 text-xs italic">
-                          {dndEnabled && activeDragEntryId && moveOption?.can_move ? (
-                            <span className="text-emerald-700 font-semibold not-italic text-[11px]">Drop here</span>
-                          ) : (
-                            '—'
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex flex-col gap-2">
-                          {cellEntries.map((entry, idx) => {
-                            const data = getCellData(entry);
-                            const hasId = 'id' in entry;
-                            const entryId = hasId ? (entry as TimetableEntryResponse).id : -1;
-                            const key = hasId ? entryId : `${entry.course_assignment_id}-${idx}`;
-                            const detailEntry = entry as TimetableEntryDetailResponse;
-                            const isPending = hasId && Boolean(pendingEntryIds?.has(entryId));
-                            const isHighlighted = hasId && Boolean(highlightedEntryIds?.has(entryId));
-                            const isMultiPeriod = Boolean(detailEntry.block_group_id);
-
-                            const card = (
-                              <div
-                                key={key}
-                                onClick={() => {
-                                  if (isEditable && hasId && !activeDragEntryId) {
-                                    setEditingEntry(entry as TimetableEntryResponse);
-                                  }
-                                }}
-                                className={isEditable && hasId ? 'cursor-pointer hover:ring-2 hover:ring-indigo-500 rounded-lg transition-all' : ''}
-                              >
-                                <TimetableCell
-                                  courseCode={data.courseCode}
-                                  courseName={data.courseName}
-                                  facultyName={data.facultyName}
-                                  roomName={data.roomName}
-                                  hourType={data.hourType}
-                                  sectionName={detailEntry.section_name}
-                                  isEditMode={dndEnabled}
-                                  isPendingChange={isPending}
-                                  isConflictHighlighted={isHighlighted}
-                                  isMultiPeriodBlock={isMultiPeriod}
-                                />
-                              </div>
-                            );
-
-                            if (dndEnabled && hasId) {
-                              return (
-                                <DraggableEntryCard key={key} entryId={entryId} disabled={!dndEnabled}>
-                                  {card}
-                                </DraggableEntryCard>
-                              );
-                            }
-                            return card;
-                          })}
-                        </div>
-                      )}
-                    </DroppableSlotTd>
+                      <div className="font-bold font-tabular leading-snug">{label}</div>
+                    </th>
                   );
                 })}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <DragOverlay>
-        {activeDragEntryId !== null ? (() => {
-          const activeEntry = entries.find((e) => 'id' in e && e.id === activeDragEntryId);
-          if (!activeEntry) return null;
-          const data = getCellData(activeEntry);
-          return (
-            <div className="w-48 shadow-xl opacity-95 rotate-1">
-              <TimetableCell
-                courseCode={data.courseCode}
-                courseName={data.courseName}
-                facultyName={data.facultyName}
-                roomName={data.roomName}
-                hourType={data.hourType}
-                isEditMode
-              />
-            </div>
-          );
-        })() : null}
-      </DragOverlay>
+            </thead>
+            <tbody>
+              {DAYS.map((dayKey) => (
+                <tr key={dayKey} className="border-b last:border-b-0 border-slate-200 hover:bg-slate-50/50 transition-colors">
+                  {/* Day Header Column */}
+                  <td className="w-28 p-3.5 border-r border-slate-300 bg-slate-50/90 font-extrabold text-slate-800 text-center uppercase tracking-wide align-top">
+                    {DAY_LABELS[dayKey] || dayKey}
+                  </td>
+
+                  {/* Slot Cells */}
+                  {sortedSlots.map((slot) => {
+                    const start = (slot.start_time || '').slice(0, 5);
+                    const end = (slot.end_time || '').slice(0, 5);
+                    const timeKey = `${start}-${end}`;
+                    const cellEntries = matrix[dayKey]?.[timeKey] || [];
+                    const daySlot = slotLookupByDayTime.get(`${dayKey}::${timeKey}`);
+                    const daySlotId = daySlot?.id ?? null;
+                    const moveOption = daySlotId ? moveOptionsMap[daySlotId] : undefined;
+
+                    // Handle explicit Break/Lunch slots
+                    const isTeaBreak = slot.slot_type === 'BREAK' || (start === '10:20' && end === '10:40');
+                    const isLunchBreak = slot.slot_type === 'LUNCH' || (start === '12:30' && end === '13:30');
+
+                    if (isLunchBreak) {
+                      return (
+                        <td key={slot.id} className="p-2 border-r last:border-r-0 border-slate-200 bg-amber-50/60 text-amber-800 text-center font-bold text-[11px] tracking-wider uppercase align-middle">
+                          <span className="block px-2 py-1 rounded bg-amber-100/60 font-medium">Lunch Break: 12:30–13:30</span>
+                        </td>
+                      );
+                    }
+                    if (isTeaBreak) {
+                      return (
+                        <td key={slot.id} className="p-2 border-r last:border-r-0 border-slate-200 bg-amber-50/60 text-amber-800 text-center font-bold text-[11px] tracking-wider uppercase align-middle">
+                          <span className="block px-2 py-1 rounded bg-amber-100/60 font-medium">Tea Break: 10:20–10:40</span>
+                        </td>
+                      );
+                    }
+
+                    return (
+                      <DroppableSlotTd
+                        key={slot.id}
+                        slotId={daySlotId}
+                        dayKey={dayKey}
+                        timeKey={timeKey}
+                        dndEnabled={dndEnabled}
+                        isDraggingActive={activeDragEntryId !== null}
+                        moveOption={moveOption}
+                      >
+                        {cellEntries.length === 0 ? (
+                          <div className="h-full min-h-[70px] flex items-center justify-center text-slate-300 text-xs italic">
+                            {dndEnabled && activeDragEntryId && moveOption?.status === 'VALID' ? (
+                              <span className="text-emerald-700 font-semibold not-italic text-[11px]">Drop here</span>
+                            ) : (
+                              '—'
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-2">
+                            {cellEntries.map((entry, idx) => {
+                              const data = getCellData(entry);
+                              const hasId = 'id' in entry;
+                              const entryId = hasId ? (entry as TimetableEntryResponse).id : -1;
+                              const key = hasId ? entryId : `${entry.course_assignment_id}-${idx}`;
+                              const detailEntry = entry as TimetableEntryDetailResponse;
+                              const isPending = hasId && Boolean(pendingEntryIds?.has(entryId));
+                              const isHighlighted = hasId && Boolean(highlightedEntryIds?.has(entryId));
+                              const isMultiPeriod = Boolean(detailEntry.block_group_id);
+
+                              const card = (
+                                <div
+                                  key={key}
+                                  onClick={() => {
+                                    if (isEditable && hasId && !activeDragEntryId) {
+                                      setEditingEntry(entry as TimetableEntryResponse);
+                                    }
+                                  }}
+                                  className={isEditable && hasId ? 'cursor-pointer hover:ring-2 hover:ring-indigo-500 rounded-lg transition-all' : ''}
+                                >
+                                  <TimetableCell
+                                    courseCode={data.courseCode}
+                                    courseName={data.courseName}
+                                    facultyName={data.facultyName}
+                                    roomName={data.roomName}
+                                    hourType={data.hourType}
+                                    sectionName={detailEntry.section_name}
+                                    isEditMode={dndEnabled}
+                                    isPendingChange={isPending}
+                                    isConflictHighlighted={isHighlighted}
+                                    isMultiPeriodBlock={isMultiPeriod}
+                                  />
+                                </div>
+                              );
+
+                              if (dndEnabled && hasId) {
+                                return (
+                                  <DraggableEntryCard key={key} entryId={entryId} disabled={!dndEnabled}>
+                                    {card}
+                                  </DraggableEntryCard>
+                                );
+                              }
+                              return card;
+                            })}
+                          </div>
+                        )}
+                      </DroppableSlotTd>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <DragOverlay>
+          {activeDragEntryId !== null ? (() => {
+            const activeEntry = entries.find((e) => 'id' in e && e.id === activeDragEntryId);
+            if (!activeEntry) return null;
+            const data = getCellData(activeEntry);
+            return (
+              <div className="w-48 shadow-xl opacity-95 rotate-1">
+                <TimetableCell
+                  courseCode={data.courseCode}
+                  courseName={data.courseName}
+                  facultyName={data.facultyName}
+                  roomName={data.roomName}
+                  hourType={data.hourType}
+                  isEditMode
+                />
+              </div>
+            );
+          })() : null}
+        </DragOverlay>
       </DndContext>
 
       {/* Course & Faculty Detail Reference Table */}

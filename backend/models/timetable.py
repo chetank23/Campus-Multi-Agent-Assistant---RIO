@@ -133,7 +133,7 @@ class TimetableVersion(Base):
     status: Mapped[Optional[str]] = mapped_column(
         String(20),
         CheckConstraint(
-            "status IN ('DRAFT','GENERATED','REVIEWED','VALIDATED','FINALIZED','PUBLISHED','REJECTED','ARCHIVED')",
+            "status IN ('DRAFT','GENERATED','REVIEWED','VALIDATED','FINALIZED','APPROVED','PUBLISHED','REJECTED','ARCHIVED')",
             name="ck_tv_status",
         ),
         nullable=True,
@@ -144,6 +144,8 @@ class TimetableVersion(Base):
     approved_by: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id", name="fk_tv_approved_by"), nullable=True
     )
+    approved_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    approved_revision: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, default=utc_now, server_default=func.now()
     )

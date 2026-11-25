@@ -74,3 +74,5 @@ aids_a_seed_credentials.json
 LOCAL_TEST_*
 backups/
 *.dump
+screenshots/
+

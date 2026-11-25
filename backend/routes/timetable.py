@@ -1,5 +1,6 @@
 import datetime
-from typing import List, Optional
+from collections import defaultdict
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session, joinedload
 
@@ -8,7 +9,7 @@ from backend.models.identity import User
 from backend.dependencies import get_current_user, require_role
 from backend.models.academic import AcademicYear, Semester, Department, Program, Section, Faculty
 from backend.models.space_time import Room
-from backend.models.timetable import Timetable, TimetableVersion, TimetableEntry
+from backend.models.timetable import Timetable, TimetableVersion, TimetableEntry, TimetableChangeHistory
 from backend.models.workflow import AuditLog
 from backend.schemas.timetable_generation import (
     GenerationScope,
@@ -18,6 +19,9 @@ from backend.schemas.timetable_generation import (
 )
 from backend.schemas.timetable import (
     CanonicalTimetableResponse,
+    CoordinatorRecipientItem,
+    PublishPreflightResponse,
+    TimetableVersionsSummaryResponse,
     TimetablePreviewResponse,
     PublishTimetableRequest,
     PublishTimetableResponse,
@@ -39,7 +43,9 @@ from backend.services.timetable_service import (
     get_canonical_timetables,
     execute_timetable_generation,
     publish_persisted_version_authoritatively,
+    resolve_coordinators_for_version,
 )
+from backend.utils.datetime_utils import utc_now
 from backend.services.timetable_editor_service import (
     get_move_options,
     validate_proposed_arrangements,
@@ -280,33 +286,131 @@ def batch_generate_timetable(
     )
 
 
-from typing import List, Optional
+@router.get("/versions/summary", response_model=TimetableVersionsSummaryResponse)
+def get_versions_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    all_versions = db.query(TimetableVersion.status).all()
+    total = len(all_versions)
+    awaiting = sum(1 for (st,) in all_versions if st in ("DRAFT", "GENERATED", "REVIEWED"))
+    approved = sum(1 for (st,) in all_versions if st in ("VALIDATED", "FINALIZED", "APPROVED"))
+    published = sum(1 for (st,) in all_versions if st == "PUBLISHED")
+    archived = sum(1 for (st,) in all_versions if st in ("ARCHIVED", "REJECTED"))
+
+    return TimetableVersionsSummaryResponse(
+        total_generated=total,
+        awaiting_review=awaiting,
+        approved=approved,
+        published=published,
+        archived=archived,
+    )
+
 
 @router.get("/versions", response_model=List[TimetableVersionResponse])
 def get_versions(
     academic_year_id: Optional[int] = None,
     response: Response = Response(),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("ADMIN"))
+    current_user: User = Depends(require_role("ADMIN")),
+    department_id: Optional[int] = None,
+    semester_id: Optional[int] = None,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
 ):
     if response:
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
-    query = db.query(TimetableVersion)
+
+    query = (
+        db.query(TimetableVersion)
+        .options(
+            joinedload(TimetableVersion.academic_year),
+            joinedload(TimetableVersion.creator),
+            joinedload(TimetableVersion.approver),
+        )
+    )
     if academic_year_id:
         query = query.filter(TimetableVersion.academic_year_id == academic_year_id)
-    return query.order_by(TimetableVersion.id.desc()).all()
+    if department_id:
+        query = query.filter(TimetableVersion.department_id == department_id)
+    if semester_id:
+        query = query.filter(TimetableVersion.semester_id == semester_id)
+    if status:
+        query = query.filter(TimetableVersion.status == status.upper())
 
-from sqlalchemy.orm import Session, joinedload
-from backend.models.academic import Faculty, Section
-from backend.models.space_time import Room
-from backend.schemas.timetable import (
-    TimetableVersionResponse,
-    TimetableVersionDetailResponse,
-    TimetableEntryResponse,
-    TimetableEntryDetailResponse,
-    TimetableEntryUpdate,
-)
+    versions = query.order_by(TimetableVersion.id.desc()).all()
+
+    depts_map = {d.id: d.name for d in db.query(Department).all()}
+    sems_map = {s.id: s.semester_number for s in db.query(Semester).all()}
+    progs_map = {p.id: p.program_name for p in db.query(Program).all()}
+
+    ver_ids = [v.id for v in versions]
+    entry_info: Dict[int, Dict[str, Any]] = defaultdict(lambda: {"count": 0, "sections": set()})
+    if ver_ids:
+        rows = (
+            db.query(TimetableEntry.version_id, Section.section_name)
+            .join(Section, TimetableEntry.section_id == Section.id, isouter=True)
+            .filter(
+                TimetableEntry.version_id.in_(ver_ids),
+                TimetableEntry.status != "CANCELLED",
+            )
+            .all()
+        )
+        for vid, sec_name in rows:
+            entry_info[vid]["count"] += 1
+            if sec_name:
+                entry_info[vid]["sections"].add(sec_name)
+
+    results = []
+    for v in versions:
+        dept_name = depts_map.get(v.department_id) if v.department_id else None
+        prog_name = progs_map.get(v.program_id) if v.program_id else None
+        sem_num = sems_map.get(v.semester_id) if v.semester_id else None
+        ay_name = v.academic_year.name if v.academic_year else None
+        sec_names = sorted(list(entry_info[v.id]["sections"]))
+
+        if search:
+            q = search.lower().strip()
+            text_blob = f"{v.version_number or ''} {dept_name or ''} {prog_name or ''} {ay_name or ''} {' '.join(sec_names)} {v.status or ''}".lower()
+            if q not in text_blob:
+                continue
+
+        results.append(
+            TimetableVersionResponse(
+                id=v.id,
+                academic_year_id=v.academic_year_id,
+                version_number=v.version_number,
+                status=v.status,
+                created_by=v.created_by,
+                approved_by=v.approved_by,
+                approved_at=v.approved_at,
+                approved_revision=v.approved_revision,
+                created_at=v.created_at,
+                published_at=v.published_at,
+                reason=v.reason,
+                revision=v.revision or 1,
+                validated_revision=v.validated_revision,
+                last_saved_at=v.last_saved_at,
+                last_saved_by=v.last_saved_by,
+                finalized_by=v.finalized_by,
+                finalized_at=v.finalized_at,
+                working_days=v.working_days or "MON_SAT",
+                score_summary=v.score_summary,
+                department_id=v.department_id,
+                program_id=v.program_id,
+                semester_id=v.semester_id,
+                department_name=dept_name,
+                program_name=prog_name,
+                academic_year_name=ay_name,
+                semester_number=sem_num,
+                created_by_name=v.creator.name if v.creator else None,
+                approved_by_name=v.approver.name if v.approver else None,
+                entry_count=entry_info[v.id]["count"],
+                section_names=sec_names,
+            )
+        )
+    return results
 
 @router.get("/versions/{version_id}", response_model=TimetableVersionDetailResponse)
 def get_version(
@@ -556,3 +660,192 @@ def publish_version(
         "published_timetables": [tt.model_dump() for tt in pub_res.published_timetables],
         "notifications": dispatch_res,
     }
+
+
+@router.post("/versions/{version_id}/approve")
+def approve_version(
+    version_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    """
+    Formally approves a timetable version:
+    1. Validates that the persisted timetable has zero hard blocker conflicts.
+    2. Sets status = 'APPROVED', approved_by, approved_at, approved_revision = revision.
+    3. Records AuditLog and TimetableChangeHistory.
+    4. Broadcasts real-time VERSION_APPROVED event.
+    """
+    version = db.query(TimetableVersion).filter(TimetableVersion.id == version_id).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    if version.status == "PUBLISHED":
+        raise HTTPException(status_code=409, detail="Timetable is already PUBLISHED.")
+
+    # Re-validate persisted timetable before approval
+    val_result = validate_persisted_timetable(db, version_id)
+    if not val_result.is_valid or val_result.blocker_count > 0:
+        msgs = "; ".join(v.message for v in val_result.violations if v.severity in ("HARD", "BLOCKER"))
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot approve timetable: {val_result.blocker_count} blocker violation(s) found. {msgs}",
+        )
+
+    old_status = version.status
+    now_utc = utc_now()
+    version.status = "APPROVED"
+    version.approved_by = current_user.id
+    version.approved_at = now_utc
+    version.approved_revision = version.revision
+    version.validated_revision = version.revision
+
+    db.add(
+        TimetableChangeHistory(
+            version_id=version.id,
+            revision=version.revision,
+            admin_id=current_user.id,
+            validation_outcome="APPROVED",
+            reason="Admin approved timetable for coordinator publication",
+        )
+    )
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="TIMETABLE_APPROVED",
+            entity_type="TimetableVersion",
+            entity_id=version.id,
+            old_value={"status": old_status},
+            new_value={"status": "APPROVED", "revision": version.revision},
+        )
+    )
+    db.commit()
+
+    broadcast_version_update(
+        version_id=version.id,
+        revision=version.revision,
+        status_value="APPROVED",
+        actor_name=current_user.name,
+        event_type="VERSION_APPROVED",
+    )
+    return {
+        "message": "Timetable approved successfully.",
+        "version_id": version.id,
+        "status": "APPROVED",
+        "revision": version.revision,
+        "approved_at": version.approved_at.isoformat() if version.approved_at else None,
+    }
+
+
+@router.get("/versions/{version_id}/coordinators", response_model=PublishPreflightResponse)
+def get_version_coordinators(
+    version_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    """
+    Preflight coordinator publication inspection:
+    Resolves authoritative coordinators for this academic scope, verifies status is APPROVED
+    and checks whether publication is allowed.
+    """
+    version = db.query(TimetableVersion).filter(TimetableVersion.id == version_id).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    coordinators = resolve_coordinators_for_version(db, version)
+
+    blocking_reasons: List[str] = []
+    if version.status not in ("APPROVED", "FINALIZED"):
+        blocking_reasons.append(f"Timetable status is '{version.status}'. It must be APPROVED before publishing.")
+    if version.approved_revision is not None and version.approved_revision != version.revision:
+        blocking_reasons.append("Timetable was modified after approval. Please re-validate and approve before publishing.")
+    if not coordinators:
+        blocking_reasons.append("Cannot publish: No eligible coordinators mapped for this academic scope. Please assign at least one coordinator before publishing.")
+
+    dept = db.query(Department).filter(Department.id == version.department_id).first() if version.department_id else None
+    ay = db.query(AcademicYear).filter(AcademicYear.id == version.academic_year_id).first() if version.academic_year_id else None
+    sem = db.query(Semester).filter(Semester.id == version.semester_id).first() if version.semester_id else None
+
+    sec_names = sorted(list({
+        e.section.section_name
+        for e in db.query(TimetableEntry).options(joinedload(TimetableEntry.section)).filter(
+            TimetableEntry.version_id == version.id,
+            TimetableEntry.status != "CANCELLED",
+        ).all()
+        if e.section and e.section.section_name
+    }))
+
+    can_pub = len(blocking_reasons) == 0
+
+    return PublishPreflightResponse(
+        version_id=version.id,
+        academic_year_id=version.academic_year_id,
+        academic_year_name=ay.name if ay else None,
+        department_id=version.department_id,
+        department_name=dept.name if dept else None,
+        semester_id=version.semester_id,
+        semester_number=sem.semester_number if sem else None,
+        section_names=sec_names,
+        status=version.status or "DRAFT",
+        revision=version.revision or 1,
+        approved_revision=version.approved_revision,
+        can_publish=can_pub,
+        coordinators=coordinators,
+        coordinator_count=len(coordinators),
+        blocking_reasons=blocking_reasons,
+    )
+
+
+@router.post("/versions/{version_id}/archive")
+def archive_version(
+    version_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    version = db.query(TimetableVersion).filter(TimetableVersion.id == version_id).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    old_status = version.status
+    version.status = "ARCHIVED"
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="TIMETABLE_ARCHIVED",
+            entity_type="TimetableVersion",
+            entity_id=version.id,
+            old_value={"status": old_status},
+            new_value={"status": "ARCHIVED"},
+        )
+    )
+    db.commit()
+    return {"message": f"Timetable version #{version.id} archived successfully."}
+
+
+@router.delete("/versions/{version_id}")
+def delete_version(
+    version_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN")),
+):
+    version = db.query(TimetableVersion).filter(TimetableVersion.id == version_id).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    if version.status == "PUBLISHED":
+        raise HTTPException(status_code=409, detail="Cannot delete a PUBLISHED timetable version.")
+
+    db.query(TimetableChangeHistory).filter(TimetableChangeHistory.version_id == version.id).delete(synchronize_session=False)
+    db.query(TimetableEntry).filter(TimetableEntry.version_id == version.id).delete(synchronize_session=False)
+    db.delete(version)
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            action="TIMETABLE_VERSION_DELETED",
+            entity_type="TimetableVersion",
+            entity_id=version_id,
+            old_value={"id": version_id},
+            new_value=None,
+        )
+    )
+    db.commit()
+    return {"message": f"Timetable version #{version_id} deleted successfully."}

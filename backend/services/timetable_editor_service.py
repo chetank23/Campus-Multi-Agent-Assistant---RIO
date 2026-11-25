@@ -41,7 +41,7 @@ from backend.schemas.timetable import (
 )
 from backend.utils.datetime_utils import utc_now
 
-EDITABLE_STATUSES = {"DRAFT", "GENERATED", "REVIEWED", "VALIDATED"}
+EDITABLE_STATUSES = {"DRAFT", "GENERATED", "REVIEWED", "VALIDATED", "APPROVED"}
 
 
 def _norm_day(d: Optional[str]) -> str:
@@ -705,6 +705,11 @@ def build_version_detail_response(db: Session, version_id: int) -> TimetableVers
         cu = db.query(User).filter(User.id == version.created_by).first()
         creator_name = cu.name if cu else None
 
+    approver_name = None
+    if version.approved_by:
+        au = db.query(User).filter(User.id == version.approved_by).first()
+        approver_name = au.name if au else None
+
     dept_name = None
     prog_name = None
     sem_num = None
@@ -780,6 +785,8 @@ def build_version_detail_response(db: Session, version_id: int) -> TimetableVers
         status=version.status,
         created_by=version.created_by,
         approved_by=version.approved_by,
+        approved_at=version.approved_at,
+        approved_revision=version.approved_revision,
         created_at=version.created_at,
         published_at=version.published_at,
         reason=version.reason,
@@ -803,6 +810,9 @@ def build_version_detail_response(db: Session, version_id: int) -> TimetableVers
         class_teacher_designation=ct_desig,
         class_teacher_contact=ct_contact,
         created_by_name=creator_name,
+        approved_by_name=approver_name,
+        entry_count=len(entries),
+        section_names=sorted(list({e.section.section_name for e in entries if e.section and e.section.section_name})),
         total_sections=total_sections,
         available_periods=available_periods,
         timetable_entries=detail_entries,
@@ -929,6 +939,11 @@ def save_arrangements(
         locked_version.revision = new_revision
         locked_version.status = "REVIEWED"
         locked_version.validated_revision = None  # Invalidate previous validation
+        locked_version.approved_by = None
+        locked_version.approved_at = None
+        locked_version.approved_revision = None
+        locked_version.finalized_by = None
+        locked_version.finalized_at = None
         locked_version.last_saved_at = now_utc
         locked_version.last_saved_by = current_user.id
 

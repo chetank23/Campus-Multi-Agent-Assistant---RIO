@@ -20,7 +20,8 @@ from backend.models.academic import AcademicYear, Semester, Department, Program,
 from backend.models.courses import Course
 from backend.models.space_time import Room, TimeSlot
 from backend.models.timetable import Timetable, TimetableVersion, TimetableEntry, TimetableChangeHistory
-from backend.models.workflow import AuditLog
+from backend.models.events import CoordinatorCapability
+from backend.models.workflow import AuditLog, Notification
 from backend.schemas.timetable_generation import (
     GenerationScope,
     GenerationSummary,
@@ -28,6 +29,7 @@ from backend.schemas.timetable_generation import (
 )
 from backend.schemas.timetable import (
     CanonicalTimetableResponse,
+    CoordinatorRecipientItem,
     TimetableEntryDetailResponse,
     TimetablePreviewEntry,
     TimetablePreviewResponse,
@@ -780,20 +782,155 @@ def get_canonical_timetables(
     return result
 
 
+def resolve_coordinators_for_version(
+    db: Session,
+    version: TimetableVersion,
+) -> List[CoordinatorRecipientItem]:
+    """
+    Authoritatively resolves all coordinators associated with the timetable's academic scope:
+    1. CoordinatorCapability records with capability in ('TIMETABLE_COORDINATOR', 'ACADEMIC_COORDINATOR', 'DEPARTMENT_COORDINATOR')
+       that are active and either GLOBAL or scoped to the timetable's department.
+    2. Section class teachers (Section.class_teacher) for all sections present in the version's entries.
+    3. Faculty belonging to the version's department whose designation contains 'Coordinator'.
+    """
+    # 1. Active capabilities
+    cap_q = (
+        db.query(CoordinatorCapability)
+        .filter(
+            CoordinatorCapability.is_active == True,  # noqa: E712
+            CoordinatorCapability.capability.in_([
+                "TIMETABLE_COORDINATOR",
+                "ACADEMIC_COORDINATOR",
+                "DEPARTMENT_COORDINATOR",
+            ]),
+        )
+    )
+    if version.department_id:
+        cap_q = cap_q.filter(
+            (CoordinatorCapability.scope_type == "GLOBAL")
+            | (
+                (CoordinatorCapability.scope_type == "DEPARTMENT")
+                & (
+                    (CoordinatorCapability.scope_id == version.department_id)
+                    | (CoordinatorCapability.scope_id == None)  # noqa: E711
+                )
+            )
+        )
+    else:
+        cap_q = cap_q.filter(CoordinatorCapability.scope_type == "GLOBAL")
+    capabilities = cap_q.all()
+
+    # 2. Sections in version entries
+    entries = (
+        db.query(TimetableEntry)
+        .filter(
+            TimetableEntry.version_id == version.id,
+            TimetableEntry.status != "CANCELLED",
+        )
+        .all()
+    )
+    section_ids = {e.section_id for e in entries if e.section_id is not None}
+    sections = (
+        db.query(Section)
+        .options(joinedload(Section.class_teacher).joinedload(Faculty.user))
+        .filter(Section.id.in_(section_ids))
+        .all()
+        if section_ids
+        else []
+    )
+
+    # 3. Department faculty coordinators
+    dept_coordinators = []
+    if version.department_id:
+        dept_coordinators = (
+            db.query(Faculty)
+            .options(joinedload(Faculty.user), joinedload(Faculty.department))
+            .filter(
+                Faculty.department_id == version.department_id,
+                Faculty.designation.ilike("%Coordinator%"),
+            )
+            .all()
+        )
+
+    dept_name = None
+    if version.department_id:
+        dept = db.query(Department).filter(Department.id == version.department_id).first()
+        dept_name = dept.name if dept else None
+
+    coordinators_by_user_id: Dict[int, CoordinatorRecipientItem] = {}
+
+    for cap in capabilities:
+        u = db.query(User).filter(User.id == cap.user_id).first()
+        if not u:
+            continue
+        scope_desc = "Global Scope" if cap.scope_type == "GLOBAL" else f"Department: {dept_name or cap.scope_id}"
+        role_label = cap.capability.replace("_", " ").title()
+        coordinators_by_user_id[u.id] = CoordinatorRecipientItem(
+            id=cap.id,
+            user_id=u.id,
+            name=u.name,
+            email=u.email,
+            role_or_designation=role_label,
+            scope_type="COORDINATOR_CAPABILITY",
+            scope_description=scope_desc,
+            department_name=dept_name,
+        )
+
+    for s in sections:
+        ct = s.class_teacher
+        if ct and ct.user:
+            u = ct.user
+            scope_desc = f"Section: {s.section_name}"
+            role_label = f"Class Teacher / Section Coordinator ({s.section_name})"
+            if u.id in coordinators_by_user_id:
+                prev = coordinators_by_user_id[u.id]
+                prev.scope_description = f"{prev.scope_description}, {scope_desc}"
+            else:
+                coordinators_by_user_id[u.id] = CoordinatorRecipientItem(
+                    id=ct.id,
+                    user_id=u.id,
+                    name=u.name,
+                    email=u.email,
+                    role_or_designation=role_label,
+                    scope_type="CLASS_TEACHER",
+                    scope_description=scope_desc,
+                    department_name=dept_name,
+                    section_name=s.section_name,
+                )
+
+    for f in dept_coordinators:
+        if f.user and f.user.id not in coordinators_by_user_id:
+            u = f.user
+            coordinators_by_user_id[u.id] = CoordinatorRecipientItem(
+                id=f.id,
+                user_id=u.id,
+                name=u.name,
+                email=u.email,
+                role_or_designation=f.designation or "Department Coordinator",
+                scope_type="DEPARTMENT_COORDINATOR",
+                scope_description=f"Department: {dept_name or f.department_id}",
+                department_name=dept_name,
+            )
+
+    return list(coordinators_by_user_id.values())
+
+
 def publish_persisted_version_authoritatively(
     db: Session,
     version_id: int,
     current_user: User,
 ) -> PublishTimetableResponse:
     """
-    Authoritatively publishes a FINALIZED TimetableVersion into canonical Timetable records
+    Authoritatively publishes an APPROVED or FINALIZED TimetableVersion into canonical Timetable records
     inside a single atomic transaction:
-    1. Locks the TimetableVersion row and verifies status == FINALIZED and validated_revision == revision.
-    2. Re-runs validate_persisted_timetable(db, version_id) to guarantee zero conflicts.
-    3. Archives previously PUBLISHED TimetableVersion rows in the same scope without deleting history.
-    4. Unlinks old canonical entries (preserving them under their archived version_id) and binds
+    1. Locks the TimetableVersion row and verifies status in ('APPROVED', 'FINALIZED') and revision match.
+    2. Verifies at least 1 coordinator is mapped for the academic scope (blocks with 422 if 0).
+    3. Re-runs validate_persisted_timetable(db, version_id) to guarantee zero conflicts.
+    4. Archives previously PUBLISHED TimetableVersion rows in the same scope without deleting history.
+    5. Unlinks old canonical entries (preserving them under their archived version_id) and binds
        the new version's entries to canonical Timetable rows per (academic_year_id, semester_id, section_id).
-    5. Transitions version to PUBLISHED and writes AuditLog + TimetableChangeHistory.
+    6. Dispatches notification to related coordinators.
+    7. Transitions version to PUBLISHED and writes AuditLog + TimetableChangeHistory.
     """
     if current_user.role != "ADMIN":
         raise HTTPException(
@@ -816,16 +953,30 @@ def publish_persisted_version_authoritatively(
             detail="Timetable version is already PUBLISHED.",
         )
 
-    if version.status != "FINALIZED":
+    if version.status not in ("APPROVED", "FINALIZED"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot publish timetable from status '{version.status}'. Version must be FINALIZED first.",
+            detail=f"Cannot publish timetable from status '{version.status}'. Version must be APPROVED or FINALIZED first.",
+        )
+
+    if version.approved_revision is not None and version.approved_revision != version.revision:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Version was modified after approval. Please re-validate and approve before publishing.",
         )
 
     if version.validated_revision is not None and version.validated_revision != version.revision:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Version has unvalidated changes. Please run validation at the current revision before publishing.",
+        )
+
+    # Preflight coordinator resolution: Must have at least one coordinator mapped
+    coordinators = resolve_coordinators_for_version(db, version)
+    if not coordinators:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Cannot publish: No eligible coordinators mapped for this academic scope. Please assign at least one coordinator before publishing.",
         )
 
     val_result = validate_persisted_timetable(db, version_id)
@@ -1035,6 +1186,24 @@ def publish_persisted_version_authoritatively(
                     },
                 )
             )
+
+            # Notify resolved coordinators
+            ver_num = version.version_number or str(version.id)
+            d_name = version.department_id and (db.query(Department.name).filter(Department.id == version.department_id).scalar() or "Department")
+            for coord in coordinators:
+                if coord.user_id:
+                    db.add(
+                        Notification(
+                            user_id=coord.user_id,
+                            title=f"Timetable Published: Department Schedule v{ver_num}",
+                            message=f"Timetable v{ver_num} has been officially approved and published for {d_name or 'your department'}. Please review the schedule.",
+                            type="TIMETABLE_PUBLISHED",
+                            link="/faculty/dept-timetable",
+                            entity_type="TimetableVersion",
+                            entity_id=version.id,
+                            is_read=False,
+                        )
+                    )
 
         db.commit()
     except HTTPException:

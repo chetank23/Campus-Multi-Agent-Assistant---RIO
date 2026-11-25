@@ -49,6 +49,8 @@ class TimetableVersionResponse(BaseModel):
     status: Optional[str] = None
     created_by: Optional[int] = None
     approved_by: Optional[int] = None
+    approved_at: Optional[datetime] = None
+    approved_revision: Optional[int] = None
     created_at: datetime
     published_at: Optional[datetime] = None
     reason: Optional[str] = None
@@ -63,6 +65,14 @@ class TimetableVersionResponse(BaseModel):
     department_id: Optional[int] = None
     program_id: Optional[int] = None
     semester_id: Optional[int] = None
+    department_name: Optional[str] = None
+    program_name: Optional[str] = None
+    academic_year_name: Optional[str] = None
+    semester_number: Optional[int] = None
+    created_by_name: Optional[str] = None
+    approved_by_name: Optional[str] = None
+    entry_count: int = 0
+    section_names: List[str] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -240,6 +250,44 @@ class PublishTimetableResponse(BaseModel):
     message: str
     published_timetables: List[CanonicalTimetableResponse] = []
     total_entries_published: int = 0
+
+
+class CoordinatorRecipientItem(BaseModel):
+    id: int
+    user_id: Optional[int] = None
+    name: str
+    email: Optional[str] = None
+    role_or_designation: str
+    scope_type: str
+    scope_description: str
+    department_name: Optional[str] = None
+    section_name: Optional[str] = None
+
+
+class PublishPreflightResponse(BaseModel):
+    version_id: int
+    academic_year_id: Optional[int] = None
+    academic_year_name: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
+    semester_id: Optional[int] = None
+    semester_number: Optional[int] = None
+    section_names: List[str] = []
+    status: str
+    revision: int
+    approved_revision: Optional[int] = None
+    can_publish: bool
+    coordinators: List[CoordinatorRecipientItem] = []
+    coordinator_count: int = 0
+    blocking_reasons: List[str] = []
+
+
+class TimetableVersionsSummaryResponse(BaseModel):
+    total_generated: int = 0
+    awaiting_review: int = 0
+    approved: int = 0
+    published: int = 0
+    archived: int = 0
 
 
 # ── Smart Timetable Editor & Arrangement Schemas ──────────────────────────

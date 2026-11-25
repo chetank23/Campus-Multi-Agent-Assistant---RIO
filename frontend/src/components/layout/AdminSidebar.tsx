@@ -144,8 +144,14 @@ const adminSections: NavSection[] = [
     icon: <CalendarDays size={15} className="text-[#2563EB] shrink-0" />,
     items: [
       {
+        id: 'generated-timetables',
+        label: 'Generated Timetables',
+        icon: <Layers size={17} className="shrink-0" />,
+        to: '/admin/timetables/generated',
+      },
+      {
         id: 'timetable-management',
-        label: 'Timetable Management',
+        label: 'Timetable Workspace',
         icon: <CalendarDays size={17} className="shrink-0" />,
         to: '/admin/timetable',
       },
