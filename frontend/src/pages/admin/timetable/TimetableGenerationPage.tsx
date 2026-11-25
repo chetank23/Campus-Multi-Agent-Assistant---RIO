@@ -53,6 +53,9 @@ export const TimetableGenerationPage: React.FC = () => {
       setErrorStatus('');
       setErrorMessage('');
       setErrorDiagnostics([]);
+      if (data.version_id) {
+        navigate(`/admin/timetable/versions/${data.version_id}`);
+      }
     },
     onError: (err: unknown) => {
       setSummary(null);

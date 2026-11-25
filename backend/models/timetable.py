@@ -25,6 +25,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.utils.datetime_utils import utc_now
@@ -151,6 +152,31 @@ class TimetableVersion(Base):
     curriculum_version_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("curriculum_versions.id", name="fk_tv_curriculum_version_id"), nullable=True
     )
+    revision: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1", nullable=False
+    )
+    validated_revision: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    last_saved_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    last_saved_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", name="fk_tv_last_saved_by"), nullable=True
+    )
+    finalized_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", name="fk_tv_finalized_by"), nullable=True
+    )
+    finalized_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    working_days: Mapped[Optional[str]] = mapped_column(
+        String(10), default="MON_SAT", server_default="'MON_SAT'", nullable=True
+    )
+    score_summary: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    department_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("departments.id", name="fk_tv_department_id"), nullable=True
+    )
+    program_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("programs.id", name="fk_tv_program_id"), nullable=True
+    )
+    semester_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("semesters.id", name="fk_tv_semester_id"), nullable=True
+    )
 
     academic_year: Mapped[Optional["AcademicYear"]] = relationship(
         "AcademicYear", back_populates="timetable_versions"
@@ -217,6 +243,11 @@ class TimetableEntry(Base):
     slot_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("time_slots.id", name="fk_tt_slot_id"), nullable=True
     )
+    course_assignment_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("course_assignments.id", name="fk_tte_course_assignment_id", ondelete="SET NULL"), nullable=True
+    )
+    hour_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    block_group_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     status: Mapped[str] = mapped_column(
         String(20),
         CheckConstraint(
@@ -258,3 +289,48 @@ class TimetableEntry(Base):
     slot: Mapped[Optional["TimeSlot"]] = relationship(
         "TimeSlot", back_populates="timetable_entries"
     )
+
+
+class TimetableChangeHistory(Base):
+    """
+    Immutable audit trail of arrangement changes saved on a TimetableVersion.
+    """
+    __tablename__ = "timetable_change_history"
+
+    __table_args__ = (
+        Index("ix_tch_version_revision", "version_id", "revision"),
+        Index("ix_tch_entry_id", "entry_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    version_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("timetable_versions.id", name="fk_tch_version_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    entry_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("timetable_entries.id", name="fk_tch_entry_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    admin_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", name="fk_tch_admin_id"),
+        nullable=False,
+    )
+    previous_slot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    new_slot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    previous_room_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    new_room_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    previous_faculty_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    new_faculty_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    previous_day: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    new_day: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    validation_outcome: Mapped[str] = mapped_column(String(40), default="VALID", server_default="'VALID'")
+    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=utc_now, server_default=func.now()
+    )
+
+    admin: Mapped["User"] = relationship("User", foreign_keys=[admin_id])

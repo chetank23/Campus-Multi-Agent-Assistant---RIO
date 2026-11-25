@@ -1,5 +1,5 @@
-from pydantic import BaseModel, ConfigDict
-from typing import List, Optional
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 class TimetableEntryUpdate(BaseModel):
@@ -20,6 +20,9 @@ class TimetableEntryResponse(BaseModel):
     faculty_id: Optional[int] = None
     room_id: Optional[int] = None
     slot_id: Optional[int] = None
+    course_assignment_id: Optional[int] = None
+    hour_type: Optional[str] = None
+    block_group_id: Optional[str] = None
     status: str
 
     model_config = ConfigDict(from_attributes=True)
@@ -49,6 +52,17 @@ class TimetableVersionResponse(BaseModel):
     created_at: datetime
     published_at: Optional[datetime] = None
     reason: Optional[str] = None
+    revision: int = 1
+    validated_revision: Optional[int] = None
+    last_saved_at: Optional[datetime] = None
+    last_saved_by: Optional[int] = None
+    finalized_by: Optional[int] = None
+    finalized_at: Optional[datetime] = None
+    working_days: Optional[str] = "MON_SAT"
+    score_summary: Optional[Dict[str, Any]] = None
+    department_id: Optional[int] = None
+    program_id: Optional[int] = None
+    semester_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -61,6 +75,9 @@ class TimetableVersionDetailResponse(TimetableVersionResponse):
     class_teacher_name: Optional[str] = None
     class_teacher_designation: Optional[str] = None
     class_teacher_contact: Optional[str] = None
+    created_by_name: Optional[str] = None
+    total_sections: int = 0
+    available_periods: int = 0
     timetable_entries: List[TimetableEntryDetailResponse] = []
 
 
@@ -223,3 +240,101 @@ class PublishTimetableResponse(BaseModel):
     message: str
     published_timetables: List[CanonicalTimetableResponse] = []
     total_entries_published: int = 0
+
+
+# ── Smart Timetable Editor & Arrangement Schemas ──────────────────────────
+
+class AlternativeRoomOption(BaseModel):
+    room_id: int
+    room_number: str
+    building_name: Optional[str] = None
+    capacity: Optional[int] = None
+    room_type: Optional[str] = None
+
+
+class MoveOptionSlot(BaseModel):
+    slot_id: int
+    day: str
+    start_time: str
+    end_time: str
+    slot_type: str
+    can_move: bool
+    blocked_reason: Optional[str] = None
+    warnings: List[str] = Field(default_factory=list)
+    alternative_rooms: List[AlternativeRoomOption] = Field(default_factory=list)
+
+
+class MoveOptionsResponse(BaseModel):
+    version_id: int
+    entry_id: int
+    block_entry_ids: List[int] = Field(default_factory=list)
+    revision: int
+    options: List[MoveOptionSlot] = Field(default_factory=list)
+
+
+class ProposedMoveItem(BaseModel):
+    entry_id: int
+    target_slot_id: int
+    target_room_id: Optional[int] = None
+    target_faculty_id: Optional[int] = None
+
+
+class ArrangementValidateRequest(BaseModel):
+    expected_revision: Optional[int] = None
+    moves: List[ProposedMoveItem] = Field(..., min_length=1)
+
+
+class MoveOutcomeItem(BaseModel):
+    entry_id: int
+    target_slot_id: int
+    valid: bool
+    reasons: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    affected_entry_ids: List[int] = Field(default_factory=list)
+
+
+class ArrangementValidateResponse(BaseModel):
+    valid: bool
+    can_save: bool
+    current_revision: int
+    outcomes: List[MoveOutcomeItem] = Field(default_factory=list)
+    conflicts: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+
+
+class ArrangementSaveRequest(BaseModel):
+    expected_revision: int
+    moves: List[ProposedMoveItem] = Field(..., min_length=1)
+    reason: Optional[str] = None
+
+
+class ArrangementSaveResponse(BaseModel):
+    success: bool
+    version_id: int
+    revision: int
+    status: str
+    last_saved_at: datetime
+    saved_count: int
+    version_detail: TimetableVersionDetailResponse
+
+
+class TimetableChangeHistoryItem(BaseModel):
+    id: int
+    version_id: int
+    revision: int
+    entry_id: Optional[int] = None
+    admin_id: int
+    admin_name: Optional[str] = None
+    previous_slot_id: Optional[int] = None
+    new_slot_id: Optional[int] = None
+    previous_room_id: Optional[int] = None
+    new_room_id: Optional[int] = None
+    previous_faculty_id: Optional[int] = None
+    new_faculty_id: Optional[int] = None
+    previous_day: Optional[str] = None
+    new_day: Optional[str] = None
+    validation_outcome: str
+    reason: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

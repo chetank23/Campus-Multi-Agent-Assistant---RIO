@@ -4,7 +4,7 @@ export interface GenerationScope {
   academic_year_id: number;
   semester_id: number;
   department_id: number;
-  program_id: number;
+  program_id?: number;
   working_days?: 'MON_FRI' | 'MON_SAT';
   section_ids?: number[];
   building_ids?: number[];
@@ -38,6 +38,9 @@ export interface TimetableEntryResponse {
   faculty_id: number | null;
   room_id: number | null;
   slot_id: number | null;
+  course_assignment_id?: number | null;
+  hour_type?: string | null;
+  block_group_id?: string | null;
   status: string;
 }
 
@@ -46,6 +49,17 @@ export interface TimetableVersionResponse {
   academic_year_id: number | null;
   version_number: string | null;
   status: string | null;
+  revision?: number;
+  validated_revision?: number | null;
+  last_saved_at?: string | null;
+  last_saved_by?: number | null;
+  finalized_by?: number | null;
+  finalized_at?: string | null;
+  working_days?: string | null;
+  department_id?: number | null;
+  program_id?: number | null;
+  semester_id?: number | null;
+  score_summary?: Record<string, unknown> | null;
   created_by: number | null;
   approved_by: number | null;
   created_at: string;
@@ -119,6 +133,7 @@ export interface TimetableScore {
 export interface GenerationSummary {
   status: string;
   message: string;
+  version_id?: number | null;
   loaded_sections: number;
   loaded_courses: number;
   loaded_faculty: number;
@@ -128,6 +143,89 @@ export interface GenerationSummary {
   generated_entries?: TimetableEntryResult[];
   diagnostics?: string[];
   score?: TimetableScore;
+}
+
+export interface AlternativeRoomOption {
+  room_id: number;
+  room_number: string;
+  room_type: string;
+  capacity: number;
+  building_name?: string | null;
+}
+
+export interface MoveOptionSlot {
+  slot_id: number;
+  day: string;
+  start_time: string;
+  end_time: string;
+  slot_type: string;
+  can_move: boolean;
+  blocked_reason?: string | null;
+  warnings: string[];
+  alternative_rooms: AlternativeRoomOption[];
+}
+
+export interface MoveOptionsResponse {
+  version_id: number;
+  entry_id: number;
+  block_entry_ids: number[];
+  revision: number;
+  options: MoveOptionSlot[];
+}
+
+export interface ProposedMoveItem {
+  entry_id: number;
+  target_slot_id: number;
+  target_room_id?: number | null;
+  target_faculty_id?: number | null;
+}
+
+export interface MoveOutcomeItem {
+  entry_id: number;
+  target_slot_id: number;
+  valid: boolean;
+  reasons: string[];
+  warnings: string[];
+  affected_entry_ids: number[];
+}
+
+export interface ArrangementValidateResponse {
+  valid: boolean;
+  can_save: boolean;
+  current_revision: number;
+  outcomes: MoveOutcomeItem[];
+  conflicts: string[];
+  warnings: string[];
+}
+
+export interface ArrangementSaveResponse {
+  success: boolean;
+  version_id: number;
+  revision: number;
+  status: string;
+  last_saved_at: string;
+  saved_count: number;
+  version_detail: TimetableVersionDetailResponse;
+}
+
+export interface TimetableChangeHistoryItem {
+  id: number;
+  version_id: number;
+  revision: number;
+  entry_id?: number | null;
+  admin_id: number;
+  admin_name?: string | null;
+  previous_slot_id?: number | null;
+  new_slot_id?: number | null;
+  previous_room_id?: number | null;
+  new_room_id?: number | null;
+  previous_faculty_id?: number | null;
+  new_faculty_id?: number | null;
+  previous_day?: string | null;
+  new_day?: string | null;
+  validation_outcome: string;
+  reason?: string | null;
+  created_at: string;
 }
 
 export const generateTimetable = async (scope: GenerationScope): Promise<GenerationSummary> => {
@@ -157,13 +255,52 @@ export const updateTimetableEntry = async (entryId: number, updates: TimetableEn
   return response.data;
 };
 
-export const finalizeTimetableVersion = async (versionId: number): Promise<{ message: string; version_id: number; status: string }> => {
+export const finalizeTimetableVersion = async (versionId: number): Promise<{ message: string; version_id: number; status: string; revision?: number }> => {
   const response = await apiClient.post(`/timetable/versions/${versionId}/finalize`);
   return response.data;
 };
 
-export const publishTimetableVersion = async (versionId: number): Promise<{ message: string; version_id: number; status: string }> => {
+export const publishTimetableVersion = async (versionId: number): Promise<{ message: string; version_id: number; status: string; total_entries_published?: number }> => {
   const response = await apiClient.post(`/timetable/versions/${versionId}/publish`);
+  return response.data;
+};
+
+export const getMoveOptions = async (versionId: number, entryId: number): Promise<MoveOptionsResponse> => {
+  const response = await apiClient.get(`/timetable/versions/${versionId}/move-options`, {
+    params: { entry_id: entryId },
+  });
+  return response.data;
+};
+
+export const validateArrangements = async (
+  versionId: number,
+  moves: ProposedMoveItem[],
+): Promise<ArrangementValidateResponse> => {
+  const response = await apiClient.post(`/timetable/versions/${versionId}/arrangements/validate`, { moves });
+  return response.data;
+};
+
+export const saveArrangements = async (
+  versionId: number,
+  expectedRevision: number,
+  moves: ProposedMoveItem[],
+  reason?: string,
+): Promise<ArrangementSaveResponse> => {
+  const response = await apiClient.post(`/timetable/versions/${versionId}/arrangements`, {
+    expected_revision: expectedRevision,
+    moves,
+    reason,
+  });
+  return response.data;
+};
+
+export const createTimetableRevision = async (versionId: number): Promise<TimetableVersionDetailResponse> => {
+  const response = await apiClient.post(`/timetable/versions/${versionId}/revise`);
+  return response.data;
+};
+
+export const getTimetableChangeHistory = async (versionId: number): Promise<TimetableChangeHistoryItem[]> => {
+  const response = await apiClient.get(`/timetable/versions/${versionId}/history`);
   return response.data;
 };
 

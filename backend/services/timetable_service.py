@@ -19,7 +19,7 @@ from backend.models.identity import User
 from backend.models.academic import AcademicYear, Semester, Department, Program, Section, Faculty
 from backend.models.courses import Course
 from backend.models.space_time import Room, TimeSlot
-from backend.models.timetable import Timetable, TimetableVersion, TimetableEntry
+from backend.models.timetable import Timetable, TimetableVersion, TimetableEntry, TimetableChangeHistory
 from backend.models.workflow import AuditLog
 from backend.schemas.timetable_generation import (
     GenerationScope,
@@ -36,7 +36,7 @@ from backend.schemas.timetable import (
 )
 from backend.services.timetable_input_loader import validate_and_load_input
 from backend.optimizer.timetable_solver import TimetableSolver
-from backend.optimizer.validator import validate_timetable
+from backend.optimizer.validator import validate_timetable, validate_persisted_timetable
 from backend.optimizer.scorer import compute_score
 from backend.utils.datetime_utils import utc_now
 
@@ -114,12 +114,21 @@ def execute_timetable_generation(
         score_dict = compute_score(val_result, solver_res.entries, optimizer_input)
         score_data = TimetableScore(**score_dict)
 
-        # 5. Persist as GENERATED version with DRAFT entries
+        # 5. Persist as GENERATED version with DRAFT entries (never auto-publish)
         try:
+            now_utc = utc_now()
             new_version = TimetableVersion(
                 academic_year_id=scope.academic_year_id,
                 curriculum_version_id=scope.curriculum_version_id,
+                department_id=scope.department_id,
+                program_id=scope.program_id,
+                semester_id=scope.semester_id,
+                working_days=getattr(scope, "working_days", None) or "MON_SAT",
                 status="GENERATED",
+                revision=1,
+                score_summary=score_dict,
+                last_saved_at=now_utc,
+                last_saved_by=current_user.id,
                 created_by=current_user.id,
             )
             db.add(new_version)
@@ -127,8 +136,31 @@ def execute_timetable_generation(
             version_id = new_version.id
 
             assignments = {a.id: a for a in optimizer_input.course_assignments}
+            courses_by_id = {c.id: c for c in optimizer_input.courses}
+            slots_by_id = {s.id: s for s in optimizer_input.time_slots}
+
+            # Group consecutive practical/lab slots per (course_assignment_id, day) into logical block_group_id
+            grouped_entries: Dict[tuple, List[Any]] = defaultdict(list)
             for entry_res in solver_res.entries:
                 a = assignments[entry_res.course_assignment_id]
+                c = courses_by_id.get(a.course_id)
+                sl = slots_by_id.get(entry_res.slot_id)
+                is_lab = bool(c and getattr(c, "course_type", "") == "LAB")
+                day_key = sl.day.upper() if (sl and sl.day) else "MON"
+                grouped_entries[(a.id, day_key, is_lab)].append((sl.start_time if sl else datetime.time(0, 0), entry_res))
+
+            block_group_map: Dict[int, Optional[str]] = {}
+            for (ca_id, day_key, is_lab), items in grouped_entries.items():
+                if is_lab and len(items) > 1:
+                    items.sort(key=lambda x: x[0])
+                    grp_id = f"v{version_id}-ca{ca_id}-{day_key}"
+                    for _, er in items:
+                        block_group_map[id(er)] = grp_id
+
+            for entry_res in solver_res.entries:
+                a = assignments[entry_res.course_assignment_id]
+                c = courses_by_id.get(a.course_id)
+                hour_type = "PRACTICAL" if (c and getattr(c, "course_type", "") == "LAB") else "THEORY"
                 new_entry = TimetableEntry(
                     version_id=version_id,
                     department_id=scope.department_id,
@@ -140,6 +172,9 @@ def execute_timetable_generation(
                     faculty_id=a.faculty_id,
                     room_id=entry_res.room_id,
                     slot_id=entry_res.slot_id,
+                    course_assignment_id=a.id,
+                    hour_type=hour_type,
+                    block_group_id=block_group_map.get(id(entry_res)),
                     status="DRAFT",
                 )
                 db.add(new_entry)
@@ -743,3 +778,277 @@ def get_canonical_timetables(
             )
         )
     return result
+
+
+def publish_persisted_version_authoritatively(
+    db: Session,
+    version_id: int,
+    current_user: User,
+) -> PublishTimetableResponse:
+    """
+    Authoritatively publishes a FINALIZED TimetableVersion into canonical Timetable records
+    inside a single atomic transaction:
+    1. Locks the TimetableVersion row and verifies status == FINALIZED and validated_revision == revision.
+    2. Re-runs validate_persisted_timetable(db, version_id) to guarantee zero conflicts.
+    3. Archives previously PUBLISHED TimetableVersion rows in the same scope without deleting history.
+    4. Unlinks old canonical entries (preserving them under their archived version_id) and binds
+       the new version's entries to canonical Timetable rows per (academic_year_id, semester_id, section_id).
+    5. Transitions version to PUBLISHED and writes AuditLog + TimetableChangeHistory.
+    """
+    if current_user.role != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators are authorized to publish timetables.",
+        )
+
+    version = (
+        db.query(TimetableVersion)
+        .filter(TimetableVersion.id == version_id)
+        .with_for_update()
+        .first()
+    )
+    if not version:
+        raise HTTPException(status_code=404, detail="Timetable version not found")
+
+    if version.status == "PUBLISHED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Timetable version is already PUBLISHED.",
+        )
+
+    if version.status != "FINALIZED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot publish timetable from status '{version.status}'. Version must be FINALIZED first.",
+        )
+
+    if version.validated_revision is not None and version.validated_revision != version.revision:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Version has unvalidated changes. Please run validation at the current revision before publishing.",
+        )
+
+    val_result = validate_persisted_timetable(db, version_id)
+    if not val_result.is_valid:
+        msgs = "; ".join(v.message for v in val_result.violations if v.severity in ("HARD", "BLOCKER"))
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Publication rejected: {msgs or 'Hard conflicts detected.'}",
+        )
+
+    entries = (
+        db.query(TimetableEntry)
+        .options(
+            joinedload(TimetableEntry.course),
+            joinedload(TimetableEntry.faculty).joinedload(Faculty.user),
+            joinedload(TimetableEntry.room).joinedload(Room.building),
+            joinedload(TimetableEntry.slot),
+        )
+        .filter(
+            TimetableEntry.version_id == version_id,
+            TimetableEntry.status != "CANCELLED",
+        )
+        .all()
+    )
+    if not entries:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot publish a timetable version with zero active entries.",
+        )
+
+    entries_by_sec: Dict[int, List[TimetableEntry]] = defaultdict(list)
+    for e in entries:
+        entries_by_sec[e.section_id].append(e)
+
+    now_utc = utc_now()
+    published_canonical_tts: List[CanonicalTimetableResponse] = []
+    total_entries_count = 0
+
+    try:
+        with db.begin_nested():
+            # Archive previous PUBLISHED versions in the same academic year (and semester if scoped)
+            archive_q = db.query(TimetableVersion).filter(
+                TimetableVersion.academic_year_id == version.academic_year_id,
+                TimetableVersion.id != version.id,
+                TimetableVersion.status == "PUBLISHED",
+            )
+            if version.semester_id is not None:
+                archive_q = archive_q.filter(
+                    (TimetableVersion.semester_id == version.semester_id)
+                    | (TimetableVersion.semester_id == None)  # noqa: E711
+                )
+            archive_q.update({"status": "ARCHIVED"}, synchronize_session=False)
+
+            for sec_id, sec_entries in entries_by_sec.items():
+                section = (
+                    db.query(Section)
+                    .options(
+                        joinedload(Section.class_teacher).joinedload(Faculty.user),
+                        joinedload(Section.program),
+                        joinedload(Section.department),
+                    )
+                    .filter(Section.id == sec_id)
+                    .first()
+                )
+                if not section:
+                    raise HTTPException(status_code=400, detail=f"Section {sec_id} not found during publication.")
+
+                sem_id = version.semester_id or sec_entries[0].semester_id or section.semester_id
+                canonical_tt = (
+                    db.query(Timetable)
+                    .filter(
+                        Timetable.academic_year_id == version.academic_year_id,
+                        Timetable.semester_id == sem_id,
+                        Timetable.section_id == sec_id,
+                    )
+                    .with_for_update()
+                    .first()
+                )
+
+                if canonical_tt:
+                    # Detach prior canonical entries without deleting them so old versions retain history
+                    db.query(TimetableEntry).filter(
+                        TimetableEntry.timetable_id == canonical_tt.id,
+                        TimetableEntry.version_id != version.id,
+                    ).update({"timetable_id": None, "status": "CANCELLED"}, synchronize_session=False)
+
+                    canonical_tt.status = "PUBLISHED"
+                    canonical_tt.published_at = now_utc
+                    canonical_tt.created_by = current_user.id
+                    canonical_tt.working_days = version.working_days or "MON_SAT"
+                else:
+                    canonical_tt = Timetable(
+                        academic_year_id=version.academic_year_id,
+                        semester_id=sem_id,
+                        section_id=sec_id,
+                        status="PUBLISHED",
+                        working_days=version.working_days or "MON_SAT",
+                        published_at=now_utc,
+                        created_at=now_utc,
+                        created_by=current_user.id,
+                    )
+                    db.add(canonical_tt)
+                    db.flush()
+
+                # Supersede any unlinked legacy ACTIVE entries for this section
+                db.query(TimetableEntry).filter(
+                    TimetableEntry.section_id == sec_id,
+                    TimetableEntry.timetable_id == None,  # noqa: E711
+                    TimetableEntry.version_id != version.id,
+                    TimetableEntry.status == "ACTIVE",
+                ).update({"status": "CANCELLED"}, synchronize_session=False)
+
+                entry_responses: List[TimetableEntryDetailResponse] = []
+                for e in sec_entries:
+                    e.timetable_id = canonical_tt.id
+                    e.status = "ACTIVE"
+                    total_entries_count += 1
+                    entry_responses.append(
+                        TimetableEntryDetailResponse(
+                            id=e.id,
+                            timetable_id=canonical_tt.id,
+                            version_id=version.id,
+                            department_id=e.department_id,
+                            program_id=e.program_id,
+                            semester_id=e.semester_id,
+                            section_id=e.section_id,
+                            batch_id=e.batch_id,
+                            course_id=e.course_id,
+                            faculty_id=e.faculty_id,
+                            room_id=e.room_id,
+                            slot_id=e.slot_id,
+                            course_assignment_id=e.course_assignment_id,
+                            hour_type=e.hour_type,
+                            block_group_id=e.block_group_id,
+                            status="ACTIVE",
+                            course_code=e.course.course_code if e.course else None,
+                            course_name=e.course.course_name if e.course else None,
+                            course_type=e.course.course_type if e.course else None,
+                            faculty_name=e.faculty.user.name if (e.faculty and e.faculty.user) else None,
+                            faculty_designation=e.faculty.designation if e.faculty else None,
+                            faculty_contact=e.faculty.contact_number if e.faculty else None,
+                            room_number=e.room.room_number if e.room else None,
+                            building_name=e.room.building.name if (e.room and e.room.building) else None,
+                            day=e.slot.day if e.slot else None,
+                            start_time=e.slot.start_time.strftime("%H:%M") if (e.slot and e.slot.start_time) else None,
+                            end_time=e.slot.end_time.strftime("%H:%M") if (e.slot and e.slot.end_time) else None,
+                            slot_type=e.slot.slot_type if e.slot else None,
+                            section_name=section.section_name,
+                        )
+                    )
+
+                ct = section.class_teacher
+                acad_year = db.query(AcademicYear).filter(AcademicYear.id == version.academic_year_id).first()
+                sem_obj = db.query(Semester).filter(Semester.id == sem_id).first()
+                dept = section.department
+
+                published_canonical_tts.append(
+                    CanonicalTimetableResponse(
+                        id=canonical_tt.id,
+                        academic_year_id=canonical_tt.academic_year_id,
+                        semester_id=canonical_tt.semester_id,
+                        section_id=canonical_tt.section_id,
+                        academic_year_name=acad_year.name if acad_year else None,
+                        semester_number=sem_obj.semester_number if sem_obj else None,
+                        section_name=section.section_name,
+                        department_id=dept.id if dept else (version.department_id or section.department_id),
+                        department_name=dept.name if dept else None,
+                        program_name=section.program.program_name if section.program else None,
+                        status="PUBLISHED",
+                        working_days=canonical_tt.working_days or "MON_SAT",
+                        created_at=canonical_tt.created_at,
+                        published_at=canonical_tt.published_at,
+                        class_teacher_name=ct.user.name if (ct and ct.user) else None,
+                        class_teacher_designation=ct.designation if ct else None,
+                        class_teacher_contact=ct.contact_number if ct else None,
+                        entries=entry_responses,
+                    )
+                )
+
+            version.status = "PUBLISHED"
+            version.published_at = now_utc
+            version.last_saved_at = now_utc
+            version.last_saved_by = current_user.id
+
+            db.add(
+                TimetableChangeHistory(
+                    version_id=version.id,
+                    revision=version.revision,
+                    admin_id=current_user.id,
+                    validation_outcome="PUBLISHED",
+                    reason=f"Published version {version.id} across {len(published_canonical_tts)} section(s)",
+                )
+            )
+            db.add(
+                AuditLog(
+                    user_id=current_user.id,
+                    action="TIMETABLE_PUBLISHED",
+                    entity_type="TimetableVersion",
+                    entity_id=version.id,
+                    new_value={
+                        "version_id": version.id,
+                        "revision": version.revision,
+                        "status": "PUBLISHED",
+                        "sections_count": len(published_canonical_tts),
+                        "entries_count": total_entries_count,
+                    },
+                )
+            )
+
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Publication failed: {str(exc)}. Previous timetable was preserved.",
+        )
+
+    return PublishTimetableResponse(
+        success=True,
+        message=f"Timetable version {version.id} published across {len(published_canonical_tts)} section(s).",
+        published_timetables=published_canonical_tts,
+        total_entries_published=total_entries_count,
+    )

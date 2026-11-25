@@ -1,6 +1,24 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Download, Printer } from 'lucide-react';
-import type { TimetableEntryResult, TimetableEntryResponse, TimetableVersionDetailResponse } from '@/api/timetable';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+import type {
+  MoveOptionSlot,
+  TimetableEntryDetailResponse,
+  TimetableEntryResponse,
+  TimetableEntryResult,
+  TimetableVersionDetailResponse,
+} from '@/api/timetable';
 import type { TimeSlotResponse } from '@/api/timeSlots';
 import type { CourseAssignmentResponse } from '@/api/courseAssignments';
 import type { CourseResponse } from '@/api/courses';
@@ -10,7 +28,7 @@ import { TimetableCell } from './TimetableCell';
 import { EditEntryModal } from './EditEntryModal';
 import { exportTimetableToPDF } from '@/utils/pdfGenerator';
 
-type AnyTimetableEntry = TimetableEntryResult | TimetableEntryResponse;
+type AnyTimetableEntry = TimetableEntryResult | TimetableEntryResponse | TimetableEntryDetailResponse;
 
 interface TimetableGridProps {
   entries: AnyTimetableEntry[];
@@ -22,7 +40,102 @@ interface TimetableGridProps {
   versionDetail?: TimetableVersionDetailResponse;
   isEditable?: boolean;
   onEntryUpdated?: () => void;
+  dndEnabled?: boolean;
+  moveOptionsMap?: Record<number, MoveOptionSlot>;
+  pendingEntryIds?: Set<number>;
+  highlightedEntryIds?: Set<number>;
+  onDragStartEntry?: (entryId: number) => void;
+  onDropOnSlot?: (entryId: number, targetSlotId: number, slotOption?: MoveOptionSlot) => void;
+  onDragCancelEntry?: () => void;
 }
+
+const DraggableEntryCard: React.FC<{
+  entryId: number;
+  disabled: boolean;
+  children: React.ReactNode;
+}> = ({ entryId, disabled, children }) => {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `entry-${entryId}`,
+    data: { entryId },
+    disabled,
+  });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0.35 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...(disabled ? {} : listeners)}
+      {...(disabled ? {} : attributes)}
+      data-testid={`draggable-entry-${entryId}`}
+    >
+      {children}
+    </div>
+  );
+};
+
+const DroppableSlotTd: React.FC<{
+  slotId: number | null;
+  dayKey: string;
+  timeKey: string;
+  dndEnabled: boolean;
+  isDraggingActive: boolean;
+  moveOption?: MoveOptionSlot;
+  children: React.ReactNode;
+}> = ({ slotId, dayKey, timeKey, dndEnabled, isDraggingActive, moveOption, children }) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: slotId ? `slot-${slotId}` : `slot-${dayKey}-${timeKey}`,
+    data: { slotId, dayKey, timeKey },
+    disabled: !dndEnabled || !slotId,
+  });
+
+  let highlightClass = '';
+  let titleText: string | undefined;
+  const moveStatus = !moveOption
+    ? undefined
+    : !moveOption.can_move
+      ? 'BLOCKED'
+      : moveOption.warnings.length > 0
+        ? 'WARNING'
+        : 'VALID';
+
+  if (dndEnabled && isDraggingActive && moveOption) {
+    if (moveStatus === 'VALID') {
+      highlightClass = isOver
+        ? 'bg-emerald-100 ring-2 ring-emerald-500'
+        : 'bg-emerald-50/80 ring-1 ring-inset ring-emerald-300';
+      titleText = 'Valid destination — drop to move';
+    } else if (moveStatus === 'WARNING') {
+      highlightClass = isOver
+        ? 'bg-amber-100 ring-2 ring-amber-500'
+        : 'bg-amber-50/80 ring-1 ring-inset ring-amber-300';
+      titleText = moveOption.warnings.join('; ') || 'Warning';
+    } else if (moveStatus === 'BLOCKED') {
+      highlightClass = isOver
+        ? 'bg-red-100 ring-2 ring-red-500'
+        : 'bg-red-50/60 ring-1 ring-inset ring-red-200';
+      titleText = moveOption.blocked_reason || 'Blocked destination';
+    }
+  } else if (dndEnabled && isOver) {
+    highlightClass = 'bg-indigo-50 ring-2 ring-indigo-400';
+  }
+
+  return (
+    <td
+      ref={setNodeRef}
+      title={titleText}
+      data-testid={slotId ? `timetable-slot-${slotId}` : `timetable-slot-${dayKey}-${timeKey}`}
+      data-slot-status={moveStatus}
+      className={`p-2 border-r last:border-r-0 border-slate-200 min-h-[110px] align-top transition-colors ${highlightClass}`}
+    >
+      {children}
+    </td>
+  );
+};
 
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
@@ -57,8 +170,57 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
   versionDetail,
   isEditable = false,
   onEntryUpdated,
+  dndEnabled = false,
+  moveOptionsMap = {},
+  pendingEntryIds,
+  highlightedEntryIds,
+  onDragStartEntry,
+  onDropOnSlot,
+  onDragCancelEntry,
 }) => {
   const [editingEntry, setEditingEntry] = useState<TimetableEntryResponse | null>(null);
+  const [activeDragEntryId, setActiveDragEntryId] = useState<number | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+  );
+
+  const slotLookupByDayTime = useMemo(() => {
+    const map = new Map<string, TimeSlotResponse>();
+    timeSlots.forEach((slot) => {
+      const dayKey = normalizeDay(slot.day);
+      const start = (slot.start_time || '').slice(0, 5);
+      const end = (slot.end_time || '').slice(0, 5);
+      map.set(`${dayKey}::${start}-${end}`, slot);
+    });
+    return map;
+  }, [timeSlots]);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const entryId = event.active.data.current?.entryId as number | undefined;
+    if (entryId) {
+      setActiveDragEntryId(entryId);
+      onDragStartEntry?.(entryId);
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const entryId = event.active.data.current?.entryId as number | undefined;
+    const targetSlotId = event.over?.data.current?.slotId as number | undefined;
+    setActiveDragEntryId(null);
+    if (entryId && targetSlotId) {
+      onDropOnSlot?.(entryId, targetSlotId, moveOptionsMap[targetSlotId]);
+    } else {
+      onDragCancelEntry?.();
+    }
+  };
+
+  const handleDragCancel = () => {
+    setActiveDragEntryId(null);
+    onDragCancelEntry?.();
+  };
 
   // Sort time slots by start_time
   const sortedSlots = useMemo(() => {
@@ -108,16 +270,16 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
     let facultyId: number | undefined;
     let hourType: string;
 
-    if ('course_assignment_id' in entry) {
+    if (!('id' in entry) && 'course_assignment_id' in entry) {
       const assignment = assignments.find((a) => a.id === entry.course_assignment_id);
       courseId = assignment?.course_id;
       facultyId = assignment?.faculty_id;
-      hourType = entry.hour_type;
+      hourType = entry.hour_type || 'THEORY';
     } else {
       courseId = entry.course_id || undefined;
       facultyId = entry.faculty_id || undefined;
       const room = rooms.find((r) => r.id === entry.room_id);
-      hourType = room?.room_type === 'LAB' ? 'PRACTICAL' : 'THEORY';
+      hourType = ('hour_type' in entry && entry.hour_type) ? entry.hour_type : (room?.room_type === 'LAB' ? 'PRACTICAL' : 'THEORY');
     }
 
     const course = courses.find((c) => c.id === courseId);
@@ -232,6 +394,12 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
       </div>
 
       {/* Main Timetable Matrix Grid */}
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+      >
       <div className="overflow-x-auto border border-slate-300 rounded-lg shadow-sm bg-white">
         <table className="w-full border-collapse text-xs">
           <thead>
@@ -272,6 +440,9 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
                   const end = (slot.end_time || '').slice(0, 5);
                   const timeKey = `${start}-${end}`;
                   const cellEntries = matrix[dayKey]?.[timeKey] || [];
+                  const daySlot = slotLookupByDayTime.get(`${dayKey}::${timeKey}`);
+                  const daySlotId = daySlot?.id ?? null;
+                  const moveOption = daySlotId ? moveOptionsMap[daySlotId] : undefined;
 
                   // Handle explicit Break/Lunch slots
                   const isTeaBreak = slot.slot_type === 'BREAK' || (start === '10:20' && end === '10:40');
@@ -293,24 +464,44 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
                   }
 
                   return (
-                    <td key={slot.id} className="p-2 border-r last:border-r-0 border-slate-200 min-h-[110px] align-top">
+                    <DroppableSlotTd
+                      key={slot.id}
+                      slotId={daySlotId}
+                      dayKey={dayKey}
+                      timeKey={timeKey}
+                      dndEnabled={dndEnabled}
+                      isDraggingActive={activeDragEntryId !== null}
+                      moveOption={moveOption}
+                    >
                       {cellEntries.length === 0 ? (
-                        <div className="h-full min-h-[70px] flex items-center justify-center text-slate-300 text-xs italic">—</div>
+                        <div className="h-full min-h-[70px] flex items-center justify-center text-slate-300 text-xs italic">
+                          {dndEnabled && activeDragEntryId && moveOption?.can_move ? (
+                            <span className="text-emerald-700 font-semibold not-italic text-[11px]">Drop here</span>
+                          ) : (
+                            '—'
+                          )}
+                        </div>
                       ) : (
                         <div className="flex flex-col gap-2">
                           {cellEntries.map((entry, idx) => {
                             const data = getCellData(entry);
-                            const key = 'id' in entry ? entry.id : `${entry.course_assignment_id}-${idx}`;
+                            const hasId = 'id' in entry;
+                            const entryId = hasId ? (entry as TimetableEntryResponse).id : -1;
+                            const key = hasId ? entryId : `${entry.course_assignment_id}-${idx}`;
+                            const detailEntry = entry as TimetableEntryDetailResponse;
+                            const isPending = hasId && Boolean(pendingEntryIds?.has(entryId));
+                            const isHighlighted = hasId && Boolean(highlightedEntryIds?.has(entryId));
+                            const isMultiPeriod = Boolean(detailEntry.block_group_id);
 
-                            return (
+                            const card = (
                               <div
                                 key={key}
                                 onClick={() => {
-                                  if (isEditable && 'id' in entry) {
+                                  if (isEditable && hasId && !activeDragEntryId) {
                                     setEditingEntry(entry as TimetableEntryResponse);
                                   }
                                 }}
-                                className={isEditable && 'id' in entry ? 'cursor-pointer hover:ring-2 hover:ring-indigo-500 rounded transition-all' : ''}
+                                className={isEditable && hasId ? 'cursor-pointer hover:ring-2 hover:ring-indigo-500 rounded-lg transition-all' : ''}
                               >
                                 <TimetableCell
                                   courseCode={data.courseCode}
@@ -318,13 +509,27 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
                                   facultyName={data.facultyName}
                                   roomName={data.roomName}
                                   hourType={data.hourType}
+                                  sectionName={detailEntry.section_name}
+                                  isEditMode={dndEnabled}
+                                  isPendingChange={isPending}
+                                  isConflictHighlighted={isHighlighted}
+                                  isMultiPeriodBlock={isMultiPeriod}
                                 />
                               </div>
                             );
+
+                            if (dndEnabled && hasId) {
+                              return (
+                                <DraggableEntryCard key={key} entryId={entryId} disabled={!dndEnabled}>
+                                  {card}
+                                </DraggableEntryCard>
+                              );
+                            }
+                            return card;
                           })}
                         </div>
                       )}
-                    </td>
+                    </DroppableSlotTd>
                   );
                 })}
               </tr>
@@ -332,6 +537,26 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
           </tbody>
         </table>
       </div>
+      <DragOverlay>
+        {activeDragEntryId !== null ? (() => {
+          const activeEntry = entries.find((e) => 'id' in e && e.id === activeDragEntryId);
+          if (!activeEntry) return null;
+          const data = getCellData(activeEntry);
+          return (
+            <div className="w-48 shadow-xl opacity-95 rotate-1">
+              <TimetableCell
+                courseCode={data.courseCode}
+                courseName={data.courseName}
+                facultyName={data.facultyName}
+                roomName={data.roomName}
+                hourType={data.hourType}
+                isEditMode
+              />
+            </div>
+          );
+        })() : null}
+      </DragOverlay>
+      </DndContext>
 
       {/* Course & Faculty Detail Reference Table */}
       <div className="bg-white border border-slate-300 rounded-lg p-5 shadow-sm space-y-3">

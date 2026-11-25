@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarDays,
@@ -17,7 +18,7 @@ import {
   getTimetableDepartments,
   getTimetableSections,
   getCanonicalTimetables,
-  generateTimetablePreview,
+  generateTimetable,
   publishCanonicalTimetable,
   type TimetablePreviewResponse,
   type TimetablePreviewEntry,
@@ -60,6 +61,7 @@ const normalizeDay = (d?: string | null): string => {
 };
 
 export const AdminTimetableManagementPage: React.FC = () => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -128,27 +130,25 @@ export const AdminTimetableManagementPage: React.FC = () => {
     return effectiveWd === 'MON_FRI' ? ['MON', 'TUE', 'WED', 'THU', 'FRI'] : ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
   }, [previewData, publishedTimetables, workingDays]);
 
-  // Generation Mutation
+  // Generation Mutation (persists as GENERATED draft version and opens Smart Timetable Editor)
   const generateMutation = useMutation({
     mutationFn: (scope: { academic_year_id: number; semester_id: number; department_id: number; working_days?: 'MON_FRI' | 'MON_SAT' }) =>
-      generateTimetablePreview(scope),
+      generateTimetable(scope),
     onSuccess: (data) => {
-      setPreviewData(data);
-      if (data.working_days) {
-        setWorkingDays(data.working_days);
+      queryClient.invalidateQueries({ queryKey: ['timetable', 'versions'] });
+      if (data.version_id) {
+        toast.success(
+          `Draft timetable version V${data.version_id} generated (UNPUBLISHED). Opening Smart Timetable Editor...`,
+          { duration: 4000 }
+        );
+        navigate(`/admin/timetable/versions/${data.version_id}`);
+      } else {
+        toast.success(data.message || 'Timetable generated.');
       }
-      setPublishSuccessMsg(null);
-      if (data.sections.length > 0) {
-        const firstSec = data.sections[0] as unknown as { section_id?: number; id?: number };
-        setActiveSectionId(firstSec.section_id || firstSec.id || null);
-      }
-      toast.success(
-        `Optimized schedule generated: ${data.entries.length} class slots allocated across ${data.sections.length} sections with 0 constraint conflicts.`,
-        { duration: 5000 }
-      );
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.detail || err?.message || 'Failed to generate timetable preview.';
+      const detail = err?.response?.data?.detail;
+      const msg = typeof detail === 'string' ? detail : detail?.message || err?.message || 'Failed to generate timetable.';
       toast.error(`Generation failed: ${msg}`);
     },
   });
