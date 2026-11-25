@@ -628,3 +628,44 @@ def test_assistant_placement_grounding(admin_auth, faculty_auth, student_auth, d
     assert "Google" in formatted
     assert "Software Engineer 2026" in formatted
     assert "CTC: 35 LPA" in formatted
+
+
+def test_format_placement_application_null_and_valid_student_id():
+    """Verify _format_placement_application safely normalizes NULL student_id to empty string."""
+    from types import SimpleNamespace
+    from backend.services.placement_service import _format_placement_application
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    drive = SimpleNamespace(company_name="Acme Corp", title="SDE", job_role="Engineer")
+    user = SimpleNamespace(name="Test Student", email="test@campus.edu")
+    dept = SimpleNamespace(name="CSE")
+
+    app_null_usn = SimpleNamespace(
+        id=1,
+        drive_id=10,
+        drive=drive,
+        student_id=100,
+        student=SimpleNamespace(student_id=None, user=user, department=dept),
+        status="APPLIED",
+        resume_url=None,
+        notes=None,
+        applied_at=now,
+        updated_at=now,
+    )
+    res_null = _format_placement_application(app_null_usn)
+    assert res_null.student_usn == ""
+
+    app_valid_usn = SimpleNamespace(
+        id=2,
+        drive_id=10,
+        drive=drive,
+        student_id=101,
+        student=SimpleNamespace(student_id="1MS22CS001", user=user, department=dept),
+        status="APPLIED",
+        resume_url=None,
+        notes=None,
+        applied_at=now,
+        updated_at=now,
+    )
+    res_valid = _format_placement_application(app_valid_usn)
+    assert res_valid.student_usn == "1MS22CS001"

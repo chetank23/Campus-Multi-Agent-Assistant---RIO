@@ -1275,7 +1275,7 @@ def _format_placement_application(app: PlacementApplication) -> PlacementApplica
         job_role=drive.job_role if drive else "",
         student_id=app.student_id,
         student_name=user.name if user else "Student",
-        student_usn=student.student_id if student else "",
+        student_usn=(student.student_id or "") if student is not None else "",
         student_email=user.email if user else None,
         department_name=dept.name if dept else None,
         status=app.status,
