@@ -645,7 +645,7 @@ def edit_entry(
         return entry
 
     move_req = ArrangementSaveRequest(
-        expected_revision=version.revision,
+        expected_revision=version.revision or 1,
         moves=[
             {
                 "entry_id": entry.id,

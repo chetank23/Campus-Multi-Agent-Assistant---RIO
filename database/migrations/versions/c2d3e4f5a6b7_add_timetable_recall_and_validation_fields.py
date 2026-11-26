@@ -19,7 +19,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.add_column("timetable_versions", sa.Column("recalled_at", sa.DateTime(), nullable=True))
-    op.add_column("timetable_versions", sa.Column("recalled_by", sa.Integer(), sa.ForeignKey("users.id", name="fk_tv_recalled_by"), nullable=True))
+    op.add_column("timetable_versions", sa.Column("recalled_by", sa.Integer(), nullable=True))
+    op.create_foreign_key("fk_tv_recalled_by", "timetable_versions", "users", ["recalled_by"], ["id"])
     op.add_column("timetable_versions", sa.Column("recall_reason", sa.Text(), nullable=True))
     op.add_column("timetable_versions", sa.Column("validation_status", sa.String(30), server_default="NOT_VALIDATED", nullable=True))
     op.add_column("timetable_versions", sa.Column("validation_errors_count", sa.Integer(), server_default="0", nullable=True))
@@ -42,6 +43,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Migrate any RECALLED rows to ARCHIVED so legacy check constraints remain satisfied
+    op.execute("UPDATE timetables SET status = 'ARCHIVED' WHERE status = 'RECALLED'")
+    op.execute("UPDATE timetable_versions SET status = 'ARCHIVED' WHERE status = 'RECALLED'")
+
     op.drop_constraint("ck_timetable_status", "timetables", type_="check")
     op.create_check_constraint(
         "ck_timetable_status",

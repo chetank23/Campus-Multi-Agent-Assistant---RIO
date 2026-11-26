@@ -23,7 +23,7 @@ from backend.config import engine
 from backend.models.identity import User
 from backend.models.resources import Resource, ResourceBooking
 from backend.models.space_time import TimeSlot, Room
-from backend.models.timetable import TimetableVersion, TimetableEntry
+from backend.models.timetable import Timetable, TimetableVersion, TimetableEntry
 from backend.models.courses import Course
 from backend.models.academic import Department, Section, Semester, AcademicYear
 from agents.scheduling_agent.proposal_store import proposal_store, ProposalStore
@@ -206,6 +206,13 @@ def test_scheduling_agent_strategy_advisory(admin_token):
 def test_scheduling_agent_proposal_lifecycle_and_cross_user_denial(admin_token, faculty_token):
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
     fac_headers = {"Authorization": f"Bearer {faculty_token}"}
+
+    # Scope isolation: clear existing generated/published timetables so proposal can be executed
+    with Session(engine) as db:
+        db.query(TimetableEntry).delete()
+        db.query(TimetableVersion).delete()
+        db.query(Timetable).delete()
+        db.commit()
 
     # 1. Admin generates proposal
     resp = client.post(

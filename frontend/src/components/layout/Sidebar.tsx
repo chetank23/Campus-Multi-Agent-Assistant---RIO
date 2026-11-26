@@ -49,6 +49,23 @@ function getNavGroups(role: UserRole): NavGroup[] {
     case 'ADMIN':
       return [
         {
+          groupTitle: 'TIMETABLE MANAGEMENT',
+          items: [
+            {
+              label: 'Timetable Generation',
+              icon: <CalendarDays size={18} />,
+              to: '/admin/timetable',
+              implemented: true,
+            },
+            {
+              label: 'Generated Timetables',
+              icon: <Layers size={18} />,
+              to: '/admin/timetables/generated',
+              implemented: true,
+            },
+          ],
+        },
+        {
           groupTitle: 'GENERAL',
           items: [
             {

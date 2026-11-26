@@ -260,11 +260,37 @@ def test_timetable_publication_notifications(admin_token):
         assert all([ac_year, dept, prog, sem, sec, fac, course, room, slot, admin_user])
         assert ac_year and dept and prog and sem and sec and fac and course and room and slot and admin_user
 
-        # Create a test timetable version in FINALIZED state
+        from backend.models.events import CoordinatorCapability
+        other_fac = db.query(Faculty).filter(Faculty.user_id.isnot(None), Faculty.id != fac.id).first()
+        coord_uid = other_fac.user_id if other_fac else admin_user.id
+        cap = db.query(CoordinatorCapability).filter(
+            CoordinatorCapability.user_id == coord_uid,
+            CoordinatorCapability.capability == "TIMETABLE_COORDINATOR",
+        ).first()
+        if not cap:
+            cap = CoordinatorCapability(
+                user_id=coord_uid,
+                capability="TIMETABLE_COORDINATOR",
+                scope_type="GLOBAL",
+                is_active=True,
+                assigned_by=admin_user.id,
+            )
+            db.add(cap)
+        else:
+            cap.is_active = True
+
+        # Create a test timetable version in APPROVED state
         version = TimetableVersion(
             academic_year_id=ac_year.id,
+            department_id=dept.id,
+            program_id=prog.id,
+            semester_id=sem.id,
             version_number="99.0",
-            status="FINALIZED",
+            status="APPROVED",
+            revision=1,
+            approved_revision=1,
+            approved_by=admin_user.id,
+            approved_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
             created_by=admin_user.id,
         )
         db.add(version)
@@ -309,6 +335,7 @@ def test_timetable_publication_notifications(admin_token):
                 Notification.user_id == fac_uid,
                 Notification.entity_type == "TimetableVersion",
                 Notification.entity_id == v_id,
+                Notification.link == "/faculty/timetable",
             )
             .first()
         )
@@ -354,13 +381,21 @@ def test_failed_publication_produces_no_notification():
 
 def test_booking_lifecycle_notifications(admin_token, student_token):
     # 1. Student creates a booking request
-    with Session(engine) as db:
-        res = db.query(Resource).filter(Resource.status == "ACTIVE").first()
-        stud_user = db.query(User).filter(User.email == "monica.herrera@campus.edu").first()
-        assert res and stud_user
+    res_resp = client.post(
+        "/resources",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"name": "Notification Lifecycle Hall", "resource_type": "EQUIPMENT", "capacity": 30},
+    )
+    assert res_resp.status_code == 201
+    res_id = res_resp.json()["id"]
 
-        booking_date = (datetime.date.today() + datetime.timedelta(days=20)).isoformat()
-        res_id = res.id
+    with Session(engine) as db:
+        stud_user = db.query(User).filter(User.email == "monica.herrera@campus.edu").first()
+        assert stud_user
+
+        today = datetime.date.today()
+        days_ahead = (6 - today.weekday()) % 7 + 28
+        booking_date = (today + datetime.timedelta(days=days_ahead)).isoformat()
         stud_uid = stud_user.id
 
     create_resp = client.post(

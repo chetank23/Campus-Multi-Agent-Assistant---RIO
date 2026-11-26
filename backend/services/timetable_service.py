@@ -12,6 +12,7 @@ import datetime
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
+from sqlalchemy import text, or_
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status
 
@@ -85,7 +86,18 @@ def execute_timetable_generation(
             detail="Only administrators are authorized to generate timetables.",
         )
 
-    # 0. Concurrency-protected Duplicate Scope Prevention Check
+    # 1. Load and validate input (Academic IDs, relationships, selected sections, etc.)
+    # Input validation must precede duplicate checking so invalid inputs return 400 Bad Request
+    optimizer_input = validate_and_load_input(db, scope)
+
+    # 2. Concurrency-safe Duplicate Scope Prevention Check
+    # PostgreSQL transaction-level advisory lock prevents simultaneous duplicate generations
+    lock_key = f"tt_scope:{scope.academic_year_id}:{scope.department_id}:{scope.semester_id}:{scope.program_id}"
+    try:
+        db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": lock_key})
+    except Exception:
+        pass
+
     active_statuses = ("DRAFT", "GENERATED", "REVIEWED", "VALIDATED", "FINALIZED", "APPROVED", "PUBLISHED")
     scope_check_q = (
         db.query(TimetableVersion)
@@ -98,8 +110,17 @@ def execute_timetable_generation(
     )
     if scope.program_id:
         scope_check_q = scope_check_q.filter(
-            (TimetableVersion.program_id == scope.program_id) | (TimetableVersion.program_id == None)  # noqa: E711
+            (TimetableVersion.program_id == scope.program_id)
+            | (
+                (TimetableVersion.program_id.is_(None))
+                & (
+                    TimetableVersion.timetable_entries.any(
+                        (TimetableEntry.program_id == scope.program_id) & (TimetableEntry.status != "CANCELLED")
+                    )
+                )
+            )
         )
+
     existing_active = scope_check_q.order_by(TimetableVersion.id.desc()).with_for_update().first()
     if existing_active:
         if not getattr(scope, "force_regenerate", False):
@@ -113,10 +134,7 @@ def execute_timetable_generation(
                 existing_active.status = "ARCHIVED"
                 db.flush()
 
-    # 1. Load and validate input
-    optimizer_input = validate_and_load_input(db, scope)
-
-    # 2. Run solver with selected strategy profile
+    # 3. Run solver with selected strategy profile
     solver = TimetableSolver(opt_input=optimizer_input, time_limit=time_limit, strategy=strategy)
     solver_res = solver.solve()
 
@@ -830,7 +848,40 @@ def resolve_coordinators_for_version(
     2. Section class teachers (Section.class_teacher) for all sections present in the version's entries.
     3. Faculty belonging to the version's department whose designation contains 'Coordinator'.
     """
+    # 0. Active entries in this version to resolve sections, department, and program scope
+    entries = (
+        db.query(TimetableEntry)
+        .filter(
+            TimetableEntry.version_id == version.id,
+            TimetableEntry.status != "CANCELLED",
+        )
+        .all()
+    )
+    dept_id = version.department_id
+    if not dept_id and entries:
+        dept_id = next((e.department_id for e in entries if e.department_id is not None), None)
+    prog_id = version.program_id
+    if not prog_id and entries:
+        prog_id = next((e.program_id for e in entries if e.program_id is not None), None)
+
     # 1. Active capabilities
+    cap_conditions = [CoordinatorCapability.scope_type == "GLOBAL"]
+    if dept_id:
+        cap_conditions.append(
+            (CoordinatorCapability.scope_type == "DEPARTMENT")
+            & (
+                (CoordinatorCapability.scope_id == dept_id)
+                | (CoordinatorCapability.scope_id.is_(None))
+            )
+        )
+    if prog_id:
+        cap_conditions.append(
+            (CoordinatorCapability.scope_type == "PROGRAM")
+            & (
+                (CoordinatorCapability.scope_id == prog_id)
+                | (CoordinatorCapability.scope_id.is_(None))
+            )
+        )
     cap_q = (
         db.query(CoordinatorCapability)
         .filter(
@@ -840,32 +891,12 @@ def resolve_coordinators_for_version(
                 "ACADEMIC_COORDINATOR",
                 "DEPARTMENT_COORDINATOR",
             ]),
+            or_(*cap_conditions),
         )
     )
-    if version.department_id:
-        cap_q = cap_q.filter(
-            (CoordinatorCapability.scope_type == "GLOBAL")
-            | (
-                (CoordinatorCapability.scope_type == "DEPARTMENT")
-                & (
-                    (CoordinatorCapability.scope_id == version.department_id)
-                    | (CoordinatorCapability.scope_id == None)  # noqa: E711
-                )
-            )
-        )
-    else:
-        cap_q = cap_q.filter(CoordinatorCapability.scope_type == "GLOBAL")
     capabilities = cap_q.all()
 
     # 2. Sections in version entries
-    entries = (
-        db.query(TimetableEntry)
-        .filter(
-            TimetableEntry.version_id == version.id,
-            TimetableEntry.status != "CANCELLED",
-        )
-        .all()
-    )
     section_ids = {e.section_id for e in entries if e.section_id is not None}
     sections = (
         db.query(Section)
@@ -878,20 +909,20 @@ def resolve_coordinators_for_version(
 
     # 3. Department faculty coordinators
     dept_coordinators = []
-    if version.department_id:
+    if dept_id:
         dept_coordinators = (
             db.query(Faculty)
             .options(joinedload(Faculty.user), joinedload(Faculty.department))
             .filter(
-                Faculty.department_id == version.department_id,
+                Faculty.department_id == dept_id,
                 Faculty.designation.ilike("%Coordinator%"),
             )
             .all()
         )
 
     dept_name = None
-    if version.department_id:
-        dept = db.query(Department).filter(Department.id == version.department_id).first()
+    if dept_id:
+        dept = db.query(Department).filter(Department.id == dept_id).first()
         dept_name = dept.name if dept else None
 
     coordinators_by_user_id: Dict[int, CoordinatorRecipientItem] = {}
@@ -993,7 +1024,7 @@ def publish_persisted_version_authoritatively(
     if version.status not in ("APPROVED", "FINALIZED"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot publish timetable from status '{version.status}'. Version must be APPROVED or FINALIZED first.",
+            detail=f"Cannot publish timetable from status '{version.status}'. Version must be APPROVED by an administrator before publishing.",
         )
 
     if version.approved_revision is not None and version.approved_revision != version.revision:
@@ -1055,7 +1086,7 @@ def publish_persisted_version_authoritatively(
 
     try:
         with db.begin_nested():
-            # Archive previous PUBLISHED versions in the same academic year (and semester if scoped)
+            # Scope-isolated archival: Archive previous PUBLISHED versions strictly for the same academic scope
             archive_q = db.query(TimetableVersion).filter(
                 TimetableVersion.academic_year_id == version.academic_year_id,
                 TimetableVersion.id != version.id,
@@ -1064,7 +1095,32 @@ def publish_persisted_version_authoritatively(
             if version.semester_id is not None:
                 archive_q = archive_q.filter(
                     (TimetableVersion.semester_id == version.semester_id)
-                    | (TimetableVersion.semester_id == None)  # noqa: E711
+                    | (TimetableVersion.semester_id.is_(None))
+                )
+            if version.department_id is not None:
+                archive_q = archive_q.filter(
+                    (TimetableVersion.department_id == version.department_id)
+                    | (TimetableVersion.department_id.is_(None))
+                )
+            if version.program_id is not None:
+                archive_q = archive_q.filter(
+                    (TimetableVersion.program_id == version.program_id)
+                    | (
+                        (TimetableVersion.program_id.is_(None))
+                        & (
+                            TimetableVersion.timetable_entries.any(
+                                (TimetableEntry.program_id == version.program_id)
+                                & (TimetableEntry.status != "CANCELLED")
+                            )
+                        )
+                    )
+                )
+            affected_sec_ids = set(entries_by_sec.keys())
+            if affected_sec_ids:
+                archive_q = archive_q.filter(
+                    TimetableVersion.timetable_entries.any(
+                        TimetableEntry.section_id.in_(affected_sec_ids)
+                    )
                 )
             archive_q.update({"status": "ARCHIVED"}, synchronize_session=False)
 
@@ -1312,16 +1368,45 @@ def recall_persisted_version(
     version.recalled_at = now_utc
     version.recall_reason = reason.strip()
 
-    # Find canonical timetables matching this version's scope and mark RECALLED
-    canonical_tts = (
-        db.query(Timetable)
+    # Find canonical timetables matching this version's scope and entries, and mark RECALLED
+    affected_sections = {
+        e.section_id
+        for e in db.query(TimetableEntry.section_id)
         .filter(
-            Timetable.academic_year_id == version.academic_year_id,
-            Timetable.semester_id == version.semester_id,
-            Timetable.status == "PUBLISHED",
+            TimetableEntry.version_id == version.id,
+            TimetableEntry.section_id.isnot(None),
+            TimetableEntry.status != "CANCELLED",
         )
+        .distinct()
         .all()
+    }
+    linked_tt_ids = {
+        e.timetable_id
+        for e in db.query(TimetableEntry.timetable_id)
+        .filter(
+            TimetableEntry.version_id == version.id,
+            TimetableEntry.timetable_id.isnot(None),
+        )
+        .distinct()
+        .all()
+    }
+
+    canonical_tt_q = db.query(Timetable).filter(
+        Timetable.academic_year_id == version.academic_year_id,
+        Timetable.status == "PUBLISHED",
     )
+    if version.semester_id is not None:
+        canonical_tt_q = canonical_tt_q.filter(Timetable.semester_id == version.semester_id)
+
+    if linked_tt_ids or affected_sections:
+        c_conditions = []
+        if linked_tt_ids:
+            c_conditions.append(Timetable.id.in_(linked_tt_ids))
+        if affected_sections:
+            c_conditions.append(Timetable.section_id.in_(affected_sections))
+        canonical_tt_q = canonical_tt_q.filter(or_(*c_conditions))
+
+    canonical_tts = canonical_tt_q.all()
     for c_tt in canonical_tts:
         c_tt.status = "RECALLED"
 
@@ -1396,7 +1481,15 @@ def check_academic_scope_existing(
     )
     if program_id:
         q = q.filter(
-            (TimetableVersion.program_id == program_id) | (TimetableVersion.program_id == None)  # noqa: E711
+            (TimetableVersion.program_id == program_id)
+            | (
+                (TimetableVersion.program_id.is_(None))
+                & (
+                    TimetableVersion.timetable_entries.any(
+                        (TimetableEntry.program_id == program_id) & (TimetableEntry.status != "CANCELLED")
+                    )
+                )
+            )
         )
     existing = q.order_by(TimetableVersion.id.desc()).first()
     if not existing:

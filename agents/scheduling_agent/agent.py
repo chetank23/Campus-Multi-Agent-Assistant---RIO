@@ -21,7 +21,8 @@ from sqlalchemy.orm import Session
 from backend.models.identity import User
 from backend.models.timetable import TimetableVersion
 from backend.schemas.timetable_generation import GenerationScope
-from backend.services.timetable_service import execute_timetable_generation
+from fastapi import HTTPException
+from backend.services.timetable_service import execute_timetable_generation, check_academic_scope_existing
 from agents.state.state import AgentState
 from agents.scheduling_agent.proposal_store import proposal_store
 from agents.common.operation_proposal_store import operation_proposal_store
@@ -198,11 +199,96 @@ def run_scheduling_agent(
                 "success": True,
             }
 
-    confirm_match = re.search(r"\b(?:confirm|execute|approve|proceed)\s+(prop_[a-zA-Z0-9_-]+)\b", msg_lower)
+    confirm_match = re.search(r"\b(?:confirm|execute|approve|proceed)\s+(?:replacement\s+)?(prop_[a-zA-Z0-9_-]+)(?:\s+(?:replace|force))?\b", msg_lower)
     if confirm_match:
         proposal_id = confirm_match.group(1)
         tool_calls.append({"tool": "confirm_scheduling_proposal", "args": {"proposal_id": proposal_id}})
 
+        # 1. Pre-validation: verify proposal exists and belongs to user without consuming it yet
+        existing_prop = proposal_store.get_proposal(proposal_id)
+        if not existing_prop:
+            return {
+                "intent": "TIMETABLE_GENERATION",
+                "selected_agent": "scheduling_agent",
+                "action_type": "CONFIRMATION_REJECTED",
+                "final_response": sanitize_plain_english("Confirmation Blocked: Proposal not found or expired. Please create a new schedule request."),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+        if existing_prop.user_id != user.id:
+            return {
+                "intent": "TIMETABLE_GENERATION",
+                "selected_agent": "scheduling_agent",
+                "action_type": "CONFIRMATION_REJECTED",
+                "final_response": sanitize_plain_english("Confirmation Blocked: Access denied: Proposal belongs to another user session."),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+        if existing_prop.superseded:
+            return {
+                "intent": "TIMETABLE_GENERATION",
+                "selected_agent": "scheduling_agent",
+                "action_type": "CONFIRMATION_REJECTED",
+                "final_response": sanitize_plain_english(
+                    f"Confirmation Blocked: Proposal {proposal_id} has been superseded by revision {existing_prop.superseded_by}. Please confirm the latest revision."
+                ),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+        if existing_prop.consumed:
+            return {
+                "intent": "TIMETABLE_GENERATION",
+                "selected_agent": "scheduling_agent",
+                "action_type": "CONFIRMATION_REJECTED",
+                "final_response": sanitize_plain_english(
+                    "Confirmation Blocked: Proposal has already been confirmed and executed (duplicate submission blocked)."
+                ),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+
+        scope_dict = dict(existing_prop.scope)
+        is_replacement_confirmed = ("replace" in msg_lower or "force" in msg_lower or bool(scope_dict.get("force_regenerate")))
+
+        # 2. Check for existing active timetable in academic scope
+        existing_check = check_academic_scope_existing(
+            db=db,
+            academic_year_id=scope_dict.get("academic_year_id", 0),
+            semester_id=scope_dict.get("semester_id", 0),
+            department_id=scope_dict.get("department_id", 0),
+            program_id=scope_dict.get("program_id"),
+        )
+        if existing_check.has_existing and not is_replacement_confirmed:
+            ev = existing_check.existing_version
+            v_id = ev.id if ev else "N/A"
+            v_status = ev.status if ev else "UNKNOWN"
+            is_pub = "Yes (Published)" if v_status == "PUBLISHED" else "No (Draft)"
+            disp = existing_prop.scope_display or {}
+            reply = (
+                f"Active Timetable Already Exists\n\n"
+                f"- Existing Version: #{v_id} (Status: {v_status})\n"
+                f"- Published: {is_pub}\n"
+                f"- Academic Scope: {disp.get('department', 'Dept')} - {disp.get('program', 'Prog')} - {disp.get('semester', 'Sem')}\n"
+                f"- Review Route: /admin/timetable/versions/{v_id}\n\n"
+                f"Available Safe Actions:\n"
+                f"1. Open and review existing timetable: /admin/timetable/versions/{v_id}\n"
+                f"2. Confirm replacement: reply 'confirm {proposal_id} replace' to generate an updated draft version."
+            )
+            return {
+                "intent": "TIMETABLE_GENERATION",
+                "selected_agent": "scheduling_agent",
+                "action_type": "TIMETABLE_ALREADY_EXISTS",
+                "final_response": sanitize_plain_english(reply),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
+
+        # 3. Consume proposal authoritatively
         success, proposal, err_msg = proposal_store.consume_proposal(
             proposal_id=proposal_id,
             user_id=user.id,
@@ -219,7 +305,6 @@ def run_scheduling_agent(
             }
 
         # Re-validate scope and readiness freshness
-        scope_dict = proposal.scope
         readiness = analyze_scheduling_readiness_data(db=db, scope_dict=scope_dict)
         if not readiness.get("can_proceed"):
             return {
@@ -237,6 +322,8 @@ def run_scheduling_agent(
 
         # Invoke real solver pipeline via shared service
         try:
+            if is_replacement_confirmed:
+                scope_dict["force_regenerate"] = True
             scope = GenerationScope(**scope_dict)
             gen_res = execute_timetable_generation(
                 db=db,
@@ -244,6 +331,26 @@ def run_scheduling_agent(
                 current_user=user,
                 strategy=proposal.strategy,
             )
+        except HTTPException as he:
+            if he.status_code == 409:
+                return {
+                    "intent": "TIMETABLE_GENERATION",
+                    "selected_agent": "scheduling_agent",
+                    "action_type": "TIMETABLE_ALREADY_EXISTS",
+                    "final_response": sanitize_plain_english(f"Timetable Conflict: {he.detail}"),
+                    "tool_calls": tool_calls,
+                    "sources": sources,
+                    "success": False,
+                }
+            return {
+                "intent": "TIMETABLE_GENERATION",
+                "selected_agent": "scheduling_agent",
+                "action_type": "GENERATION_ERROR",
+                "final_response": sanitize_plain_english(f"Solver Execution Failed: {he.detail}"),
+                "tool_calls": tool_calls,
+                "sources": sources,
+                "success": False,
+            }
         except Exception as exc:
             return {
                 "intent": "TIMETABLE_GENERATION",

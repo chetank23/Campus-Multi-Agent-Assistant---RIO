@@ -858,7 +858,10 @@ def save_arrangements(
         )
 
     current_rev = locked_version.revision or 1
-    if req.expected_revision != current_rev:
+    if locked_version.revision is None:
+        locked_version.revision = current_rev
+    expected_rev = req.expected_revision if req.expected_revision is not None else current_rev
+    if expected_rev != current_rev:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={

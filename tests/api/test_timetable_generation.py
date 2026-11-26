@@ -7,6 +7,8 @@ from backend.models.space_time import Room, Lab, TimeSlot, FacultyAvailability, 
 from sqlalchemy.orm import Session
 from datetime import time, date
 
+from backend.models.timetable import TimetableVersion, TimetableEntry
+
 from backend.config import engine
 
 client = TestClient(app)
@@ -27,6 +29,9 @@ def test_generate_timetable_valid_scope(admin_token):
         pytest.skip("No admin token")
     
     with Session(engine) as db:
+        db.query(TimetableEntry).delete()
+        db.query(TimetableVersion).delete()
+        db.commit()
         ac_year = db.query(AcademicYear).first()
         semester = db.query(Semester).first()
         department = db.query(Department).first()
@@ -142,6 +147,22 @@ def test_generate_timetable_infeasible(admin_token):
         assert department is not None
         assert program is not None
 
+        ay_id = ac_year.id
+        sem_id = semester.id
+        dept_id = department.id
+        prog_id = program.id
+
+        # Clean any prior versions in this scope to isolate the solver test
+        old_v = db.query(TimetableVersion).filter(
+            TimetableVersion.academic_year_id == ay_id,
+            TimetableVersion.semester_id == sem_id,
+            TimetableVersion.department_id == dept_id,
+            TimetableVersion.program_id == prog_id,
+        ).all()
+        for v in old_v:
+            db.delete(v)
+        db.commit()
+
     with patch('backend.services.timetable_service.TimetableSolver.solve') as mock_solve:
         from backend.optimizer.timetable_solver import SolverResult
         mock_solve.return_value = SolverResult(
@@ -155,10 +176,10 @@ def test_generate_timetable_infeasible(admin_token):
             "/timetable/generate",
             headers={"Authorization": f"Bearer {admin_token}"},
             json={
-                "academic_year_id": ac_year.id,
-                "semester_id": semester.id,
-                "department_id": department.id,
-                "program_id": program.id
+                "academic_year_id": ay_id,
+                "semester_id": sem_id,
+                "department_id": dept_id,
+                "program_id": prog_id,
             }
         )
         

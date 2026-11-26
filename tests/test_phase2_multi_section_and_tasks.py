@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from backend.main import app
 from backend.models.academic import AcademicYear, Department, Section, Semester
-from backend.models.timetable import Timetable
+from backend.models.timetable import Timetable, TimetableVersion, TimetableEntry
 from backend.models.workflow import AuditLog
 from backend.config import engine
 
@@ -46,6 +46,12 @@ def test_multi_section_batch_generate_and_publish():
     admin_token = get_token({"email": "admin@campus.edu", "password": "Test@1234"})
 
     with Session(engine) as db:
+        # Scope isolation: reset timetable versions and canonical timetables
+        db.query(TimetableEntry).delete()
+        db.query(TimetableVersion).delete()
+        db.query(Timetable).delete()
+        db.commit()
+
         ay = db.query(AcademicYear).first()
         assert ay is not None, "AcademicYear must exist in database"
         ay_id: int = ay.id

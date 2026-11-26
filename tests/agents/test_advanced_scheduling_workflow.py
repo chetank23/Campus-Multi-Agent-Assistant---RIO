@@ -52,6 +52,15 @@ from agents.state.state import AgentState
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def clean_timetable_scope():
+    with Session(engine) as db:
+        db.query(TimetableEntry).delete()
+        db.query(TimetableVersion).delete()
+        db.commit()
+    yield
+
+
 # ── Auth Fixtures ─────────────────────────────────────────────────────────────
 
 @pytest.fixture(scope="module")
@@ -307,6 +316,11 @@ def test_09_revision_creates_correct_updated_proposal_and_supersedes_parent(admi
 # ── Scenario 10: Confirmation Executes Only Intended Current Proposal ─────────
 
 def test_10_confirmation_executes_only_intended_current_proposal(admin_token):
+    with Session(engine) as db:
+        db.query(TimetableEntry).delete()
+        db.query(TimetableVersion).delete()
+        db.commit()
+
     # Request generation
     res1 = client.post(
         "/agents/chat",
@@ -343,6 +357,11 @@ def test_10_confirmation_executes_only_intended_current_proposal(admin_token):
 # ── Scenario 11: Stale, Expired, Superseded, and Duplicate Confirmations Blocked
 
 def test_11_stale_expired_superseded_and_duplicate_confirmations_rejected(admin_token):
+    with Session(engine) as db:
+        db.query(TimetableEntry).delete()
+        db.query(TimetableVersion).delete()
+        db.commit()
+
     # 1. Create P1 and revise to P2
     res1 = client.post(
         "/agents/chat",

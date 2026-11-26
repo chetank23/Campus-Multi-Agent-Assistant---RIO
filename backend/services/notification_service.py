@@ -224,26 +224,20 @@ def notify_timetable_published(
             ),
         }
 
-    # Deduplication check: Has this publication event already been delivered?
-    existing = (
-        db.query(Notification)
+    # Recipient-aware deduplication check: Resolve notifications already delivered for this version
+    existing_notifs = (
+        db.query(Notification.user_id, Notification.link)
         .filter(
             Notification.entity_type == "TimetableVersion",
             Notification.entity_id == version_id,
             Notification.type == "TIMETABLE_PUBLISHED",
+            Notification.user_id.isnot(None),
         )
-        .first()
+        .all()
     )
-    if existing:
-        return {
-            "success": True,
-            "deduplicated": True,
-            "message": f"Notifications for TimetableVersion #{version_id} publication have already been dispatched.",
-            "faculty_notified": 0,
-            "students_notified": 0,
-            "admins_notified": 0,
-            "total_notified": 0,
-        }
+    existing_fac_notified = {uid for (uid, link) in existing_notifs if link == "/faculty/timetable"}
+    existing_stud_notified = {uid for (uid, link) in existing_notifs if link == "/student/timetable"}
+    existing_admin_notified = {uid for (uid, link) in existing_notifs if link and link.startswith("/admin/timetable")}
 
     # Query active entries for this version
     entries = (
@@ -304,11 +298,30 @@ def notify_timetable_published(
         )
         student_user_ids = {uid for (uid,) in stud_rows if uid}
 
+    admin_rows = db.query(User.id).filter(User.role == "ADMIN", User.is_active == True).all()
+    admin_uids = {uid for (uid,) in admin_rows if uid}
+
+    # Subtract already notified users to ensure idempotent recipient-aware delivery
+    target_fac_uids = faculty_user_ids - existing_fac_notified
+    target_stud_uids = student_user_ids - existing_stud_notified
+    target_admin_uids = admin_uids - existing_admin_notified
+
+    if not target_fac_uids and not target_stud_uids and not target_admin_uids:
+        return {
+            "success": True,
+            "deduplicated": True,
+            "message": f"Notifications for TimetableVersion #{version_id} publication have already been dispatched.",
+            "faculty_notified": len(existing_fac_notified),
+            "students_notified": len(existing_stud_notified),
+            "admins_notified": len(existing_admin_notified),
+            "total_notified": 0,
+        }
+
     ver_num = version.version_number or str(version.id)
     notifications_to_add: List[Notification] = []
 
     # Notify Faculty
-    for f_uid in faculty_user_ids:
+    for f_uid in target_fac_uids:
         notifications_to_add.append(
             Notification(
                 user_id=f_uid,
@@ -323,7 +336,7 @@ def notify_timetable_published(
         )
 
     # Notify Students
-    for s_uid in student_user_ids:
+    for s_uid in target_stud_uids:
         notifications_to_add.append(
             Notification(
                 user_id=s_uid,
@@ -338,9 +351,7 @@ def notify_timetable_published(
         )
 
     # Notify Admins
-    admin_rows = db.query(User.id).filter(User.role == "ADMIN", User.is_active == True).all()
-    admin_uids = {uid for (uid,) in admin_rows if uid}
-    for a_uid in admin_uids:
+    for a_uid in target_admin_uids:
         notifications_to_add.append(
             Notification(
                 user_id=a_uid,

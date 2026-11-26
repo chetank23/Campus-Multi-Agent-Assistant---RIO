@@ -66,9 +66,10 @@ def student_token():
 def published_timetable(admin_token):
     """
     Sets up a published timetable in the database through the standard lifecycle:
-    Generate -> Validate -> Finalize -> Publish.
+    Generate -> Validate -> Approve -> Publish.
     """
     with Session(engine) as db:
+        from backend.models.events import CoordinatorCapability
         ay = db.query(AcademicYear).first()
         sem = db.query(Semester).first()
         dept = db.query(Department).first()
@@ -76,7 +77,28 @@ def published_timetable(admin_token):
         assert ay and sem and dept and prog, "Missing seed records for timetable generation"
         ay_id, sem_id, dept_id, prog_id = ay.id, sem.id, dept.id, prog.id
 
-    # 1. Generate
+        admin_user = db.query(User).filter(User.role == "ADMIN").first()
+        faculty_user = db.query(Faculty).first()
+        assert admin_user and faculty_user
+
+        cap = db.query(CoordinatorCapability).filter(
+            CoordinatorCapability.user_id == faculty_user.user_id,
+            CoordinatorCapability.capability == "TIMETABLE_COORDINATOR",
+        ).first()
+        if not cap:
+            cap = CoordinatorCapability(
+                user_id=faculty_user.user_id,
+                capability="TIMETABLE_COORDINATOR",
+                scope_type="GLOBAL",
+                is_active=True,
+                assigned_by=admin_user.id,
+            )
+            db.add(cap)
+        else:
+            cap.is_active = True
+        db.commit()
+
+    # 1. Generate (use force_regenerate to replace any residual drafts cleanly)
     gen_res = client.post(
         "/timetable/generate",
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -85,6 +107,7 @@ def published_timetable(admin_token):
             "semester_id": sem_id,
             "department_id": dept_id,
             "program_id": prog_id,
+            "force_regenerate": True,
         },
     )
     assert gen_res.status_code == 200, f"Generate failed: {gen_res.text}"
@@ -97,12 +120,12 @@ def published_timetable(admin_token):
     )
     assert val_res.status_code == 200
 
-    # 3. Finalize
-    fin_res = client.post(
-        f"/timetable/versions/{v_id}/finalize",
+    # 3. Approve
+    app_res = client.post(
+        f"/timetable/versions/{v_id}/approve",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert fin_res.status_code == 200
+    assert app_res.status_code == 200
 
     # 4. Publish
     pub_res = client.post(

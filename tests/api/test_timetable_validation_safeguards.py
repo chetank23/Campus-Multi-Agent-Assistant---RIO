@@ -94,6 +94,32 @@ def base_entities():
         assert sec is not None
         assert admin is not None
 
+        # Ensure section has class teacher and department coordinator capability exists
+        if facs and not sec.class_teacher_id:
+            sec.class_teacher_id = facs[0].id
+            db.flush()
+
+        from backend.models.events import CoordinatorCapability
+        coord_fac = facs[0] if facs else None
+        if coord_fac and coord_fac.user_id:
+            cap = db.query(CoordinatorCapability).filter(
+                CoordinatorCapability.user_id == coord_fac.user_id,
+                CoordinatorCapability.capability == "TIMETABLE_COORDINATOR",
+            ).first()
+            if not cap:
+                cap = CoordinatorCapability(
+                    user_id=coord_fac.user_id,
+                    capability="TIMETABLE_COORDINATOR",
+                    scope_type="DEPARTMENT",
+                    scope_id=dept.id,
+                    is_active=True,
+                    assigned_by=admin.id,
+                )
+                db.add(cap)
+            else:
+                cap.is_active = True
+            db.flush()
+
         # Ensure batch exists
         batch = db.query(Batch).filter(Batch.section_id == sec.id).first()
         if not batch:

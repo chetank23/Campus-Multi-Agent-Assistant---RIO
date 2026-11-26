@@ -7,7 +7,7 @@ from backend.config import engine
 from backend.models.identity import User
 from backend.models.academic import AcademicYear, Semester, Department, Program, Section, Faculty
 from backend.models.events import CoordinatorCapability
-from backend.models.space_time import TimeSlot
+from backend.models.space_time import TimeSlot, Room, Lab, Building
 from backend.models.timetable import Timetable, TimetableVersion, TimetableEntry, TimetableChangeHistory
 from backend.models.workflow import Notification, AuditLog
 
@@ -37,6 +37,11 @@ def faculty_token():
 @pytest.fixture(scope="module")
 def test_scope():
     with Session(engine) as db:
+        db.query(TimetableEntry).delete()
+        db.query(TimetableVersion).delete()
+        db.query(Timetable).delete()
+        db.commit()
+
         ac_year = db.query(AcademicYear).first()
         semester = db.query(Semester).first()
         department = db.query(Department).first()
@@ -648,10 +653,17 @@ def test_13_recall_published_timetable(admin_token, test_scope):
         assert ver.recall_reason == recall_reason
 
         # Canonical timetable must be RECALLED and entries unlinked
-        canon = db.query(Timetable).filter(
-            Timetable.academic_year_id == test_scope["academic_year_id"],
-            Timetable.semester_id == test_scope["semester_id"],
-        ).first()
+        published_canon_ids = [t["id"] for t in pub_res.json().get("published_timetables", [])]
+        canon = (
+            db.query(Timetable)
+            .filter(Timetable.id.in_(published_canon_ids))
+            .first()
+            if published_canon_ids
+            else db.query(Timetable).filter(
+                Timetable.academic_year_id == test_scope["academic_year_id"],
+                Timetable.semester_id == test_scope["semester_id"],
+            ).first()
+        )
         if canon:
             assert canon.status == "RECALLED"
             # Canonical entries should be unlinked
@@ -682,14 +694,39 @@ def test_14_recalled_timetable_can_be_edited_revalidated_and_republished(admin_t
     )
     vid = gen.json()["version_id"]
 
-    client.post(f"/timetable/versions/{vid}/validate", headers={"Authorization": f"Bearer {admin_token}"})
-    client.post(f"/timetable/versions/{vid}/approve", headers={"Authorization": f"Bearer {admin_token}"})
-    client.post(f"/timetable/versions/{vid}/publish", headers={"Authorization": f"Bearer {admin_token}"})
-    client.post(
+    # Ensure coordinator exists
+    with Session(engine) as db:
+        admin_user = db.query(User).filter(User.role == "ADMIN").first()
+        faculty_user = db.query(Faculty).first()
+        assert admin_user and faculty_user
+        cap = db.query(CoordinatorCapability).filter(
+            CoordinatorCapability.user_id == faculty_user.user_id,
+            CoordinatorCapability.capability == "TIMETABLE_COORDINATOR",
+        ).first()
+        if not cap:
+            db.add(CoordinatorCapability(
+                user_id=faculty_user.user_id,
+                capability="TIMETABLE_COORDINATOR",
+                scope_type="GLOBAL",
+                is_active=True,
+                assigned_by=admin_user.id,
+            ))
+        else:
+            cap.is_active = True
+        db.commit()
+
+    val_init = client.post(f"/timetable/versions/{vid}/validate", headers={"Authorization": f"Bearer {admin_token}"})
+    assert val_init.status_code == 200, val_init.text
+    app_init = client.post(f"/timetable/versions/{vid}/approve", headers={"Authorization": f"Bearer {admin_token}"})
+    assert app_init.status_code == 200, app_init.text
+    pub_init = client.post(f"/timetable/versions/{vid}/publish", headers={"Authorization": f"Bearer {admin_token}"})
+    assert pub_init.status_code == 200, pub_init.text
+    rec_init = client.post(
         f"/timetable/versions/{vid}/recall",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={"reason": "Curriculum realignment requirement"},
     )
+    assert rec_init.status_code == 200, rec_init.text
 
     # 2. Check move options and save an edit on the RECALLED version
     with Session(engine) as db:
@@ -697,22 +734,28 @@ def test_14_recalled_timetable_can_be_edited_revalidated_and_republished(admin_t
         assert ver is not None
         cur_rev = ver.revision
 
-        entry = db.query(TimetableEntry).filter(
+        entries = db.query(TimetableEntry).filter(
             TimetableEntry.version_id == vid,
             TimetableEntry.status != "CANCELLED",
-        ).first()
-        assert entry is not None
-        entry_id = entry.id
-        version = entry.version
-        assert version is not None
-        assert version.id == ver.id
-        assert version.revision == cur_rev
+        ).all()
+        assert entries
+        entry_id = None
+        target_slot_id = None
 
-        other_slot = db.query(TimeSlot).filter(TimeSlot.id != entry.slot_id, TimeSlot.slot_type == "CLASS").first()
-        assert other_slot is not None
-        target_slot_id = other_slot.id
+    for candidate in entries:
+        move_opts = client.get(
+            f"/timetable/versions/{vid}/move-options?entry_id={candidate.id}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        if move_opts.status_code == 200:
+            valid_opts = [opt for opt in move_opts.json().get("options", []) if opt.get("can_move")]
+            if valid_opts:
+                entry_id = candidate.id
+                target_slot_id = valid_opts[0]["slot_id"]
+                break
 
-    # Recalled timetables allow arrangement edits!
+    assert entry_id is not None and target_slot_id is not None, "Failed to find a valid arrangement move in recalled timetable"
+
     save_res = client.post(
         f"/timetable/versions/{vid}/arrangements",
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -739,3 +782,181 @@ def test_14_recalled_timetable_can_be_edited_revalidated_and_republished(admin_t
     assert pub_res.status_code == 200
     assert pub_res.json()["status"] == "PUBLISHED"
 
+
+def test_15_cross_program_and_cross_department_scope_isolation(admin_token):
+    """
+    Phase 5 Critical Requirement:
+    Publishing or recalling a timetable for Programme A (Dept 1) must NEVER affect
+    Programme B (Dept 3), even when sharing academic year and semester.
+    History and canonical tables must remain strictly isolated.
+    """
+    with Session(engine) as db:
+        from backend.models.events import CoordinatorCapability
+        from backend.models.academic import Faculty
+        ay = db.query(AcademicYear).first()
+        sem = db.query(Semester).first()
+        sec_a = db.query(Section).filter(Section.department_id == 1, Section.semester_id == sem.id).first()
+        sec_b = db.query(Section).filter(Section.department_id == 3, Section.semester_id == sem.id).first()
+        assert ay and sem and sec_a and sec_b
+        dept_a = sec_a.department
+        dept_b = sec_b.department
+        prog_a = sec_a.program
+        prog_b = sec_b.program
+        assert dept_a and dept_b and prog_a and prog_b
+
+        admin_u = db.query(User).filter(User.role == "ADMIN").first()
+        fac_a = db.query(Faculty).filter(Faculty.department_id == dept_a.id).first()
+        fac_b = db.query(Faculty).filter(Faculty.department_id == dept_b.id).first()
+        assert admin_u and fac_a and fac_b
+
+        # Ensure coordinators mapped for each department
+        for fac_obj, dept_obj in [(fac_a, dept_a), (fac_b, dept_b)]:
+            cap = db.query(CoordinatorCapability).filter(
+                CoordinatorCapability.user_id == fac_obj.user_id,
+                CoordinatorCapability.capability == "TIMETABLE_COORDINATOR",
+            ).first()
+            if not cap:
+                cap = CoordinatorCapability(
+                    user_id=fac_obj.user_id,
+                    capability="TIMETABLE_COORDINATOR",
+                    scope_type="DEPARTMENT",
+                    scope_id=dept_obj.id,
+                    is_active=True,
+                    assigned_by=admin_u.id,
+                )
+                db.add(cap)
+            else:
+                cap.is_active = True
+
+        # Ensure Dept B has both classroom and lab room available for its practical courses
+        bldg = db.query(Building).first()
+        r8 = db.query(Room).filter(Room.department_id == dept_b.id).first()
+        if r8:
+            r8.capacity = max(r8.capacity or 0, 60)
+            r8.room_type = "CLASSROOM"
+        lab_b = db.query(Room).filter(Room.department_id == dept_b.id, Room.room_type == "LAB").first()
+        if not lab_b:
+            lab_b = Room(
+                building_id=bldg.id if bldg else 1,
+                room_number="EE-LAB-101",
+                capacity=60,
+                room_type="LAB",
+                department_id=dept_b.id,
+                status="ACTIVE",
+            )
+            db.add(lab_b)
+            db.flush()
+            db.add(Lab(room_id=lab_b.id))
+        db.commit()
+
+        scope_a = {
+            "academic_year_id": ay.id,
+            "semester_id": sem.id,
+            "department_id": dept_a.id,
+            "program_id": prog_a.id,
+        }
+        scope_b = {
+            "academic_year_id": ay.id,
+            "semester_id": sem.id,
+            "department_id": dept_b.id,
+            "program_id": prog_b.id,
+        }
+
+    # 1. Generate & publish Programme A
+    gen_a = client.post("/timetable/generate", headers={"Authorization": f"Bearer {admin_token}"}, json={**scope_a, "force_regenerate": True})
+    assert gen_a.status_code == 200, gen_a.text
+    vid_a = gen_a.json()["version_id"]
+    client.post(f"/timetable/versions/{vid_a}/validate", headers={"Authorization": f"Bearer {admin_token}"})
+    client.post(f"/timetable/versions/{vid_a}/approve", headers={"Authorization": f"Bearer {admin_token}"})
+    pub_a = client.post(f"/timetable/versions/{vid_a}/publish", headers={"Authorization": f"Bearer {admin_token}"})
+    assert pub_a.status_code == 200
+    assert pub_a.json()["status"] == "PUBLISHED"
+
+    # 2. Generate & publish Programme B
+    gen_b = client.post("/timetable/generate", headers={"Authorization": f"Bearer {admin_token}"}, json={**scope_b, "force_regenerate": True})
+    assert gen_b.status_code == 200, gen_b.text
+    vid_b = gen_b.json()["version_id"]
+    client.post(f"/timetable/versions/{vid_b}/validate", headers={"Authorization": f"Bearer {admin_token}"})
+    client.post(f"/timetable/versions/{vid_b}/approve", headers={"Authorization": f"Bearer {admin_token}"})
+    pub_b = client.post(f"/timetable/versions/{vid_b}/publish", headers={"Authorization": f"Bearer {admin_token}"})
+    assert pub_b.status_code == 200
+    assert pub_b.json()["status"] == "PUBLISHED"
+
+    # 3. Verify both are active and published
+    with Session(engine) as db:
+        va = db.query(TimetableVersion).filter(TimetableVersion.id == vid_a).first()
+        vb = db.query(TimetableVersion).filter(TimetableVersion.id == vid_b).first()
+        assert va and va.status == "PUBLISHED"
+        assert vb and vb.status == "PUBLISHED"
+
+        canons_b_before = db.query(Timetable).filter(
+            Timetable.academic_year_id == scope_b["academic_year_id"],
+            Timetable.semester_id == scope_b["semester_id"],
+            Timetable.status == "PUBLISHED",
+            Timetable.timetable_entries.any(TimetableEntry.version_id == vid_b),
+        ).all()
+        assert canons_b_before, "Programme B must have published canonical records"
+
+    # 4. Recall Programme A
+    rec_a = client.post(
+        f"/timetable/versions/{vid_a}/recall",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"reason": "Dept A curriculum schedule revision isolation test"},
+    )
+    assert rec_a.status_code == 200, rec_a.text
+
+    # 5. Critical Scope Isolation Verifications:
+    with Session(engine) as db:
+        va_after = db.query(TimetableVersion).filter(TimetableVersion.id == vid_a).first()
+        vb_after = db.query(TimetableVersion).filter(TimetableVersion.id == vid_b).first()
+        assert va_after and va_after.status == "RECALLED"
+        # Programme B MUST remain PUBLISHED!
+        assert vb_after and vb_after.status == "PUBLISHED", "Programme B was altered when Programme A was recalled!"
+
+        canons_b_after = db.query(Timetable).filter(
+            Timetable.academic_year_id == scope_b["academic_year_id"],
+            Timetable.semester_id == scope_b["semester_id"],
+            Timetable.status == "PUBLISHED",
+            Timetable.timetable_entries.any(TimetableEntry.version_id == vid_b),
+        ).all()
+        assert len(canons_b_after) == len(canons_b_before), "Programme B canonical timetables were recalled or unlinked!"
+
+        # History for Programme A is preserved
+        entries_a = db.query(TimetableEntry).filter(TimetableEntry.version_id == vid_a).all()
+        assert entries_a, "Programme A entries must not be deleted on recall"
+
+
+def test_16_duplicate_published_and_controlled_replacement(admin_token, test_scope):
+    """
+    Phase 2 & Phase 5:
+    When a scope has an active PUBLISHED timetable:
+    1. Duplicate generation without force_regenerate is rejected (409 Conflict).
+    2. Controlled replacement with force_regenerate=True generates a new draft without destroying
+       the active published timetable until the replacement is approved and published.
+    """
+    # 1. Ensure test_scope has a published timetable
+    gen1 = client.post("/timetable/generate", headers={"Authorization": f"Bearer {admin_token}"}, json={**test_scope, "force_regenerate": True})
+    assert gen1.status_code == 200
+    v1_id = gen1.json()["version_id"]
+    client.post(f"/timetable/versions/{v1_id}/validate", headers={"Authorization": f"Bearer {admin_token}"})
+    client.post(f"/timetable/versions/{v1_id}/approve", headers={"Authorization": f"Bearer {admin_token}"})
+    pub1 = client.post(f"/timetable/versions/{v1_id}/publish", headers={"Authorization": f"Bearer {admin_token}"})
+    assert pub1.status_code == 200
+
+    # 2. Duplicate generation attempt returns 409
+    dup_res = client.post("/timetable/generate", headers={"Authorization": f"Bearer {admin_token}"}, json=test_scope)
+    assert dup_res.status_code == 409
+    assert f"Version {v1_id}" in dup_res.json()["detail"] or "already exists" in dup_res.json()["detail"]
+
+    # 3. Controlled replacement with force_regenerate=True
+    gen2 = client.post("/timetable/generate", headers={"Authorization": f"Bearer {admin_token}"}, json={**test_scope, "force_regenerate": True})
+    assert gen2.status_code == 200
+    v2_id = gen2.json()["version_id"]
+    assert v2_id != v1_id
+
+    # 4. Crucial: Previous timetable v1_id MUST still be PUBLISHED while v2_id is merely GENERATED
+    with Session(engine) as db:
+        v1 = db.query(TimetableVersion).filter(TimetableVersion.id == v1_id).first()
+        v2 = db.query(TimetableVersion).filter(TimetableVersion.id == v2_id).first()
+        assert v1 and v1.status == "PUBLISHED", "Published timetable must remain published during draft generation"
+        assert v2 and v2.status == "GENERATED"

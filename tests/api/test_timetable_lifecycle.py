@@ -25,6 +25,12 @@ def seeded_timetable(admin_token):
         pytest.skip("No admin token")
         
     with Session(engine) as db:
+        from backend.models.timetable import Timetable
+        db.query(TimetableEntry).delete()
+        db.query(TimetableVersion).delete()
+        db.query(Timetable).delete()
+        db.commit()
+
         ac_year = db.query(AcademicYear).first()
         semester = db.query(Semester).first()
         department = db.query(Department).first()
@@ -140,6 +146,37 @@ def test_finalize_version(admin_token, seeded_timetable):
     assert response.json()["status"] == "FINALIZED"
     
 def test_publish_version(admin_token, seeded_timetable):
+    with Session(engine) as db:
+        from backend.models.events import CoordinatorCapability
+        from backend.models.academic import Faculty
+        from backend.models.identity import User
+        admin_user = db.query(User).filter(User.role == "ADMIN").first()
+        faculty_user = db.query(Faculty).first()
+        assert admin_user and faculty_user
+        cap = db.query(CoordinatorCapability).filter(
+            CoordinatorCapability.user_id == faculty_user.user_id,
+            CoordinatorCapability.capability == "TIMETABLE_COORDINATOR",
+        ).first()
+        if not cap:
+            cap = CoordinatorCapability(
+                user_id=faculty_user.user_id,
+                capability="TIMETABLE_COORDINATOR",
+                scope_type="GLOBAL",
+                is_active=True,
+                assigned_by=admin_user.id,
+            )
+            db.add(cap)
+        else:
+            cap.is_active = True
+        db.commit()
+
+    # Formally approve version first
+    app_res = client.post(
+        f"/timetable/versions/{seeded_timetable}/approve",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert app_res.status_code == 200
+
     response = client.post(
         f"/timetable/versions/{seeded_timetable}/publish",
         headers={"Authorization": f"Bearer {admin_token}"}

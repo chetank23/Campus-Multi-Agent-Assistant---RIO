@@ -75,11 +75,37 @@ def test_workflow_a_timetable_publication_and_notifications(admin_token, faculty
         assert all([ac_year, dept, prog, sem, sec, fac, student, course, room, slot, admin_user]), "Missing prerequisite seed records"
         assert ac_year and dept and prog and sem and sec and fac and student and course and room and slot and admin_user
 
-        # Create an isolated test timetable version in FINALIZED status
+        from backend.models.events import CoordinatorCapability
+        other_fac = db.query(Faculty).filter(Faculty.user_id.isnot(None), Faculty.id != fac.id).first()
+        coord_user_id = other_fac.user_id if other_fac else admin_user.id
+        cap = db.query(CoordinatorCapability).filter(
+            CoordinatorCapability.user_id == coord_user_id,
+            CoordinatorCapability.capability == "TIMETABLE_COORDINATOR",
+        ).first()
+        if not cap:
+            cap = CoordinatorCapability(
+                user_id=coord_user_id,
+                capability="TIMETABLE_COORDINATOR",
+                scope_type="GLOBAL",
+                is_active=True,
+                assigned_by=admin_user.id,
+            )
+            db.add(cap)
+        else:
+            cap.is_active = True
+
+        # Create an isolated test timetable version in APPROVED status
         version = TimetableVersion(
             academic_year_id=ac_year.id,
+            department_id=dept.id,
+            program_id=prog.id,
+            semester_id=sem.id,
             version_number="v99.0",
-            status="FINALIZED",
+            status="APPROVED",
+            revision=1,
+            approved_revision=1,
+            approved_by=admin_user.id,
+            approved_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
             created_by=admin_user.id,
         )
         db.add(version)
