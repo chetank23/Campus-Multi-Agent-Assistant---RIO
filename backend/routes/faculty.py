@@ -12,6 +12,7 @@ from backend.schemas.faculty import FacultyCreate, FacultyUpdate, FacultyRespons
 from backend.schemas.timetable import FacultyTimetableResponse, PersonalTimetableEntry, DepartmentTimetableResponse
 from backend.models.substitution import FacultySubstitution
 from backend.services.substitution_service import day_matches_date, get_active_substitutions_for_date
+from backend.services.timetable_visibility import published_timetable_entry_predicate
 from backend.dependencies import get_current_user, require_role
 
 router = APIRouter(prefix="/faculty", tags=["Faculty"])
@@ -84,10 +85,8 @@ def get_faculty_my_timetable(
         .outerjoin(Timetable, TimetableEntry.timetable_id == Timetable.id)
         .outerjoin(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
         .filter(
-            ((Timetable.id != None) & (Timetable.status == "PUBLISHED")) |  # noqa: E711
-            ((TimetableEntry.timetable_id == None) & (TimetableVersion.id != None) & (TimetableVersion.status == "PUBLISHED")),  # noqa: E711
+            published_timetable_entry_predicate(TimetableEntry, Timetable, TimetableVersion),
             TimetableEntry.faculty_id == fac.id,
-            TimetableEntry.status != "CANCELLED",
         )
     )
     if academic_year_id:
@@ -283,10 +282,8 @@ def get_faculty_department_timetable(
         .outerjoin(Timetable, TimetableEntry.timetable_id == Timetable.id)
         .outerjoin(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
         .filter(
-            ((Timetable.id != None) & (Timetable.status == "PUBLISHED")) |  # noqa: E711
-            ((TimetableVersion.id != None) & (TimetableVersion.status == "PUBLISHED")),  # noqa: E711
+            published_timetable_entry_predicate(TimetableEntry, Timetable, TimetableVersion),
             TimetableEntry.department_id == fac.department_id,
-            TimetableEntry.status != "CANCELLED",
         )
     )
     if academic_year_id:

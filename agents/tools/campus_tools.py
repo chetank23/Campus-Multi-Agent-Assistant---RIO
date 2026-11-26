@@ -214,7 +214,7 @@ def get_room_availability_data(
             .filter(
                 TimetableEntry.version_id == published_version.id,
                 TimeSlot.day == target_day,
-                TimetableEntry.status != "CANCELLED",
+                TimetableEntry.status == "ACTIVE",
             )
         )
         if t_start and t_end:

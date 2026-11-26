@@ -12,6 +12,7 @@ from backend.models.space_time import Room, TimeSlot
 from backend.schemas.student import StudentCreate, StudentUpdate, StudentResponse, StudentCourseResponse
 from backend.schemas.timetable import StudentTimetableResponse, PersonalTimetableEntry
 from backend.services.substitution_service import day_matches_date, get_active_substitutions_for_date
+from backend.services.timetable_visibility import published_timetable_entry_predicate
 from backend.dependencies import get_current_user, require_role, require_department_scope
 
 router = APIRouter(prefix="/students", tags=["Students"])
@@ -81,10 +82,8 @@ def _get_student_my_timetable_handler(
         .outerjoin(Timetable, TimetableEntry.timetable_id == Timetable.id)
         .outerjoin(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
         .filter(
-            ((Timetable.id != None) & (Timetable.status == "PUBLISHED")) |  # noqa: E711
-            ((TimetableEntry.timetable_id == None) & (TimetableVersion.id != None) & (TimetableVersion.status == "PUBLISHED")),  # noqa: E711
+            published_timetable_entry_predicate(TimetableEntry, Timetable, TimetableVersion),
             TimetableEntry.section_id == stu.section_id,
-            TimetableEntry.status != "CANCELLED",
         )
     )
     if academic_year_id:

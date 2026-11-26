@@ -75,6 +75,7 @@ def get_department_timetable_data(
         .filter(
             TimetableEntry.version_id == published_version.id,
             TimetableEntry.department_id == target_dept_id,
+            TimetableEntry.status == "ACTIVE",
         )
     )
 

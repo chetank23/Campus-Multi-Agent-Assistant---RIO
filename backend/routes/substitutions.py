@@ -472,7 +472,7 @@ def get_classes_for_date(
         )
         .filter(
             TimetableVersion.status == "PUBLISHED",
-            TimetableEntry.status != "CANCELLED",
+            TimetableEntry.status == "ACTIVE",
         )
     )
     if section_id:

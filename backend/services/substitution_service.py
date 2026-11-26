@@ -106,7 +106,7 @@ def list_faculty_upcoming_classes(
         .filter(
             TimetableVersion.status == "PUBLISHED",
             TimetableEntry.faculty_id == fac.id,
-            TimetableEntry.status != "CANCELLED",
+            TimetableEntry.status == "ACTIVE",
         )
         .options(
             joinedload(TimetableEntry.course),
@@ -226,7 +226,7 @@ def create_substitution_request(
         .filter(
             TimetableEntry.id == timetable_entry_id,
             TimetableVersion.status == "PUBLISHED",
-            TimetableEntry.status != "CANCELLED",
+            TimetableEntry.status == "ACTIVE",
         )
         .first()
     )
@@ -460,7 +460,7 @@ def find_and_rank_substitute_candidates(
         .filter(
             TimetableVersion.status == "PUBLISHED",
             TimetableEntry.course_id == target_course_id,
-            TimetableEntry.status != "CANCELLED",
+            TimetableEntry.status == "ACTIVE",
         )
         .all()
     )
@@ -521,7 +521,7 @@ def find_and_rank_substitute_candidates(
         .filter(
             TimetableVersion.status == "PUBLISHED",
             TimetableEntry.slot_id == target_slot_id,
-            TimetableEntry.status != "CANCELLED",
+            TimetableEntry.status == "ACTIVE",
         )
         .all()
     )
@@ -565,7 +565,7 @@ def find_and_rank_substitute_candidates(
         .join(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
         .filter(
             TimetableVersion.status == "PUBLISHED",
-            TimetableEntry.status != "CANCELLED",
+            TimetableEntry.status == "ACTIVE",
         )
         .all()
     )
@@ -956,7 +956,7 @@ def approve_substitution_request(
             TimetableVersion.status == "PUBLISHED",
             TimetableEntry.course_id == target_course_id,
             TimetableEntry.faculty_id == substitute_faculty_id,
-            TimetableEntry.status != "CANCELLED",
+            TimetableEntry.status == "ACTIVE",
         )
         .first()
     )
@@ -974,7 +974,7 @@ def approve_substitution_request(
             TimetableVersion.status == "PUBLISHED",
             TimetableEntry.faculty_id == substitute_faculty_id,
             TimetableEntry.slot_id == entry.slot_id,
-            TimetableEntry.status != "CANCELLED",
+            TimetableEntry.status == "ACTIVE",
         )
         .first()
     )

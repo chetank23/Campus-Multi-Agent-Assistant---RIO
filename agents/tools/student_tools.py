@@ -102,17 +102,11 @@ def get_student_timetable_data(
         .filter(
             TimetableVersion.status == "PUBLISHED",
             TimetableEntry.section_id == student.section_id,
+            TimetableEntry.status == "ACTIVE",
         )
         .order_by(TimetableVersion.published_at.desc(), TimetableVersion.id.desc())
         .first()
     )
-    if not published_version:
-        published_version = (
-            db.query(TimetableVersion)
-            .filter(TimetableVersion.status == "PUBLISHED")
-            .order_by(TimetableVersion.published_at.desc(), TimetableVersion.id.desc())
-            .first()
-        )
 
     if not published_version:
         section = db.query(Section).filter(Section.id == student.section_id).first() if student.section_id else None
@@ -128,6 +122,7 @@ def get_student_timetable_data(
         .filter(
             TimetableEntry.version_id == published_version.id,
             TimetableEntry.section_id == student.section_id,
+            TimetableEntry.status == "ACTIVE",
         )
     )
 
@@ -289,6 +284,7 @@ def get_class_status_data(
             .filter(
                 TimetableEntry.version_id == published_version.id,
                 TimetableEntry.faculty_id == faculty.id,
+                TimetableEntry.status == "ACTIVE",
                 or_(TimeSlot.day == today_day, TimeSlot.day == today_code),
             )
         )
@@ -308,6 +304,7 @@ def get_class_status_data(
             .join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id)
             .filter(
                 TimetableEntry.version_id == published_version.id,
+                TimetableEntry.status == "ACTIVE",
                 or_(TimeSlot.day == today_day, TimeSlot.day == today_code),
             )
         )

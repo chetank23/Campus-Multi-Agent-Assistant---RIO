@@ -73,6 +73,8 @@ export interface TimetableVersionResponse {
   validation_errors_count?: number;
   validation_warnings_count?: number;
   validated_at?: string | null;
+  lifecycle_status?: 'GENERATED' | 'DRAFT' | 'REVIEWED' | 'VALIDATED' | 'APPROVED' | 'PUBLISHED' | 'RECALLED' | string;
+  publication_status?: 'UNPUBLISHED' | 'PUBLISHED' | 'RECALLED' | string;
   created_at: string;
   published_at: string | null;
   reason: string | null;
@@ -212,6 +214,10 @@ export interface TimetableScore {
 
 export interface GenerationSummary {
   status: string;
+  solver_status?: 'OPTIMAL' | 'FEASIBLE' | 'INFEASIBLE' | string;
+  lifecycle_status?: 'GENERATED' | 'DRAFT' | 'REVIEWED' | 'VALIDATED' | 'APPROVED' | 'PUBLISHED' | 'RECALLED' | string;
+  validation_status?: 'NOT_VALIDATED' | 'PASSED' | 'PASSED_WITH_WARNINGS' | 'FAILED' | string;
+  publication_status?: 'UNPUBLISHED' | 'PUBLISHED' | 'RECALLED' | string;
   message: string;
   version_id?: number | null;
   loaded_sections: number;

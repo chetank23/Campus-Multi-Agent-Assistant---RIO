@@ -262,7 +262,7 @@ def execute_timetable_generation(
         return TimetableGenerationResult(
             success=True,
             status=solver_res.status,
-            message=solver_res.message,
+            message="Timetable generated successfully and saved as a private draft. It is not published.",
             version_id=version_id,
             solve_time_seconds=solver_res.solve_time_seconds,
             loaded_sections=len(optimizer_input.sections),
@@ -602,8 +602,15 @@ def publish_canonical_timetable(
                 if not legacy_ver:
                     legacy_ver = TimetableVersion(
                         academic_year_id=request.academic_year_id,
+                        department_id=request.department_id,
+                        program_id=section.program_id,
                         version_number=version_code,
                         status="PUBLISHED",
+                        validation_status="PASSED",
+                        validated_revision=1,
+                        approved_at=now_utc,
+                        approved_by=current_user.id,
+                        approved_revision=1,
                         published_at=now_utc,
                         created_at=now_utc,
                         created_by=current_user.id,
@@ -611,7 +618,14 @@ def publish_canonical_timetable(
                     db.add(legacy_ver)
                     db.flush()
                 else:
+                    legacy_ver.department_id = request.department_id
+                    legacy_ver.program_id = section.program_id
                     legacy_ver.status = "PUBLISHED"
+                    legacy_ver.validation_status = "PASSED"
+                    legacy_ver.validated_revision = legacy_ver.revision
+                    legacy_ver.approved_at = now_utc
+                    legacy_ver.approved_by = current_user.id
+                    legacy_ver.approved_revision = legacy_ver.revision
                     legacy_ver.published_at = now_utc
                     db.query(TimetableEntry).filter(TimetableEntry.version_id == legacy_ver.id).delete(synchronize_session=False)
 
@@ -807,7 +821,7 @@ def get_canonical_timetables(
                 slot_type=e.slot.slot_type if e.slot else None,
                 section_name=sec.section_name if sec else None,
             )
-            for e in sorted_entries if e.status != "CANCELLED"
+            for e in sorted_entries if e.status == "ACTIVE"
         ]
 
         dept = sec.department if sec else None
@@ -1532,11 +1546,15 @@ def build_version_summary_response_item(
         TimetableEntry.status != "CANCELLED",
     ).count()
 
+    pub_status = "PUBLISHED" if (v.status == "PUBLISHED" and v.published_at is not None) else ("RECALLED" if v.status == "RECALLED" else "UNPUBLISHED")
+
     return TimetableVersionResponse(
         id=v.id,
         academic_year_id=v.academic_year_id,
         version_number=v.version_number,
         status=v.status,
+        lifecycle_status=v.status,
+        publication_status=pub_status,
         created_by=v.created_by,
         approved_by=v.approved_by,
         approved_at=v.approved_at,

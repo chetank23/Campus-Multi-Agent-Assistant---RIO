@@ -9,7 +9,7 @@ from backend.database import get_db
 from backend.dependencies import get_current_user, require_role
 from backend.models.identity import User
 from backend.models.space_time import Room, Building
-from backend.models.timetable import TimetableEntry
+from backend.models.timetable import TimetableEntry, TimetableVersion
 from backend.models.resources import ResourceBooking
 from backend.schemas.room import RoomCreate, RoomUpdate, RoomResponse
 
@@ -58,11 +58,17 @@ def delete_room(room_id: int, admin_user: User = Depends(require_role("ADMIN")),
 def get_room_availability(room_id: int, check_date: date, slot_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)): 
     # Check TimetableEntry (this assumes TimetableEntry spans the whole semester)
     # This is a stubbed basic check. True timetabling will need semester date boundary checks.
-    timetable_conflict = db.query(TimetableEntry).filter(
-        TimetableEntry.room_id == room_id,
-        TimetableEntry.slot_id == slot_id,
-        TimetableEntry.status.in_(["ACTIVE"])
-    ).first()
+    timetable_conflict = (
+        db.query(TimetableEntry)
+        .join(TimetableVersion, TimetableEntry.version_id == TimetableVersion.id)
+        .filter(
+            TimetableVersion.status == "PUBLISHED",
+            TimetableEntry.room_id == room_id,
+            TimetableEntry.slot_id == slot_id,
+            TimetableEntry.status.in_(["ACTIVE"]),
+        )
+        .first()
+    )
     
     if timetable_conflict:
         return {"available": False, "reason": "Scheduled for class"}

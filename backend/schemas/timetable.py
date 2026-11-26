@@ -47,6 +47,8 @@ class TimetableVersionResponse(BaseModel):
     academic_year_id: Optional[int] = None
     version_number: Optional[str] = None
     status: Optional[str] = None
+    lifecycle_status: Optional[str] = None
+    publication_status: Optional[str] = "UNPUBLISHED"
     created_by: Optional[int] = None
     approved_by: Optional[int] = None
     approved_at: Optional[datetime] = None

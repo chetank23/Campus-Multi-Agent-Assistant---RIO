@@ -139,7 +139,7 @@ def get_faculty_schedule_data(
         .filter(
             TimetableEntry.version_id == published_version.id,
             TimetableEntry.faculty_id == faculty.id,
-            TimetableEntry.status != "CANCELLED",
+            TimetableEntry.status == "ACTIVE",
         )
     )
 
@@ -337,7 +337,7 @@ def get_available_faculty_data(
             or_(TimeSlot.day == day_full, TimeSlot.day == day_3),
             TimeSlot.start_time < et,
             TimeSlot.end_time > st,
-            TimetableEntry.status != "CANCELLED",
+            TimetableEntry.status == "ACTIVE",
         )
         .distinct()
         .all()
@@ -356,7 +356,7 @@ def get_available_faculty_data(
             or_(TimeSlot.day == day_full, TimeSlot.day == day_3),
             TimeSlot.start_time < et,
             TimeSlot.end_time > st,
-            TimetableEntry.status != "CANCELLED",
+            TimetableEntry.status == "ACTIVE",
         )
         .distinct()
         .all()
@@ -715,7 +715,7 @@ def get_next_class_data(
         .join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id)
         .filter(
             TimetableEntry.version_id == published_version.id,
-            TimetableEntry.status != "CANCELLED",
+            TimetableEntry.status == "ACTIVE",
         )
     )
 

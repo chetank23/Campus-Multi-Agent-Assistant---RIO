@@ -201,7 +201,7 @@ def get_faculty_free_periods_data(
                 TimetableEntry.version_id == published_version.id,
                 TimetableEntry.faculty_id == fac.id,
                 TimeSlot.day == target_day,
-                TimetableEntry.status != "CANCELLED",
+                TimetableEntry.status == "ACTIVE",
             )
             .all()
         )

@@ -484,7 +484,7 @@ def check_venue_availability(
             .filter(
                 TimetableEntry.version_id == pub_version.id,
                 TimetableEntry.room_id == room_id,
-                TimetableEntry.status != "CANCELLED",
+                TimetableEntry.status == "ACTIVE",
                 TimeSlot.day == target_day,
                 TimeSlot.start_time < t_end,
                 TimeSlot.end_time > t_start,

@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  Send,
   Loader2,
   ShieldCheck,
   Info,
@@ -19,7 +18,6 @@ import {
   getTimetableSections,
   getCanonicalTimetables,
   generateTimetable,
-  publishCanonicalTimetable,
   checkTimetableScope,
   type TimetablePreviewResponse,
   type TimetablePreviewEntry,
@@ -76,7 +74,6 @@ export const AdminTimetableManagementPage: React.FC = () => {
 
   // Preview & Workflow state
   const [previewData, setPreviewData] = useState<TimetablePreviewResponse | null>(null);
-  const [showPublishModal, setShowPublishModal] = useState(false);
   const [publishSuccessMsg, setPublishSuccessMsg] = useState<string | null>(null);
   const [forceRegenerate, setForceRegenerate] = useState<boolean>(false);
 
@@ -162,12 +159,12 @@ export const AdminTimetableManagementPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['timetable-scope-check'] });
       if (data.version_id) {
         toast.success(
-          `Draft timetable version V${data.version_id} generated (UNPUBLISHED). Opening Smart Timetable Editor...`,
+          'Timetable generated successfully and saved as a private draft. It is not published.',
           { duration: 4000 }
         );
         navigate(`/admin/timetable/versions/${data.version_id}`);
       } else {
-        toast.success(data.message || 'Timetable generated.');
+        toast.success(data.message || 'Timetable generated successfully and saved as a private draft. It is not published.');
       }
     },
     onError: (err: any) => {
@@ -177,37 +174,6 @@ export const AdminTimetableManagementPage: React.FC = () => {
       if (err?.response?.status === 409) {
         refetchScopeCheck();
       }
-    },
-  });
-
-  // Publication Mutation
-  const publishMutation = useMutation({
-    mutationFn: () => {
-      if (!previewData || typeof selectedAyId !== 'number' || typeof selectedSemId !== 'number' || typeof selectedDeptId !== 'number') {
-        throw new Error('No timetable preview available to publish.');
-      }
-      return publishCanonicalTimetable({
-        academic_year_id: selectedAyId,
-        semester_id: selectedSemId,
-        department_id: selectedDeptId,
-        working_days: previewData.working_days || workingDays,
-        entries: previewData.entries,
-      });
-    },
-    onSuccess: (res) => {
-      setShowPublishModal(false);
-      setPreviewData(null);
-      const msg = `Timetable successfully published! ${res.total_entries_published} classes scheduled across ${res.published_timetables.length} sections.`;
-      setPublishSuccessMsg(msg);
-      toast.success(msg, { duration: 6000 });
-      refetchPublished();
-      queryClient.invalidateQueries({ queryKey: ['timetable-canonical'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-analytics-overview'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-dept-progress'] });
-    },
-    onError: (err: any) => {
-      const msg = err?.response?.data?.detail || err?.message || 'Failed to publish timetable.';
-      toast.error(`Publication failed: ${msg}`);
     },
   });
 
@@ -450,7 +416,7 @@ export const AdminTimetableManagementPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setPreviewData(null)}
-                  disabled={generateMutation.isPending || publishMutation.isPending}
+                  disabled={generateMutation.isPending}
                   className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
                 >
                   Discard Preview
@@ -460,7 +426,7 @@ export const AdminTimetableManagementPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleGenerate}
-                disabled={generateMutation.isPending || publishMutation.isPending}
+                disabled={generateMutation.isPending}
                 className={`inline-flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold shadow-sm text-white transition-all ${
                   isExistingPublished
                     ? 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500'
@@ -537,31 +503,31 @@ export const AdminTimetableManagementPage: React.FC = () => {
               </h3>
             </div>
 
-            {/* Validation & Publish Action */}
+            {/* Validation & Draft Action */}
             <div className="flex items-center gap-3">
               {previewData.can_publish ? (
                 <button
                   type="button"
-                  onClick={() => setShowPublishModal(true)}
-                  disabled={publishMutation.isPending}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm focus:ring-2 focus:ring-emerald-500 transition-all"
+                  onClick={handleGenerate}
+                  disabled={generateMutation.isPending}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm focus:ring-2 focus:ring-indigo-500 transition-all"
                 >
-                  {publishMutation.isPending ? (
+                  {generateMutation.isPending ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
-                      Publishing...
+                      Generating Draft...
                     </>
                   ) : (
                     <>
-                      <Send size={16} />
-                      PUBLISH TIMETABLE
+                      <Sparkles size={16} />
+                      GENERATE DRAFT FOR REVIEW
                     </>
                   )}
                 </button>
               ) : (
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold text-slate-400 bg-slate-100 cursor-not-allowed">
                   <XCircle size={16} className="text-rose-500" />
-                  Publish Disabled (Hard Conflicts Detected)
+                  Draft Generation Blocked (Hard Conflicts Detected)
                 </div>
               )}
             </div>
@@ -572,7 +538,7 @@ export const AdminTimetableManagementPage: React.FC = () => {
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-800 flex items-center justify-between">
               <div className="flex items-center gap-2 font-medium">
                 <ShieldCheck size={18} className="text-emerald-600" />
-                Validation Passed: Zero hard constraint violations. Schedule is feasible and ready to publish.
+                Validation Passed: Zero hard constraint violations. Click 'Generate Draft for Review' to save as a private draft and proceed through approval & publication.
               </div>
               <span className="text-emerald-700 font-semibold">{previewData.entries.length} scheduled periods</span>
             </div>
@@ -783,69 +749,6 @@ export const AdminTimetableManagementPage: React.FC = () => {
         </div>
       )}
 
-      {/* ── Publish Confirmation Modal ───────────────────────────────────── */}
-      {showPublishModal && previewData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 animate-scaleUp">
-            <div className="flex items-center gap-3 text-emerald-600">
-              <div className="p-2 rounded-full bg-emerald-50">
-                <CheckCircle2 size={24} />
-              </div>
-              <h3 className="text-base font-bold text-slate-900">Publish Canonical Timetable?</h3>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed">
-              This will publish the generated schedule as the <strong>single canonical timetable</strong> for{' '}
-              <strong>{previewData.department_name} (Semester {previewData.semester_number})</strong>.
-            </p>
-
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs space-y-1 text-slate-700">
-              <div className="flex justify-between">
-                <span>Sections Included:</span>
-                <span className="font-semibold">{previewData.sections.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Total Classes:</span>
-                <span className="font-semibold">{previewData.entries.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Hard Constraint Violations:</span>
-                <span className="font-semibold text-emerald-600">0 (Passed)</span>
-              </div>
-            </div>
-
-            <p className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
-              Note: Once published, students and faculty can immediately view this schedule on their dashboards. Any previously published schedule for this scope will be transactionally replaced.
-            </p>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowPublishModal(false)}
-                disabled={publishMutation.isPending}
-                className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => publishMutation.mutate()}
-                disabled={publishMutation.isPending}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all"
-              >
-                {publishMutation.isPending ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    Publishing...
-                  </>
-                ) : (
-                  'Confirm & Publish'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

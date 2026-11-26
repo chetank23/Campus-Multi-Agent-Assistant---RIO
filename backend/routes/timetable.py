@@ -240,7 +240,11 @@ def generate_timetable(
 
     return GenerationSummary(
         status=gen_res.status,
-        message=gen_res.message,
+        solver_status=gen_res.status,
+        lifecycle_status="GENERATED",
+        validation_status="NOT_VALIDATED",
+        publication_status="UNPUBLISHED",
+        message="Timetable generated successfully and saved as a private draft. It is not published.",
         loaded_sections=gen_res.loaded_sections,
         loaded_courses=gen_res.loaded_courses,
         loaded_faculty=gen_res.loaded_faculty,
@@ -447,12 +451,16 @@ def get_versions(
             if q not in text_blob:
                 continue
 
+        pub_status = "PUBLISHED" if (v.status == "PUBLISHED" and v.published_at is not None) else ("RECALLED" if v.status == "RECALLED" else "UNPUBLISHED")
+
         results.append(
             TimetableVersionResponse(
                 id=v.id,
                 academic_year_id=v.academic_year_id,
                 version_number=v.version_number,
                 status=v.status,
+                lifecycle_status=v.status,
+                publication_status=pub_status,
                 created_by=v.created_by,
                 approved_by=v.approved_by,
                 approved_at=v.approved_at,

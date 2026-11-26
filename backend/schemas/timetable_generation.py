@@ -128,7 +128,11 @@ class TimetableScore(BaseModel):
     workload_balance_quality: float
 
 class GenerationSummary(BaseModel):
-    status: str
+    status: str  # Solver result status (OPTIMAL, FEASIBLE, INFEASIBLE)
+    solver_status: Optional[str] = None
+    lifecycle_status: str = "GENERATED"
+    validation_status: str = "NOT_VALIDATED"
+    publication_status: str = "UNPUBLISHED"
     message: str
     loaded_sections: int
     loaded_courses: int
