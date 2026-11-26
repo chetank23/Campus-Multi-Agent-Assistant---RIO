@@ -807,9 +807,10 @@ def test_15_cross_program_and_cross_department_scope_isolation(admin_token):
         from backend.models.academic import Faculty
         ay = db.query(AcademicYear).first()
         sem = db.query(Semester).first()
+        assert ay is not None and sem is not None, "Missing AcademicYear or Semester seed record"
         sec_a = db.query(Section).filter(Section.department_id == 1, Section.semester_id == sem.id).first()
         sec_b = db.query(Section).filter(Section.department_id == 3, Section.semester_id == sem.id).first()
-        assert ay and sem and sec_a and sec_b
+        assert sec_a is not None and sec_b is not None, "Missing Section seed records for dept 1 and dept 3"
         dept_a = sec_a.department
         dept_b = sec_b.department
         prog_a = sec_a.program
