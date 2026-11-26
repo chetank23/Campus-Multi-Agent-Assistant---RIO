@@ -475,8 +475,10 @@ def publish_canonical_timetable(
     current_user: User,
 ) -> PublishTimetableResponse:
     """
-    Atomically publishes or replaces the canonical timetable for the given scope.
-    Exactly ONE canonical timetable is maintained per (Academic Year + Semester + Section).
+    Authoritatively publishes a timetable from a persisted, approved TimetableVersion.
+    Legacy arbitrary raw entry publication without an approved persisted version
+    is strictly rejected with HTTP 409 Conflict.
+    Accepts 'version_id' of an approved TimetableVersion for compatibility.
     """
     if current_user.role != "ADMIN":
         raise HTTPException(
@@ -484,258 +486,21 @@ def publish_canonical_timetable(
             detail="Only administrators are authorized to publish timetables.",
         )
 
-    ay = db.query(AcademicYear).filter(AcademicYear.id == request.academic_year_id).first()
-    if not ay:
-        raise HTTPException(status_code=400, detail="Academic year not found.")
-    sem = db.query(Semester).filter(Semester.id == request.semester_id).first()
-    if not sem:
-        raise HTTPException(status_code=400, detail="Semester not found.")
-    dept = db.query(Department).filter(Department.id == request.department_id).first()
-    if not dept:
-        raise HTTPException(status_code=400, detail="Department not found.")
-
-    if not request.entries:
-        raise HTTPException(status_code=400, detail="No timetable entries provided to publish.")
-
-    # 1. Independent validation: check breaks and collision constraints
-    slots_db = {s.id: s for s in db.query(TimeSlot).filter(TimeSlot.id.in_([e.slot_id for e in request.entries])).all()}
-    for e in request.entries:
-        sl = slots_db.get(e.slot_id)
-        if sl and getattr(sl, "slot_type", "") in ("BREAK", "LUNCH"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Publication rejected: Entry {e.course_code} is assigned to non-instructional slot {sl.slot_type} ({sl.day} {sl.start_time})."
-            )
-
-    fac_slot = defaultdict(list)
-    room_slot = defaultdict(list)
-    sec_slot = defaultdict(list)
-    for e in request.entries:
-        fac_slot[(e.faculty_id, e.slot_id)].append(e)
-        room_slot[(e.room_id, e.slot_id)].append(e)
-        sec_slot[(e.section_id, e.slot_id)].append(e)
-
-    for (f_id, s_id), clash in fac_slot.items():
-        if len(clash) > 1:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Publication rejected: Faculty #{f_id} ({clash[0].faculty_name}) has conflict on {clash[0].day} at {clash[0].start_time}."
-            )
-    for (r_id, s_id), clash in room_slot.items():
-        if len(clash) > 1:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Publication rejected: Room #{r_id} ({clash[0].room_number}) has collision on {clash[0].day} at {clash[0].start_time}."
-            )
-    for (sec_id, s_id), clash in sec_slot.items():
-        if len(clash) > 1:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Publication rejected: Section #{sec_id} ({clash[0].section_name}) has multiple classes scheduled on {clash[0].day} at {clash[0].start_time}."
-            )
-
-    now_utc = utc_now()
-    published_canonical_tts: List[CanonicalTimetableResponse] = []
-    total_entries_count = 0
-
-    entries_by_sec = defaultdict(list)
-    for e in request.entries:
-        entries_by_sec[e.section_id].append(e)
-
-    # 2. Transactional upsert and replacement
-    try:
-        with db.begin_nested():
-            for sec_id, sec_entries in entries_by_sec.items():
-                section = db.query(Section).options(
-                    joinedload(Section.class_teacher).joinedload(Faculty.user),
-                    joinedload(Section.program),
-                ).filter(Section.id == sec_id).first()
-                if not section:
-                    continue
-
-                canonical_tt = db.query(Timetable).filter(
-                    Timetable.academic_year_id == request.academic_year_id,
-                    Timetable.semester_id == request.semester_id,
-                    Timetable.section_id == sec_id,
-                ).first()
-
-                if canonical_tt:
-                    # Replace existing timetable entries transactionally
-                    db.query(TimetableEntry).filter(TimetableEntry.timetable_id == canonical_tt.id).delete(synchronize_session=False)
-                    canonical_tt.status = "PUBLISHED"
-                    canonical_tt.published_at = now_utc
-                    canonical_tt.created_by = current_user.id
-                    canonical_tt.working_days = request.working_days or "MON_SAT"
-                else:
-                    canonical_tt = Timetable(
-                        academic_year_id=request.academic_year_id,
-                        semester_id=request.semester_id,
-                        section_id=sec_id,
-                        status="PUBLISHED",
-                        working_days=request.working_days or "MON_SAT",
-                        published_at=now_utc,
-                        created_at=now_utc,
-                        created_by=current_user.id,
-                    )
-                    db.add(canonical_tt)
-                    db.flush()
-
-                # Supersede any legacy unlinked entries for this section so only canonical entries remain active
-                db.query(TimetableEntry).filter(
-                    TimetableEntry.section_id == sec_id,
-                    TimetableEntry.timetable_id == None,  # noqa: E711
-                ).update({"status": "CANCELLED"}, synchronize_session=False)
-
-                # Legacy mirror version for compatibility (version_number max length 10)
-                version_code = f"CANON-{sec_id}"[:10]
-
-                # Archive any other previously published versions so there is never more than 1 active published version per section
-                db.query(TimetableVersion).filter(
-                    TimetableVersion.academic_year_id == request.academic_year_id,
-                    TimetableVersion.version_number != version_code,
-                    TimetableVersion.status == "PUBLISHED",
-                ).update({"status": "ARCHIVED"}, synchronize_session=False)
-                legacy_ver = db.query(TimetableVersion).filter(
-                    TimetableVersion.academic_year_id == request.academic_year_id,
-                    TimetableVersion.version_number == version_code,
-                ).first()
-                if not legacy_ver:
-                    legacy_ver = TimetableVersion(
-                        academic_year_id=request.academic_year_id,
-                        department_id=request.department_id,
-                        program_id=section.program_id,
-                        version_number=version_code,
-                        status="PUBLISHED",
-                        validation_status="PASSED",
-                        validated_revision=1,
-                        approved_at=now_utc,
-                        approved_by=current_user.id,
-                        approved_revision=1,
-                        published_at=now_utc,
-                        created_at=now_utc,
-                        created_by=current_user.id,
-                    )
-                    db.add(legacy_ver)
-                    db.flush()
-                else:
-                    legacy_ver.department_id = request.department_id
-                    legacy_ver.program_id = section.program_id
-                    legacy_ver.status = "PUBLISHED"
-                    legacy_ver.validation_status = "PASSED"
-                    legacy_ver.validated_revision = legacy_ver.revision
-                    legacy_ver.approved_at = now_utc
-                    legacy_ver.approved_by = current_user.id
-                    legacy_ver.approved_revision = legacy_ver.revision
-                    legacy_ver.published_at = now_utc
-                    db.query(TimetableEntry).filter(TimetableEntry.version_id == legacy_ver.id).delete(synchronize_session=False)
-
-                entry_responses = []
-                for e in sec_entries:
-                    new_entry = TimetableEntry(
-                        timetable_id=canonical_tt.id,
-                        version_id=legacy_ver.id,
-                        department_id=request.department_id,
-                        program_id=section.program_id,
-                        semester_id=request.semester_id,
-                        section_id=sec_id,
-                        course_id=e.course_id,
-                        faculty_id=e.faculty_id,
-                        room_id=e.room_id,
-                        slot_id=e.slot_id,
-                        status="ACTIVE",
-                    )
-                    db.add(new_entry)
-                    db.flush()
-                    total_entries_count += 1
-
-                    entry_responses.append(
-                        TimetableEntryDetailResponse(
-                            id=new_entry.id,
-                            timetable_id=canonical_tt.id,
-                            version_id=legacy_ver.id,
-                            department_id=request.department_id,
-                            program_id=section.program_id,
-                            semester_id=request.semester_id,
-                            section_id=sec_id,
-                            batch_id=None,
-                            course_id=e.course_id,
-                            faculty_id=e.faculty_id,
-                            room_id=e.room_id,
-                            slot_id=e.slot_id,
-                            status="ACTIVE",
-                            course_code=e.course_code,
-                            course_name=e.course_name,
-                            course_type=e.course_type,
-                            faculty_name=e.faculty_name,
-                            faculty_designation=e.faculty_designation,
-                            faculty_contact=e.faculty_contact,
-                            room_number=e.room_number,
-                            building_name=e.building_name,
-                            day=e.day,
-                            start_time=e.start_time,
-                            end_time=e.end_time,
-                            slot_type=e.slot_type,
-                            section_name=section.section_name,
-                        )
-                    )
-
-                ct = section.class_teacher
-                ct_name = ct.user.name if (ct and ct.user) else None
-                ct_desig = ct.designation if ct else None
-                ct_contact = ct.contact_number if ct else None
-
-                published_canonical_tts.append(
-                    CanonicalTimetableResponse(
-                        id=canonical_tt.id,
-                        academic_year_id=canonical_tt.academic_year_id,
-                        semester_id=canonical_tt.semester_id,
-                        section_id=canonical_tt.section_id,
-                        academic_year_name=ay.name,
-                        semester_number=sem.semester_number,
-                        section_name=section.section_name,
-                        department_id=dept.id,
-                        department_name=dept.name,
-                        program_name=section.program.program_name if section.program else None,
-                        status="PUBLISHED",
-                        working_days=canonical_tt.working_days or "MON_SAT",
-                        created_at=canonical_tt.created_at,
-                        published_at=canonical_tt.published_at,
-                        class_teacher_name=ct_name,
-                        class_teacher_designation=ct_desig,
-                        class_teacher_contact=ct_contact,
-                        entries=entry_responses,
-                    )
-                )
-
-                db.add(AuditLog(
-                    user_id=current_user.id,
-                    action="TIMETABLE_PUBLISHED",
-                    entity_type="Timetable",
-                    entity_id=canonical_tt.id,
-                    new_value={
-                        "academic_year_id": request.academic_year_id,
-                        "semester_id": request.semester_id,
-                        "section_id": sec_id,
-                        "status": "PUBLISHED",
-                        "entries_count": len(sec_entries),
-                    }
-                ))
-
-        db.commit()
-    except HTTPException:
-        raise
-    except Exception as exc:
-        db.rollback()
+    if not request.version_id:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Publication failed: {str(exc)}. Previous timetable was preserved.",
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Legacy direct raw entry publication without an approved persisted version is disabled. "
+                "All timetables must be generated as a draft version, validated, and explicitly approved "
+                "before publication. Please provide the 'version_id' of an APPROVED TimetableVersion "
+                "or use the Generated Timetables workflow (/admin/timetable/versions/{version_id}/publish)."
+            ),
         )
 
-    return PublishTimetableResponse(
-        success=True,
-        message=f"Timetable published successfully across {len(published_canonical_tts)} section(s).",
-        published_timetables=published_canonical_tts,
-        total_entries_published=total_entries_count,
+    return publish_persisted_version_authoritatively(
+        db=db,
+        version_id=request.version_id,
+        current_user=current_user,
     )
 
 
@@ -1035,22 +800,34 @@ def publish_persisted_version_authoritatively(
             detail="Timetable version is already PUBLISHED.",
         )
 
-    if version.status not in ("APPROVED", "FINALIZED"):
+    if version.status != "APPROVED":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot publish timetable from status '{version.status}'. Version must be APPROVED by an administrator before publishing.",
         )
 
-    if version.approved_revision is not None and version.approved_revision != version.revision:
+    if not version.approved_by or not version.approved_at or version.approved_revision is None:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Version was modified after approval. Please re-validate and approve before publishing.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot publish timetable: Version is missing formal approval metadata (approved_by, approved_at, approved_revision). Please complete the approval process.",
         )
 
-    if version.validated_revision is not None and version.validated_revision != version.revision:
+    if version.approved_revision != version.revision:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Version has unvalidated changes. Please run validation at the current revision before publishing.",
+            detail=f"Version was modified after approval (approved revision {version.approved_revision} != current revision {version.revision}). Please re-validate and approve before publishing.",
+        )
+
+    if version.validated_revision is None or version.validated_revision != version.revision:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Version has unvalidated changes (validated revision {version.validated_revision} != current revision {version.revision}). Please run validation at the current revision before publishing.",
+        )
+
+    if version.validation_status not in ("PASSED", "PASSED_WITH_WARNINGS"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot publish timetable: Validation status is '{version.validation_status}'. Timetable must pass validation before publishing.",
         )
 
     # Preflight coordinator resolution: Must have at least one coordinator mapped

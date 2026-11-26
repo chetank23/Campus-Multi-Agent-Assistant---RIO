@@ -147,6 +147,12 @@ class TestAidsATimetableGeneration:
         version_id = getattr(TestAidsATimetableGeneration, "generated_version_id", None)
         assert version_id is not None
 
+        app_res = client.post(
+            f"/timetable/versions/{version_id}/approve",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert app_res.status_code == 200, f"Approve failed: {app_res.text}"
+
         response = client.post(
             f"/timetable/versions/{version_id}/publish",
             headers={"Authorization": f"Bearer {admin_token}"},

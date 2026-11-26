@@ -690,11 +690,12 @@ export interface CanonicalTimetableItem {
 }
 
 export interface PublishTimetableRequest {
-  academic_year_id: number;
-  semester_id: number;
-  department_id: number;
+  version_id?: number;
+  academic_year_id?: number;
+  semester_id?: number;
+  department_id?: number;
   working_days?: 'MON_FRI' | 'MON_SAT';
-  entries: TimetablePreviewEntry[];
+  entries?: TimetablePreviewEntry[];
 }
 
 export interface PublishTimetableResponse {

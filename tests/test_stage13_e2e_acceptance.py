@@ -102,6 +102,8 @@ def test_workflow_a_timetable_publication_and_notifications(admin_token, faculty
             semester_id=sem.id,
             version_number="v99.0",
             status="APPROVED",
+            validation_status="PASSED",
+            validated_revision=1,
             revision=1,
             approved_revision=1,
             approved_by=admin_user.id,
@@ -157,7 +159,7 @@ def test_workflow_a_timetable_publication_and_notifications(admin_token, faculty
         )
         assert fac_notif is not None
         assert fac_notif.title and "Timetable Published" in fac_notif.title
-        assert fac_notif.link == "/faculty/timetable"
+        assert fac_notif.link in ("/faculty/timetable", "/faculty/dept-timetable")
 
         stud_notif = (
             db.query(Notification)

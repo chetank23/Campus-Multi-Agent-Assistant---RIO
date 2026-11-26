@@ -16,6 +16,7 @@ Verifies:
 
 from __future__ import annotations
 
+from typing import Any, TypeVar
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -34,22 +35,31 @@ from agents.tools.user_query_tools import get_faculty_free_periods_data
 
 client = TestClient(app)
 
+T = TypeVar("T")
+
+
+def _require_record(record: T | None, message: str) -> T:
+    assert record is not None, message
+    return record
+
 
 @pytest.fixture(scope="module")
-def admin_user():
+def admin_user() -> dict[str, Any]:
     with Session(engine) as db:
-        user = db.query(User).filter(User.role == "ADMIN").first()
-        assert user is not None, "Admin user must exist"
+        user = _require_record(
+            db.query(User).filter(User.role == "ADMIN").first(),
+            "Admin user must exist",
+        )
         return {"id": user.id, "email": user.email, "role": user.role}
 
 
 @pytest.fixture(scope="module")
-def admin_token(admin_user):
+def admin_token(admin_user: dict[str, Any]) -> str:
     return create_access_token(data={"sub": str(admin_user["id"]), "role": "ADMIN"})
 
 
 @pytest.fixture(scope="module")
-def test_academic_scope():
+def test_academic_scope() -> dict[str, Any]:
     with Session(engine) as db:
         # Clear existing timetables to guarantee a clean slate
         db.query(TimetableEntry).delete()
@@ -57,17 +67,20 @@ def test_academic_scope():
         db.query(Timetable).delete()
         db.commit()
 
-        ac_year = db.query(AcademicYear).first()
-        semester = db.query(Semester).first()
-        department = db.query(Department).first()
-        program = db.query(Program).filter(Program.department_id == department.id).first()
-        if not program:
-            program = db.query(Program).first()
+        ac_year = _require_record(db.query(AcademicYear).first(), "AcademicYear seed record missing")
+        semester = _require_record(db.query(Semester).first(), "Semester seed record missing")
+        department = _require_record(db.query(Department).first(), "Department seed record missing")
+        program = (
+            db.query(Program).filter(Program.department_id == department.id).first()
+            or db.query(Program).first()
+        )
 
         # Find faculty in this department
-        fac = db.query(Faculty).filter(Faculty.department_id == department.id).first()
-        if not fac:
-            fac = db.query(Faculty).first()
+        fac = _require_record(
+            db.query(Faculty).filter(Faculty.department_id == department.id).first()
+            or db.query(Faculty).first(),
+            "Faculty seed record missing",
+        )
 
         # Ensure active coordinator capability exists for publication
         existing_cap = (
@@ -99,31 +112,40 @@ def test_academic_scope():
 
 
 @pytest.fixture(scope="module")
-def faculty_user(test_academic_scope):
+def faculty_user(test_academic_scope: dict[str, Any]) -> dict[str, Any]:
     with Session(engine) as db:
-        fac = db.query(Faculty).join(User, Faculty.user_id == User.id).filter(Faculty.id == test_academic_scope["faculty_id"]).first()
-        return {"id": fac.user.id, "faculty_id": fac.id, "email": fac.user.email, "dept_id": fac.department_id}
+        fac = _require_record(
+            db.query(Faculty)
+            .join(User, Faculty.user_id == User.id)
+            .filter(Faculty.id == test_academic_scope["faculty_id"])
+            .one_or_none(),
+            "Expected Faculty record for test scope",
+        )
+        user = _require_record(fac.user, "Expected User linked to Faculty")
+        return {"id": user.id, "faculty_id": fac.id, "email": user.email, "dept_id": fac.department_id}
 
 
 @pytest.fixture(scope="module")
-def faculty_token(faculty_user):
+def faculty_token(faculty_user: dict[str, Any]) -> str:
     return create_access_token(data={"sub": str(faculty_user["id"]), "role": "FACULTY"})
 
 
 @pytest.fixture(scope="module")
-def student_user(test_academic_scope):
+def student_user(test_academic_scope: dict[str, Any]) -> dict[str, Any]:
     with Session(engine) as db:
         sec = db.query(Section).filter(Section.program_id == test_academic_scope["program_id"]).first()
-        stud = None
-        if sec:
+        stud: Student | None = None
+        if sec is not None:
             stud = db.query(Student).join(User, Student.user_id == User.id).filter(Student.section_id == sec.id).first()
-        if not stud:
+        if stud is None:
             stud = db.query(Student).join(User, Student.user_id == User.id).first()
-        return {"id": stud.user.id, "student_id": stud.id, "section_id": stud.section_id}
+        stud_rec = _require_record(stud, "Expected Student record in test database")
+        user = _require_record(stud_rec.user, "Expected User linked to Student")
+        return {"id": user.id, "student_id": stud_rec.id, "section_id": stud_rec.section_id}
 
 
 @pytest.fixture(scope="module")
-def student_token(student_user):
+def student_token(student_user: dict[str, Any]) -> str:
     return create_access_token(data={"sub": str(student_user["id"]), "role": "STUDENT"})
 
 
@@ -172,7 +194,7 @@ class TestTimetablePrivacySafeguards:
             assert ver.status == "GENERATED"
             assert ver.published_at is None
             assert ver.approved_at is None
-            assert ver.validation_status in ("NOT_VALIDATED", "PASSED")
+            assert ver.validation_status == "NOT_VALIDATED"
 
             # Entries must be DRAFT and unattached to any canonical timetable
             entries = db.query(TimetableEntry).filter(TimetableEntry.version_id == version_id).all()
@@ -234,6 +256,11 @@ class TestTimetablePrivacySafeguards:
             f_sched = get_faculty_schedule_data(db, fac_user_obj)
             assert len(f_sched.get("entries", [])) == 0, "Draft timetable entries leaked to get_faculty_schedule_data tool!"
 
+        # Non-admins must not be able to retrieve unpublished version details directly
+        vid = TestTimetablePrivacySafeguards.created_version_id
+        assert client.get(f"/timetable/versions/{vid}", headers={"Authorization": f"Bearer {student_token}"}).status_code == 403
+        assert client.get(f"/timetable/versions/{vid}", headers={"Authorization": f"Bearer {faculty_token}"}).status_code == 403
+
         # Room availability: Draft entry must NOT block the room
         if TestTimetablePrivacySafeguards.target_room_id and TestTimetablePrivacySafeguards.target_slot_id:
             room_resp = client.get(
@@ -258,7 +285,10 @@ class TestTimetablePrivacySafeguards:
         assert val_resp.status_code == 200
 
         with Session(engine) as db:
-            ver = db.query(TimetableVersion).filter(TimetableVersion.id == vid).first()
+            ver = _require_record(
+                db.query(TimetableVersion).filter(TimetableVersion.id == vid).one_or_none(),
+                f"Expected TimetableVersion {vid} to exist",
+            )
             assert ver.status != "PUBLISHED"
             assert ver.published_at is None
 
@@ -281,7 +311,10 @@ class TestTimetablePrivacySafeguards:
         assert app_resp.json()["status"] == "APPROVED"
 
         with Session(engine) as db:
-            ver = db.query(TimetableVersion).filter(TimetableVersion.id == vid).first()
+            ver = _require_record(
+                db.query(TimetableVersion).filter(TimetableVersion.id == vid).one_or_none(),
+                f"Expected TimetableVersion {vid} to exist",
+            )
             assert ver.status == "APPROVED"
             assert ver.published_at is None
 
@@ -310,7 +343,10 @@ class TestTimetablePrivacySafeguards:
         assert data["status"] == "PUBLISHED"
 
         with Session(engine) as db:
-            ver = db.query(TimetableVersion).filter(TimetableVersion.id == vid).first()
+            ver = _require_record(
+                db.query(TimetableVersion).filter(TimetableVersion.id == vid).one_or_none(),
+                f"Expected TimetableVersion {vid} to exist",
+            )
             assert ver.status == "PUBLISHED"
             assert ver.published_at is not None
 
@@ -368,7 +404,10 @@ class TestTimetablePrivacySafeguards:
         assert recall_resp.status_code == 200, f"Recall failed: {recall_resp.text}"
 
         with Session(engine) as db:
-            ver = db.query(TimetableVersion).filter(TimetableVersion.id == vid).first()
+            ver = _require_record(
+                db.query(TimetableVersion).filter(TimetableVersion.id == vid).one_or_none(),
+                f"Expected TimetableVersion {vid} to exist",
+            )
             assert ver.status == "RECALLED"
             assert ver.recall_reason == "Emergency curriculum revision"
 
@@ -432,8 +471,14 @@ class TestTimetablePrivacySafeguards:
         assert v2_id != vid
 
         with Session(engine) as db:
-            v1_db = db.query(TimetableVersion).filter(TimetableVersion.id == vid).first()
-            v2_db = db.query(TimetableVersion).filter(TimetableVersion.id == v2_id).first()
+            v1_db = _require_record(
+                db.query(TimetableVersion).filter(TimetableVersion.id == vid).one_or_none(),
+                f"Expected v1 TimetableVersion {vid} to exist",
+            )
+            v2_db = _require_record(
+                db.query(TimetableVersion).filter(TimetableVersion.id == v2_id).one_or_none(),
+                f"Expected v2 TimetableVersion {v2_id} to exist",
+            )
 
             # v2 must be GENERATED draft
             assert v2_db.status == "GENERATED"
@@ -456,8 +501,14 @@ class TestTimetablePrivacySafeguards:
         assert pub2.status_code == 200
 
         with Session(engine) as db:
-            v1_after = db.query(TimetableVersion).filter(TimetableVersion.id == vid).first()
-            v2_after = db.query(TimetableVersion).filter(TimetableVersion.id == v2_id).first()
+            v1_after = _require_record(
+                db.query(TimetableVersion).filter(TimetableVersion.id == vid).one_or_none(),
+                f"Expected v1 TimetableVersion {vid} to exist",
+            )
+            v2_after = _require_record(
+                db.query(TimetableVersion).filter(TimetableVersion.id == v2_id).one_or_none(),
+                f"Expected v2 TimetableVersion {v2_id} to exist",
+            )
 
             # v1 must now be ARCHIVED
             assert v1_after.status == "ARCHIVED"

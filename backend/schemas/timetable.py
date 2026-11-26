@@ -248,11 +248,12 @@ class TimetablePreviewResponse(BaseModel):
 
 
 class PublishTimetableRequest(BaseModel):
-    academic_year_id: int
-    semester_id: int
-    department_id: int
+    version_id: Optional[int] = None
+    academic_year_id: Optional[int] = None
+    semester_id: Optional[int] = None
+    department_id: Optional[int] = None
     working_days: Optional[str] = "MON_SAT"
-    entries: List[TimetablePreviewEntry]
+    entries: Optional[List[Any]] = None
 
 
 class PublishTimetableResponse(BaseModel):

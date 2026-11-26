@@ -180,15 +180,52 @@ class TestCanonicalTimetableWorkflow:
             "entries": preview_data["entries"],
         }
 
-        pub_res = client.post(
+        # 1. Assert that legacy raw entry publication without approved version_id is rejected with 409
+        raw_res = client.post(
             "/timetable/publish",
             headers={"Authorization": f"Bearer {admin_token}"},
             json=publish_payload,
         )
+        assert raw_res.status_code == 409
+        assert "Legacy direct raw entry publication without an approved persisted version is disabled" in raw_res.json()["detail"]
+
+        # 2. Generate persisted draft, validate, and approve
+        gen_res = client.post(
+            "/timetable/generate",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={
+                "academic_year_id": scope["academic_year_id"],
+                "semester_id": scope["semester_id"],
+                "department_id": scope["department_id"],
+                "force_regenerate": True,
+            },
+        )
+        assert gen_res.status_code == 200
+        vid = gen_res.json()["version_id"]
+        TestCanonicalTimetableWorkflow.created_version_id = vid
+
+        val_res = client.post(
+            f"/timetable/versions/{vid}/validate",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert val_res.status_code == 200
+
+        app_res = client.post(
+            f"/timetable/versions/{vid}/approve",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert app_res.status_code == 200
+
+        # 3. Publish via compatibility endpoint with version_id
+        pub_res = client.post(
+            "/timetable/publish",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"version_id": vid},
+        )
         assert pub_res.status_code == 200, f"Publish failed: {pub_res.text}"
         pub_json = pub_res.json()
         assert pub_json["success"] is True
-        assert pub_json["total_entries_published"] == len(preview_data["entries"])
+        assert pub_json["total_entries_published"] > 0
         assert len(pub_json["published_timetables"]) >= 1
         canonical_tt_id = pub_json["published_timetables"][0]["id"]
         sec_id = scope["section_ids"][0]
@@ -244,25 +281,30 @@ class TestCanonicalTimetableWorkflow:
         assert len(published_list) >= 1
         original_tt_id = published_list[0]["id"]
 
-        # 1. Generate new preview
-        preview_res = client.post(
-            "/timetable/generate-preview",
-            headers={"Authorization": f"Bearer {admin_token}"},
-            json=scope,
-        )
-        assert preview_res.status_code == 200
-        new_preview = preview_res.json()
-
-        # 2. Publish new preview
-        repub_res = client.post(
-            "/timetable/publish",
+        # 1. Generate new version, validate and approve
+        gen2 = client.post(
+            "/timetable/generate",
             headers={"Authorization": f"Bearer {admin_token}"},
             json={
                 "academic_year_id": scope["academic_year_id"],
                 "semester_id": scope["semester_id"],
                 "department_id": scope["department_id"],
-                "entries": new_preview["entries"],
+                "force_regenerate": True,
             },
+        )
+        assert gen2.status_code == 200
+        vid2 = gen2.json()["version_id"]
+
+        val2 = client.post(f"/timetable/versions/{vid2}/validate", headers={"Authorization": f"Bearer {admin_token}"})
+        assert val2.status_code == 200
+        app2 = client.post(f"/timetable/versions/{vid2}/approve", headers={"Authorization": f"Bearer {admin_token}"})
+        assert app2.status_code == 200
+
+        # 2. Publish replacement via compatibility endpoint
+        repub_res = client.post(
+            "/timetable/publish",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"version_id": vid2},
         )
         assert repub_res.status_code == 200
         repub_json = repub_res.json()
@@ -323,7 +365,7 @@ class TestCanonicalTimetableWorkflow:
             headers={"Authorization": f"Bearer {admin_token}"},
             json=bad_payload,
         )
-        assert bad_res.status_code in (400, 404, 422, 500)
+        assert bad_res.status_code in (400, 404, 409, 422, 500)
 
         # Verify existing schedule was preserved without corruption
         with SessionLocal() as db:

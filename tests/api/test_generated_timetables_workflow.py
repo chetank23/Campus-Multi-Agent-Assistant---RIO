@@ -330,10 +330,16 @@ def test_7_publish_blocked_when_zero_coordinators(admin_token, test_scope):
         db.commit()
 
         try:
-            # Approve the version
+            # Approve the version with complete approval & validation metadata
             assert version is not None
+            import datetime
+            admin_user = db.query(User).filter(User.role == "ADMIN").first()
             version.status = "APPROVED"
+            version.validation_status = "PASSED"
+            version.validated_revision = version.revision
             version.approved_revision = version.revision
+            version.approved_by = admin_user.id if admin_user else 1
+            version.approved_at = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
             db.commit()
 
             # Attempt publish with 0 coordinators
@@ -399,7 +405,13 @@ def test_8_publish_approved_version_with_coordinators_succeeds(admin_token, test
     ).json()
     assert preflight["coordinator_count"] >= 1
 
-    # Formally approve
+    # Formally validate and approve
+    val_res = client.post(
+        f"/timetable/versions/{version_id}/validate",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert val_res.status_code == 200
+
     app_res = client.post(
         f"/timetable/versions/{version_id}/approve",
         headers={"Authorization": f"Bearer {admin_token}"},

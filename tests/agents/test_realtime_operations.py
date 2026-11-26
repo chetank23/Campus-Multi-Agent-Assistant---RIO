@@ -632,8 +632,9 @@ def test_admin_timetable_publication_lifecycle(admin_token):
     """
     Tests:
     1. Timetable version in FINALIZED state.
-    2. Admin says 'Publish timetable version {id}' -> Operation Proposal.
-    3. Admin confirms -> status becomes PUBLISHED, verified in DB.
+    2. Admin says 'Publish timetable version {id}' -> Read-only readiness info with route to admin review,
+       explaining that direct publication via chat is disabled.
+    3. Attempting to confirm a PUBLISH_TIMETABLE proposal is rejected, and status in DB remains FINALIZED.
     """
     with Session(engine) as db:
         tv = TimetableVersion(
@@ -647,30 +648,44 @@ def test_admin_timetable_publication_lifecycle(admin_token):
         db.refresh(tv)
         tv_id = tv.id
 
-    # Step 1: Admin prepares publication
+    # Step 1: Admin asks to publish via chat -> returns readiness report and admin route, no mutation
     adm_prep = client.post(
         "/agents/chat",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={"message": f"Publish timetable version {tv_id}"},
     )
     assert adm_prep.status_code == 200
-    assert adm_prep.json()["proposal"] is not None
-    assert adm_prep.json()["proposal"]["action_name"] == "PUBLISH_TIMETABLE"
+    prep_json = adm_prep.json()
+    assert "/admin/timetable/versions/" in prep_json["reply"] or "disabled" in prep_json["reply"].lower()
 
-    # Step 2: Admin confirms
+    # Step 2: Simulate any attempt to confirm PUBLISH_TIMETABLE -> rejected
+    prop = operation_proposal_store.create_proposal(
+        user_id=1,
+        role="ADMIN",
+        action_name="PUBLISH_TIMETABLE",
+        entity_type="TimetableVersion",
+        entity_id=tv_id,
+        entity_name=f"Timetable Version #{tv_id}",
+        changes={"status": "PUBLISHED"},
+        consequences="Attempted chat publication bypass",
+        proposal_data={"version_id": tv_id},
+    )
+
     adm_exec = client.post(
         "/agents/chat",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json={"message": "Yes, proceed"},
+        json={"message": f"confirm {prop.proposal_id}"},
     )
     assert adm_exec.status_code == 200
-    assert "published" in adm_exec.json()["reply"].lower() and "active campus-wide" in adm_exec.json()["reply"].lower()
+    exec_json = adm_exec.json()
+    assert "disabled" in exec_json["reply"].lower() or "rejected" in exec_json.get("action_type", "").lower()
 
-    # Step 3: Verify persistence in DB
+    # Step 3: Verify DB status remains FINALIZED (NOT published)
     with Session(engine) as db:
         db_tv = db.query(TimetableVersion).filter(TimetableVersion.id == tv_id).first()
         assert db_tv is not None
-        assert db_tv.status == "PUBLISHED"
+        assert db_tv.status == "FINALIZED"
+        assert db_tv.published_at is None
 
 
 # ── 5. Real-Time Data Integrity & Concurrency ─────────────────────────────────

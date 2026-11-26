@@ -148,10 +148,39 @@ def test_multi_section_batch_generate_and_publish():
         "working_days": "MON_SAT",
         "entries": entries,
     }
-    pub_res = client.post(
+    # 4. Assert raw entry publication is rejected with 409 Conflict
+    raw_pub = client.post(
         "/timetable/publish",
         headers={"Authorization": f"Bearer {admin_token}"},
         json=pub_req,
+    )
+    assert raw_pub.status_code == 409
+    assert "Legacy direct raw entry publication without an approved persisted version is disabled" in raw_pub.json()["detail"]
+
+    # Generate persisted version, validate, approve, and publish with version_id
+    gen_res = client.post(
+        "/timetable/generate",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={
+            "academic_year_id": ay_id,
+            "semester_id": sem_id,
+            "department_id": dept_id,
+            "force_regenerate": True,
+        },
+    )
+    assert gen_res.status_code == 200
+    vid = gen_res.json()["version_id"]
+
+    val_res = client.post(f"/timetable/versions/{vid}/validate", headers={"Authorization": f"Bearer {admin_token}"})
+    assert val_res.status_code == 200
+
+    app_res = client.post(f"/timetable/versions/{vid}/approve", headers={"Authorization": f"Bearer {admin_token}"})
+    assert app_res.status_code == 200
+
+    pub_res = client.post(
+        "/timetable/publish",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"version_id": vid},
     )
     assert pub_res.status_code == 200, f"Publication failed: {pub_res.text}"
     pub_data = pub_res.json()

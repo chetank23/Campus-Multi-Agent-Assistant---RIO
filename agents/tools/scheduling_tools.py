@@ -19,7 +19,7 @@ from backend.models.identity import User
 from backend.models.academic import Department, Program, Semester, Section, AcademicYear, Batch, Faculty
 from backend.models.courses import Course, CourseAssignment
 from backend.models.space_time import Room, TimeSlot, FacultyAvailability
-from backend.models.timetable import TimetableVersion
+from backend.models.timetable import TimetableVersion, TimetableEntry
 from backend.models.workflow import AuditLog
 from backend.schemas.timetable_generation import GenerationScope
 from backend.services.timetable_input_loader import validate_and_load_input
@@ -420,85 +420,112 @@ def execute_publish_timetable_data(
     user: User,
 ) -> Dict[str, Any]:
     """
-    Executes authoritative timetable version publication.
-    Enforces ADMIN role check, version status validation (must be FINALIZED),
-    independent validation verification, audit logging, and persistence verification.
+    Direct timetable publication through the scheduling agent is disabled to ensure
+    all publications go through the official administrative review, validation, and approval workflow.
     """
-    if user.role != "ADMIN":
-        return {
-            "success": False,
-            "error": "Access denied: Only university Administrators possess the authority to publish timetable versions.",
-        }
+    return {
+        "success": False,
+        "error": (
+            "Direct timetable publication via chat confirmation is disabled to safeguard campus schedules. "
+            f"Please review, approve, and authoritatively publish timetable version #{version_id} "
+            f"directly on the Generated Timetables management review page (/admin/timetable/versions/{version_id})."
+        ),
+    }
 
+
+def get_timetable_publication_readiness_data(
+    db: Session,
+    version_id: int,
+    user: User,
+) -> Dict[str, Any]:
+    """
+    Provides read-only publication readiness assessment for a timetable version.
+    Inspects validation status, approval metadata, revision alignment, coordinator mappings,
+    and active entries. Does NOT mutate database state.
+    """
     version = db.query(TimetableVersion).filter(TimetableVersion.id == version_id).first()
     if not version:
         return {
-            "success": False,
-            "error": f"Timetable version #{version_id} was not found.",
+            "version_id": version_id,
+            "found": False,
+            "ready_for_publication": False,
+            "blocking_reasons": [f"Timetable version #{version_id} was not found."],
         }
 
-    if version.status == "PUBLISHED":
-        return {
-            "success": True,
-            "version_id": version.id,
-            "version_number": version.version_number,
-            "status": "PUBLISHED",
-            "published_at": str(version.published_at),
-            "message": f"Timetable version #{version.id} (v{version.version_number}) is already published and active campus-wide.",
-        }
+    blocking_reasons: List[str] = []
 
-    if version.status != "FINALIZED":
-        return {
-            "success": False,
-            "error": (
-                f"Cannot publish timetable version #{version_id} because its current status is '{version.status}'. "
-                f"Versions must be finalized (status FINALIZED) by an Administrator before campus publication."
-            ),
-        }
+    # 1. Status check
+    if version.status != "APPROVED":
+        blocking_reasons.append(
+            f"Timetable status is '{version.status}'. It must have status APPROVED before publishing."
+        )
 
-    # Authoritative constraint validation check before state transition
-    if version.timetable_entries:
-        val_res = validate_persisted_timetable(db, version.id)
-        if not val_res.is_valid:
-            blocker_msgs = ", ".join(v.message for v in val_res.violations if v.severity in ("BLOCKER", "HARD"))
-            return {
-                "success": False,
-                "error": f"Cannot publish timetable version #{version_id}: Constraint validation failed with blockers: {blocker_msgs}",
-            }
+    # 2. Formal approval metadata
+    if not version.approved_by or not version.approved_at or version.approved_revision is None:
+        blocking_reasons.append(
+            "Version is missing formal approval metadata (approved_by, approved_at, approved_revision)."
+        )
 
-    old_status = version.status
-    now = datetime.datetime.now(datetime.UTC)
-    version.status = "PUBLISHED"
-    version.published_at = now
+    # 3. Revision checks
+    if version.approved_revision is not None and version.approved_revision != version.revision:
+        blocking_reasons.append(
+            f"Version was modified after approval (approved revision {version.approved_revision} != current revision {version.revision})."
+        )
 
-    audit = AuditLog(
-        user_id=user.id,
-        action="TIMETABLE_PUBLISHED",
-        entity_type="TimetableVersion",
-        entity_id=version.id,
-        old_value={"status": old_status},
-        new_value={"status": "PUBLISHED", "published_at": now.isoformat()},
+    if version.validated_revision is None or version.validated_revision != version.revision:
+        blocking_reasons.append(
+            f"Version has unvalidated changes (validated revision {version.validated_revision} != current revision {version.revision})."
+        )
+
+    if version.validation_status not in ("PASSED", "PASSED_WITH_WARNINGS"):
+        blocking_reasons.append(
+            f"Validation status is '{version.validation_status}'. Timetable must pass validation before publishing."
+        )
+
+    # 4. Coordinator mappings
+    from backend.services.timetable_service import resolve_coordinators_for_version
+    coordinators = resolve_coordinators_for_version(db, version)
+    if not coordinators:
+        blocking_reasons.append(
+            "No eligible coordinators mapped for this academic scope. At least one coordinator is required."
+        )
+
+    # 5. Active entries
+    entry_count = (
+        db.query(TimetableEntry)
+        .filter(
+            TimetableEntry.version_id == version.id,
+            TimetableEntry.status != "CANCELLED",
+        )
+        .count()
     )
-    db.add(audit)
-    db.commit()
+    if entry_count == 0:
+        blocking_reasons.append("Timetable version has zero active entries.")
 
-    # Persistence verification
-    refetched = db.query(TimetableVersion).filter(TimetableVersion.id == version_id).first()
-    if not refetched or refetched.status != "PUBLISHED" or not refetched.published_at:
-        return {
-            "success": False,
-            "error": "Persistence verification failed: Timetable version status was not confirmed as PUBLISHED in the database.",
-        }
-
-    # Trigger authoritative publication notifications
-    notify_timetable_published(db=db, version_id=refetched.id)
+    approver_name = None
+    if version.approved_by:
+        approver = db.query(User).filter(User.id == version.approved_by).first()
+        if approver:
+            approver_name = approver.name
 
     return {
-        "success": True,
-        "version_id": refetched.id,
-        "version_number": refetched.version_number,
-        "status": refetched.status,
-        "published_at": str(refetched.published_at),
+        "version_id": version.id,
+        "version_number": version.version_number,
+        "status": version.status,
+        "revision": version.revision,
+        "found": True,
+        "ready_for_publication": len(blocking_reasons) == 0,
+        "blocking_reasons": blocking_reasons,
+        "validation_status": version.validation_status,
+        "validated_revision": version.validated_revision,
+        "approval_status": "APPROVED" if version.status == "APPROVED" and version.approved_by else "NOT_APPROVED",
+        "approved_by": approver_name,
+        "approved_at": version.approved_at.isoformat() if version.approved_at else None,
+        "approved_revision": version.approved_revision,
+        "coordinator_names": [c.name for c in coordinators],
+        "coordinator_count": len(coordinators),
+        "entry_count": entry_count,
+        "review_route": f"/admin/timetable/versions/{version.id}",
     }
 
 

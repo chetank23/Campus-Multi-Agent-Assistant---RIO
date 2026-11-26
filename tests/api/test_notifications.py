@@ -287,6 +287,8 @@ def test_timetable_publication_notifications(admin_token):
             semester_id=sem.id,
             version_number="99.0",
             status="APPROVED",
+            validation_status="PASSED",
+            validated_revision=1,
             revision=1,
             approved_revision=1,
             approved_by=admin_user.id,

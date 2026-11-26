@@ -900,10 +900,16 @@ def get_version_coordinators(
     coordinators = resolve_coordinators_for_version(db, version)
 
     blocking_reasons: List[str] = []
-    if version.status not in ("APPROVED", "FINALIZED"):
+    if version.status != "APPROVED":
         blocking_reasons.append(f"Timetable status is '{version.status}'. It must be APPROVED before publishing.")
+    if not version.approved_by or not version.approved_at or version.approved_revision is None:
+        blocking_reasons.append("Version is missing formal approval metadata (approved_by, approved_at, approved_revision).")
     if version.approved_revision is not None and version.approved_revision != version.revision:
         blocking_reasons.append("Timetable was modified after approval. Please re-validate and approve before publishing.")
+    if version.validated_revision is None or version.validated_revision != version.revision:
+        blocking_reasons.append("Timetable has unvalidated changes. Please validate current revision before publishing.")
+    if version.validation_status not in ("PASSED", "PASSED_WITH_WARNINGS"):
+        blocking_reasons.append(f"Validation status is '{version.validation_status}'. Timetable must pass validation before publishing.")
     if not coordinators:
         blocking_reasons.append("Cannot publish: No eligible coordinators mapped for this academic scope. Please assign at least one coordinator before publishing.")
 

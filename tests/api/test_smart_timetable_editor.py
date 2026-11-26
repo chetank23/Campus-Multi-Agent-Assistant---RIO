@@ -277,7 +277,10 @@ def test_g_validation_finalize_and_authoritative_publish(admin_token, generated_
                 cap.is_active = True
             db.commit()
 
-    # Explicit Publish
+    # Explicit Approve & Publish
+    app_resp = client.post(f"/timetable/versions/{generated_version_id}/approve", headers=headers)
+    assert app_resp.status_code == 200, app_resp.text
+
     pub_resp = client.post(f"/timetable/versions/{generated_version_id}/publish", headers=headers)
     assert pub_resp.status_code == 200, pub_resp.text
     pub_data = pub_resp.json()

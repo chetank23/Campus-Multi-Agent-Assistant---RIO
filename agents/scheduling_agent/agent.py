@@ -32,6 +32,7 @@ from agents.tools.scheduling_tools import (
     analyze_scheduling_readiness_data,
     execute_finalize_timetable_data,
     execute_publish_timetable_data,
+    get_timetable_publication_readiness_data,
     inspect_timetable_conflicts_data,
     update_faculty_availability_data,
     analyze_disruption_impact_data,
@@ -170,33 +171,18 @@ def run_scheduling_agent(
             }
 
         elif op.action_name == "PUBLISH_TIMETABLE":
-            pub_res = execute_publish_timetable_data(db=db, version_id=op.entity_id, user=user)
-            if not pub_res.get("success"):
-                return {
-                    "intent": "TIMETABLE_LIFECYCLE",
-                    "selected_agent": "scheduling_agent",
-                    "action_type": "PUBLICATION_ERROR",
-                    "final_response": sanitize_plain_english(f"Publication Failed: {pub_res.get('error')}"),
-                    "tool_calls": tool_calls,
-                    "sources": sources,
-                    "success": False,
-                }
-            reply = (
-                f"Timetable version #{pub_res['version_id']} (v{pub_res.get('version_number', '1')}) "
-                f"is now published and active campus-wide.\n\n"
-                f"- Status: PUBLISHED\n"
-                f"- Published At: {pub_res.get('published_at', 'Now')}\n"
-                f"- Published By: {user.name} ({user.email})\n\n"
-                f"Students and Faculty can now view their official schedules in their respective portals."
-            )
             return {
                 "intent": "TIMETABLE_LIFECYCLE",
                 "selected_agent": "scheduling_agent",
-                "action_type": "TIMETABLE_PUBLISHED",
-                "final_response": sanitize_plain_english(reply),
+                "action_type": "CONFIRMATION_REJECTED",
+                "final_response": sanitize_plain_english(
+                    "Direct timetable publication via chat confirmation is disabled to safeguard campus schedules. "
+                    f"Please review, approve, and authoritatively publish timetable version #{op.entity_id} "
+                    f"directly on the Generated Timetables management page (/admin/timetable/versions/{op.entity_id})."
+                ),
                 "tool_calls": tool_calls,
-                "sources": ["Timetable Version Register", "Audit Log"],
-                "success": True,
+                "sources": sources,
+                "success": False,
             }
 
     confirm_match = re.search(r"\b(?:confirm|execute|approve|proceed)\s+(?:replacement\s+)?(prop_[a-zA-Z0-9_-]+)(?:\s+(?:replace|force))?\b", msg_lower)
@@ -1169,69 +1155,45 @@ def run_scheduling_agent(
                 "success": False,
             }
 
-        if version.status == "PUBLISHED":
-            return {
-                "intent": "TIMETABLE_LIFECYCLE",
-                "selected_agent": "scheduling_agent",
-                "action_type": "INFO",
-                "final_response": sanitize_plain_english(
-                    f"Timetable version #{vid} (v{version.version_number}) is already published and active campus-wide."
-                ),
-                "tool_calls": [],
-                "sources": sources,
-                "success": True,
-            }
-
-        if version.status != "FINALIZED":
-            return {
-                "intent": "TIMETABLE_LIFECYCLE",
-                "selected_agent": "scheduling_agent",
-                "action_type": "STATUS_INVALID",
-                "final_response": sanitize_plain_english(
-                    f"Cannot publish timetable version #{vid} because its current status is '{version.status}'. "
-                    f"Versions must be finalized (status FINALIZED) by an Administrator before campus publication."
-                ),
-                "tool_calls": [],
-                "sources": sources,
-                "success": False,
-            }
-
-        consequences = f"Makes version #{version.id} the official active schedule campus-wide across all student and faculty portals."
-        op_prop = operation_proposal_store.create_proposal(
-            user_id=user.id,
-            role=user.role,
-            action_name="PUBLISH_TIMETABLE",
-            entity_type="TimetableVersion",
-            entity_id=version.id,
-            entity_name=f"Timetable Version #{version.id} (v{version.version_number})",
-            changes={"status": "PUBLISHED"},
-            consequences=consequences,
-            proposal_data={"version_id": version.id, "version_number": version.version_number},
-        )
+        readiness = get_timetable_publication_readiness_data(db=db, version_id=vid, user=user)
+        coordinators_str = ", ".join(readiness.get("coordinator_names", [])) or "None assigned"
 
         reply = (
-            f"Timetable Publication Proposal ({op_prop.proposal_id})\n\n"
-            f"Affected Entity:\n"
-            f"- Version: #{version.id} (v{version.version_number})\n"
-            f"- Current Status: FINALIZED\n\n"
-            f"Requested Change:\n"
-            f"- Transition status from FINALIZED to PUBLISHED.\n\n"
-            f"Consequences:\n"
-            f"- {consequences}\n\n"
-            f"Administrator Confirmation Required:\n"
-            f"To publish this schedule campus-wide, click Confirm below or type:\n"
-            f"confirm {op_prop.proposal_id}\n"
-            f"or say 'Yes, proceed'."
+            f"Timetable Publication Readiness for Version #{vid} (v{readiness.get('version_number', 1)}):\n\n"
+            f"- Status: {readiness.get('status')}\n"
+            f"- Validation Status: {readiness.get('validation_status')} (Revision: {readiness.get('validated_revision', 'N/A')})\n"
+            f"- Approval Status: {readiness.get('approval_status')}\n"
+            f"- Approved By: {readiness.get('approved_by') or 'Not approved'}\n"
+            f"- Approved At: {readiness.get('approved_at') or 'N/A'}\n"
+            f"- Approved Revision: {readiness.get('approved_revision') or 'N/A'}\n"
+            f"- Eligible Coordinators: {coordinators_str}\n"
+            f"- Active Entries: {readiness.get('entry_count', 0)}\n\n"
         )
+        if readiness.get("ready_for_publication"):
+            reply += (
+                "Status: READY FOR PUBLICATION\n\n"
+                "To publish this timetable, an Administrator must explicitly trigger publication "
+                f"from the Generated Timetables management review page:\n"
+                f"Route: /admin/timetable/versions/{vid}\n\n"
+                "Note: Direct chat publication is disabled to enforce verification and approval governance."
+            )
+        else:
+            reasons = "\n".join(f"  * {r}" for r in readiness.get("blocking_reasons", []))
+            reply += (
+                f"Status: NOT READY FOR PUBLICATION\n"
+                f"Blocking issues:\n{reasons}\n\n"
+                f"Please review and approve this version at /admin/timetable/versions/{vid}."
+            )
+
         return {
             "intent": "TIMETABLE_LIFECYCLE",
             "selected_agent": "scheduling_agent",
-            "action_type": "PROPOSAL_CREATED",
+            "action_type": "INFO",
             "final_response": sanitize_plain_english(reply),
-            "proposal": op_prop.model_dump(),
-            "tool_calls": [{"tool": "prepare_publish_timetable", "args": {"version_id": version.id}}],
+            "tool_calls": [{"tool": "get_timetable_publication_readiness", "args": {"version_id": vid}}],
             "sources": sources,
             "success": True,
+            "readiness": readiness,
         }
 
     # 4. Scope Resolution & Readiness Pipeline

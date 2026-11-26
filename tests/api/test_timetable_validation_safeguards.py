@@ -23,7 +23,7 @@ Scenarios verified:
 15. Regression cases for previously working functionality.
 """
 
-from datetime import time, date
+from datetime import datetime, time, date, timezone
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -246,6 +246,10 @@ def test_scenario_1_valid_timetable_satisfies_all_hard_constraints(admin_token, 
     assert fin_res.status_code == 200
     assert fin_res.json()["status"] == "FINALIZED"
 
+    app_res = client.post(f"/timetable/versions/{vid}/approve", headers={"Authorization": f"Bearer {admin_token}"})
+    assert app_res.status_code == 200
+    assert app_res.json()["status"] == "APPROVED"
+
     pub_res = client.post(f"/timetable/versions/{vid}/publish", headers={"Authorization": f"Bearer {admin_token}"})
     assert pub_res.status_code == 200
     assert pub_res.json()["status"] == "PUBLISHED"
@@ -434,7 +438,13 @@ def test_scenario_5_room_smaller_than_class_size_blocks_publication(admin_token,
         version = TimetableVersion(
             academic_year_id=base_entities["academic_year_id"],
             version_number="v105.0",
-            status="FINALIZED",
+            status="APPROVED",
+            validation_status="PASSED",
+            validated_revision=1,
+            revision=1,
+            approved_revision=1,
+            approved_by=base_entities["admin_id"],
+            approved_at=datetime.now(timezone.utc).replace(tzinfo=None),
             created_by=base_entities["admin_id"],
         )
         db.add(version)
@@ -468,7 +478,12 @@ def test_scenario_5_room_smaller_than_class_size_blocks_publication(admin_token,
     # Publication attempt must be rejected with 409
     pub_res = client.post(f"/timetable/versions/{vid}/publish", headers={"Authorization": f"Bearer {admin_token}"})
     assert pub_res.status_code == 409
-    assert "Publication rejected" in pub_res.json()["detail"]
+    detail = pub_res.json()["detail"]
+    assert (
+        "Publication rejected" in detail
+        or "Validation status is 'FAILED'" in detail
+        or "Version has unvalidated changes" in detail
+    )
 
 
 # ==============================================================================
@@ -850,7 +865,13 @@ def test_scenario_12_attempts_to_publish_invalid_timetable_rejected_409(admin_to
         version = TimetableVersion(
             academic_year_id=base_entities["academic_year_id"],
             version_number="v112.0",
-            status="FINALIZED",
+            status="APPROVED",
+            validation_status="PASSED",
+            validated_revision=1,
+            revision=1,
+            approved_revision=1,
+            approved_by=base_entities["admin_id"],
+            approved_at=datetime.now(timezone.utc).replace(tzinfo=None),
             created_by=base_entities["admin_id"],
         )
         db.add(version)
@@ -947,7 +968,13 @@ def test_scenario_14_repeated_generation_and_publication_requests_idempotency(ad
         version = TimetableVersion(
             academic_year_id=base_entities["academic_year_id"],
             version_number="v114.0",
-            status="FINALIZED",
+            status="APPROVED",
+            validation_status="PASSED",
+            validated_revision=1,
+            revision=1,
+            approved_revision=1,
+            approved_by=base_entities["admin_id"],
+            approved_at=datetime.now(timezone.utc).replace(tzinfo=None),
             created_by=base_entities["admin_id"],
         )
         db.add(version)
