@@ -96,7 +96,7 @@ def test_supervisor_node_handles_greetings():
     result = supervisor_node(state)
     assert result.get("intent") == "CAMPUS_GREETING"
     assert result.get("selected_agent") is None
-    assert "RIO Campus Assistant" in (result.get("final_response") or "")
+    assert "ATHENA" in (result.get("final_response") or "")
 
 
 def test_supervisor_node_handles_unknown_intent():

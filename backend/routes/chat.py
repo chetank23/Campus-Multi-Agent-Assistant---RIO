@@ -15,6 +15,7 @@ import datetime
 import json
 import logging
 import os
+import queue
 import re
 import threading
 import time
@@ -556,6 +557,17 @@ async def stream_chat_with_campus_assistant(
         db.rollback()
 
     cancel_event = threading.Event()
+    event_queue: queue.Queue = queue.Queue()
+
+    def _on_progress(prog: Dict[str, Any]) -> None:
+        if cancel_event.is_set():
+            return
+        event_queue.put(("progress", prog))
+
+    def _on_token(tok: str) -> None:
+        if cancel_event.is_set() or not tok:
+            return
+        event_queue.put(("token", tok))
 
     def _run_supervisor_in_thread() -> Dict[str, Any]:
         with SessionLocal() as worker_db:
@@ -566,6 +578,7 @@ async def stream_chat_with_campus_assistant(
                     "intent": "ERROR",
                     "success": False,
                     "error": "Authenticated user record not found.",
+                    "error_type": "FAILED",
                 }
             return execute_supervisor(
                 message=clean_message,
@@ -575,19 +588,44 @@ async def stream_chat_with_campus_assistant(
                 conversation_history=conversation_history,
                 cancel_check=cancel_event.is_set,
                 request_id=request_id,
+                progress_callback=_on_progress,
+                token_callback=_on_token,
             )
 
     async def event_generator():
         t_start = time.perf_counter()
         logger.info("[chat:%s] Stream started (conv=%s, role=%s)", request_id, conv_id, user_role)
+        emitted_live_tokens = False
         try:
-            # 1. Send initial status event
-            yield f"data: {json.dumps({'event': 'status', 'status': 'Understanding your question...', 'request_id': request_id})}\n\n"
+            # 1. Immediately emit request-accepted progress event before waiting on any model call
+            yield (
+                f"data: {json.dumps({'event': 'status', 'type': 'progress', 'request_id': request_id, 'stage': 'request_accepted', 'progress_status': 'running', 'status': 'Connecting to ATHENA...', 'message': 'Connecting to ATHENA...'})}\n\n"
+            )
 
-            # 2. Run supervisor in worker thread with keepalive heartbeats & disconnect check
+            # 2. Run supervisor in worker thread with real-time progress/token queue, keepalive & disconnect check
             task = asyncio.create_task(asyncio.to_thread(_run_supervisor_in_thread))
             last_heartbeat = time.perf_counter()
             max_wait_seconds = 150.0
+
+            def _drain_queue_events() -> List[str]:
+                nonlocal emitted_live_tokens
+                frames: List[str] = []
+                while True:
+                    try:
+                        kind, payload_val = event_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                    if kind == "progress" and isinstance(payload_val, dict):
+                        msg_txt = str(payload_val.get("message") or "Processing...")
+                        frames.append(
+                            f"data: {json.dumps({'event': 'status', 'type': 'progress', 'request_id': request_id, 'stage': payload_val.get('stage', 'processing'), 'progress_status': payload_val.get('status', 'running'), 'status': msg_txt, 'message': msg_txt})}\n\n"
+                        )
+                    elif kind == "token" and isinstance(payload_val, str) and payload_val:
+                        emitted_live_tokens = True
+                        frames.append(
+                            f"data: {json.dumps({'event': 'token', 'request_id': request_id, 'token': payload_val})}\n\n"
+                        )
+                return frames
 
             while not task.done():
                 if await request.is_disconnected():
@@ -595,11 +633,14 @@ async def stream_chat_with_campus_assistant(
                     logger.info("[chat:%s] Client disconnected; cancelling worker", request_id)
                     return
 
+                for frame in _drain_queue_events():
+                    yield frame
+
                 elapsed = time.perf_counter() - t_start
                 if elapsed > max_wait_seconds:
                     cancel_event.set()
                     logger.warning("[chat:%s] Stream execution exceeded %.1fs timeout", request_id, max_wait_seconds)
-                    yield f"data: {json.dumps({'event': 'error', 'error': 'The assistant took too long to respond. Please try again.', 'request_id': request_id})}\n\n"
+                    yield f"data: {json.dumps({'event': 'error', 'error': 'The assistant took too long to respond. Please try again.', 'lifecycle_state': 'TIMED_OUT', 'request_id': request_id})}\n\n"
                     return
 
                 if time.perf_counter() - last_heartbeat >= 4.0:
@@ -607,9 +648,13 @@ async def stream_chat_with_campus_assistant(
                     last_heartbeat = time.perf_counter()
 
                 try:
-                    await asyncio.wait_for(asyncio.shield(task), timeout=0.5)
+                    await asyncio.wait_for(asyncio.shield(task), timeout=0.05)
                 except asyncio.TimeoutError:
                     continue
+
+            # Drain any remaining queued events emitted right before completion
+            for frame in _drain_queue_events():
+                yield frame
 
             result = await task
             if cancel_event.is_set() or result.get("intent") == "CANCELLED":
@@ -618,19 +663,22 @@ async def stream_chat_with_campus_assistant(
 
             if not result.get("success", True) and not result.get("reply"):
                 err_msg = result.get("error") or "The assistant could not complete your request."
-                yield f"data: {json.dumps({'event': 'error', 'error': err_msg, 'request_id': request_id})}\n\n"
+                err_lifecycle = result.get("error_type") or "FAILED"
+                yield f"data: {json.dumps({'event': 'error', 'error': err_msg, 'lifecycle_state': err_lifecycle, 'request_id': request_id})}\n\n"
                 return
 
-            yield f"data: {json.dumps({'event': 'status', 'status': 'Preparing your answer...', 'request_id': request_id})}\n\n"
-
-            # 3. Stream tokens while preserving exact whitespace, indentation, and newlines for Markdown
+            # 3. If tokens were not already streamed live (e.g. deterministic fallback), stream them now
             reply_text = result.get("reply") or ""
-            chunks = re.findall(r"\S+[ \t]*|\n+|[ \t]+", reply_text) or [reply_text]
-            for token_chunk in chunks:
-                if await request.is_disconnected():
-                    cancel_event.set()
-                    return
-                yield f"data: {json.dumps({'event': 'token', 'token': token_chunk})}\n\n"
+            if not emitted_live_tokens and reply_text:
+                yield (
+                    f"data: {json.dumps({'event': 'status', 'type': 'progress', 'request_id': request_id, 'stage': 'answer_generation', 'progress_status': 'running', 'status': 'Delivering your answer...', 'message': 'Delivering your answer...'})}\n\n"
+                )
+                chunks = re.findall(r"\S+[ \t]*|\n+|[ \t]+", reply_text) or [reply_text]
+                for token_chunk in chunks:
+                    if await request.is_disconnected():
+                        cancel_event.set()
+                        return
+                    yield f"data: {json.dumps({'event': 'token', 'request_id': request_id, 'token': token_chunk})}\n\n"
 
             # 4. Save assistant response to DB
             metadata_payload: Dict[str, Any] = {}

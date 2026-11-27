@@ -25,7 +25,6 @@ import {
   Building2,
   CheckCircle2,
   AlertCircle,
-  Database,
   Paperclip,
   MessageSquare,
   Plus,
@@ -66,6 +65,7 @@ export const CampusAssistantDrawer: React.FC = () => {
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [showConvDropdown, setShowConvDropdown] = useState(false);
   const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const activeRequestIdRef = useRef<string | null>(null);
 
@@ -74,8 +74,8 @@ export const CampusAssistantDrawer: React.FC = () => {
       id: 'welcome',
       sender: 'assistant',
       content: user
-        ? `Hello **${user.name}**! I am your RIO Campus Assistant. You can ask me any question about campus academics, schedules, departments, courses, rooms, or institutional operations.`
-        : 'Hello! I am your RIO Campus Assistant. How can I help you today?',
+        ? `Hello **${user.name}**! I am **ATHENA**, your Knowledge-Driven Assistant. You can ask me any question about campus academics, schedules, departments, courses, rooms, or institutional operations.`
+        : 'Hello! I am **ATHENA**, your Knowledge-Driven Assistant. How can I help you today?',
       timestamp: new Date(),
       sources: ['RIO Knowledge Engine'],
     },
@@ -138,6 +138,14 @@ export const CampusAssistantDrawer: React.FC = () => {
     }
   }, [history, isOpen]);
 
+  useEffect(() => {
+    if (!isLoading) return;
+    const intervalId = window.setInterval(() => {
+      setElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [isLoading]);
+
   if (!user) return null;
 
   const handleCancelStreaming = () => {
@@ -168,8 +176,9 @@ export const CampusAssistantDrawer: React.FC = () => {
 
     setHistory((prev) => [...prev, userMsg]);
     setInputMessage('');
+    setElapsedSeconds(0);
     setIsLoading(true);
-    setStreamingStatus('Understanding your question...');
+    setStreamingStatus('Receiving your message...');
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -371,18 +380,6 @@ export const CampusAssistantDrawer: React.FC = () => {
     } catch {
       // Handled silently
     }
-  };
-
-  // Source icon resolver
-  const getSourceIcon = (src: string) => {
-    const s = src.toLowerCase();
-    if (s.includes('facilities') || s.includes('register') || s.includes('room')) {
-      return <Building2 size={11} className="text-emerald-700 shrink-0" />;
-    }
-    if (s.includes('placement') || s.includes('cdc')) {
-      return <Briefcase size={11} className="text-emerald-700 shrink-0" />;
-    }
-    return <Database size={11} className="text-emerald-700 shrink-0" />;
   };
 
   // Icon resolver for backend-verified navigation links
@@ -632,15 +629,15 @@ export const CampusAssistantDrawer: React.FC = () => {
         <button
           onClick={() => setIsOpen(true)}
           className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-blue-500/25 cursor-pointer"
-          title="Open RIO Campus AI Assistant"
-          aria-label="Open Campus AI Assistant"
+          title="Open ATHENA — Knowledge-Driven Assistant"
+          aria-label="Open ATHENA"
         >
           <span className="relative flex h-2.5 w-2.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-300 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
           </span>
           <Sparkles size={17} className="text-blue-100" />
-          <span className="font-semibold text-sm tracking-wide">Ask RIO AI</span>
+          <span className="font-semibold text-sm tracking-wide">Ask ATHENA</span>
         </button>
       )}
 
@@ -659,23 +656,26 @@ export const CampusAssistantDrawer: React.FC = () => {
             className="relative z-10 w-full sm:w-[540px] md:w-[600px] h-[92vh] sm:h-[calc(100vh-64px)] max-h-[850px] bg-white rounded-t-[28px] sm:rounded-[28px] shadow-2xl border border-slate-200/90 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
             role="dialog"
             aria-modal="true"
-            aria-label="RIO Campus Assistant"
+            aria-label="ATHENA — Knowledge-Driven Assistant"
           >
             {/* Header */}
-            <div className="px-6 py-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
+            <div className="px-5 sm:px-6 py-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0 gap-2">
               <div className="flex items-center gap-3.5 min-w-0">
                 <div className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
                   <Bot size={22} />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-[17px] text-slate-900 leading-tight truncate">
-                      RIO Campus Assistant
+                  <div className="flex items-center gap-2 min-w-0">
+                    <h3 className="font-bold text-[17px] text-slate-900 leading-tight tracking-tight truncate">
+                      ATHENA
                     </h3>
                     <span className="px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full bg-blue-100 text-blue-700 shrink-0">
                       Role: {user.role}
                     </span>
                   </div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-600 leading-tight truncate mt-0.5">
+                    KNOWLEDGE-DRIVEN ASSISTANT
+                  </p>
                   {/* Active Conversation Picker */}
                   <div className="relative mt-0.5">
                     <button
@@ -797,28 +797,6 @@ export const CampusAssistantDrawer: React.FC = () => {
                             : 'bg-white border border-slate-200/90 text-slate-800'
                         }`}
                       >
-                        {/* Provider Pill Badge & Outcome State */}
-                        <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5 mb-1.5">
-                          <div className="flex items-center gap-1.5">
-                            {msg.provider_badge === 'Live Nemotron' ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <Sparkles size={10} className="text-emerald-500" />
-                                Live Nemotron
-                              </span>
-                            ) : msg.provider_badge === 'System Notice' || isErr ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                                <AlertCircle size={10} className="text-amber-500" />
-                                System Notice
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                                <Database size={10} className="text-blue-500" />
-                                Deterministic Engine
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
                         {isErr && (
                           <div className="flex items-center gap-1.5 font-bold text-xs text-rose-700">
                             <AlertCircle size={15} />
@@ -896,24 +874,6 @@ export const CampusAssistantDrawer: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Source Badges */}
-                        {msg.sources && msg.sources.length > 0 && (
-                          <div className="pt-2 border-t border-slate-100 flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                              SOURCE:
-                            </span>
-                            {msg.sources.map((src, sIdx) => (
-                              <span
-                                key={sIdx}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-medium rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs"
-                              >
-                                {getSourceIcon(src)}
-                                <span>{src}</span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
                         {isErr && (
                           <div className="pt-2 border-t border-rose-100 flex items-center gap-3">
                             <button
@@ -949,30 +909,40 @@ export const CampusAssistantDrawer: React.FC = () => {
                   className="flex items-start gap-3"
                   role="status"
                   aria-live="polite"
-                  aria-label="RIO Assistant is thinking"
+                  aria-label="ATHENA is thinking"
                 >
                   <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
                     <Bot size={18} />
                   </div>
-                  <div className="bg-white border border-blue-200/80 rounded-2xl px-4 py-3 shadow-2xs flex-1 max-w-[85%] flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 text-[13px] font-medium text-slate-700 min-w-0">
-                      <span className="flex gap-1 shrink-0" aria-hidden="true">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '300ms' }} />
-                      </span>
-                      <span className="truncate">{streamingStatus || 'Understanding your question...'}</span>
+                  <div className="bg-white border border-blue-200/80 rounded-2xl px-4 py-3 shadow-2xs flex-1 max-w-[85%] flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 text-[13px] font-medium text-slate-700 min-w-0">
+                        <span className="flex gap-1 shrink-0" aria-hidden="true">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </span>
+                        <span className="truncate">
+                          {streamingStatus || 'Connecting to ATHENA...'}
+                          {elapsedSeconds > 0 ? ` · ${elapsedSeconds}s` : ''}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCancelStreaming}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 border border-slate-200 transition-colors cursor-pointer shrink-0"
+                        title="Cancel streaming request"
+                        aria-label="Cancel request"
+                      >
+                        <X size={12} />
+                        <span>Cancel</span>
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleCancelStreaming}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 border border-slate-200 transition-colors cursor-pointer shrink-0"
-                      title="Cancel streaming request"
-                      aria-label="Cancel request"
-                    >
-                      <X size={12} />
-                      <span>Cancel</span>
-                    </button>
+                    {elapsedSeconds >= 15 && (
+                      <p className="text-[11.5px] text-slate-500 pl-6">
+                        Still waiting for the response. This is taking longer than usual...
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -999,7 +969,7 @@ export const CampusAssistantDrawer: React.FC = () => {
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyDown={handleKeyDown}
                   disabled={isLoading}
-                  placeholder="Ask RIO anything about campus operations, schedules, academics, or records..."
+                  placeholder="Ask ATHENA anything about campus operations, schedules, academics, or records..."
                   className="flex-1 min-w-0 text-[13.5px] text-slate-800 placeholder-slate-400 bg-transparent border-0 border-none outline-none ring-0 shadow-none focus:outline-none focus:ring-0 focus:border-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
                   style={{
                     border: 'none',

@@ -121,7 +121,13 @@ export interface ConversationDetail {
 }
 
 export interface StreamEventData {
-  event: 'token' | 'status' | 'done' | 'error';
+  event: 'token' | 'status' | 'progress' | 'done' | 'error';
+  type?: 'progress';
+  request_id?: string;
+  stage?: string;
+  progress_status?: string;
+  message?: string;
+  lifecycle_state?: string;
   token?: string;
   status?: string;
   reply?: string;
@@ -231,8 +237,8 @@ export async function streamChatMessage(
     const dataStr = dataLines.join('\n');
     try {
       const payload: StreamEventData = JSON.parse(dataStr);
-      if (payload.event === 'status' && payload.status) {
-        callbacks.onStatus?.(payload.status);
+      if ((payload.event === 'status' || payload.event === 'progress') && (payload.message || payload.status)) {
+        callbacks.onStatus?.(payload.message || payload.status || '');
       } else if (payload.event === 'token' && payload.token) {
         callbacks.onToken?.(payload.token);
       } else if (payload.event === 'done') {

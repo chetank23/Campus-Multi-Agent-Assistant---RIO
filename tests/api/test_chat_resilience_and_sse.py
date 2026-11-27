@@ -271,3 +271,103 @@ def test_slow_response_emits_terminal_done(monkeypatch, admin_token):
     events = _parse_sse(resp.text)
     assert events[-1]["event"] == "done"
     assert events[-1]["reply"] == "Delayed grounded response."
+
+
+def test_live_stream_emits_progress_stages_and_filters_thinking(monkeypatch, admin_token):
+    monkeypatch.setenv("RIO_CHAT_LLM_ENABLED", "true")
+    monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test-key-0001")
+
+    def _chunk(text):
+        return SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=text, tool_calls=None))])
+
+    captured_kwargs = {}
+
+    def fake_create(**kwargs):
+        captured_kwargs.update(kwargs)
+        return iter([
+            _chunk("<think>internal"),
+            _chunk(" reasoning</think>"),
+            _chunk("Hello! "),
+            _chunk("I am **ATHENA**."),
+        ])
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = fake_create
+
+    with patch("agents.llm.nvidia_provider.OpenAI", return_value=mock_client):
+        resp = client.post(
+            "/agents/chat/stream",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"message": "Hi"},
+        )
+
+    assert resp.status_code == 200
+    # General greeting must not send 75 database tool schemas
+    assert "tools" not in captured_kwargs
+    assert captured_kwargs["stream"] is True
+
+    events = _parse_sse(resp.text)
+    statuses = [e.get("status") for e in events if e.get("event") == "status"]
+    assert "Connecting to ATHENA..." in statuses
+    assert "Preparing a response..." in statuses
+    assert "Delivering your answer..." in statuses
+    assert "Checking campus records..." not in statuses
+
+    streamed_tokens = "".join(e.get("token", "") for e in events if e.get("event") == "token")
+    assert "<think>" not in streamed_tokens
+    assert "internal" not in streamed_tokens
+    assert "Hello! I am **ATHENA**." in streamed_tokens
+    assert events[-1]["event"] == "done"
+    assert events[-1]["reply"] == "Hello! I am **ATHENA**."
+
+
+def test_general_query_timeout_emits_timed_out_error(monkeypatch, admin_token):
+    monkeypatch.setenv("RIO_CHAT_LLM_ENABLED", "true")
+    monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test-key-0001")
+
+    mock_client = MagicMock()
+    req = httpx.Request("POST", "https://integrate.api.nvidia.com/v1/chat/completions")
+    mock_client.chat.completions.create.side_effect = APITimeoutError(request=cast(Any, req))
+
+    with patch("agents.llm.nvidia_provider.OpenAI", return_value=mock_client):
+        resp = client.post(
+            "/agents/chat/stream",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"message": "Hi"},
+        )
+
+    assert resp.status_code == 200
+    events = _parse_sse(resp.text)
+    assert events[-1]["event"] == "error"
+    assert events[-1]["lifecycle_state"] == "TIMED_OUT"
+    assert "timed out" in events[-1]["error"].lower()
+
+
+def test_campus_query_uses_focused_tool_subset(monkeypatch, admin_token):
+    monkeypatch.setenv("RIO_CHAT_LLM_ENABLED", "true")
+    monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test-key-0001")
+
+    captured_tools = []
+
+    def fake_create(**kwargs):
+        captured_tools.append(kwargs.get("tools"))
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="There is **1 published timetable**.", tool_calls=None))]
+        )
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = fake_create
+
+    with patch("agents.llm.nvidia_provider.OpenAI", return_value=mock_client):
+        resp = client.post(
+            "/agents/chat/stream",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"message": "How many timetables are published?"},
+        )
+
+    assert resp.status_code == 200
+    assert captured_tools[0] is not None
+    assert 5 <= len(captured_tools[0]) <= 20
+    tool_names = {t["function"]["name"] for t in captured_tools[0]}
+    assert "get_published_timetables" in tool_names
+    assert "execute_semantic_query" in tool_names

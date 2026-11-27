@@ -471,7 +471,7 @@ def supervisor_node(state: AgentState) -> AgentState:
             "intent": intent,
             "selected_agent": None,
             "final_response": (
-                "Hello. I am the RIO Campus Assistant. How can I help you today? "
+                "Hello! I am ATHENA, your Knowledge-Driven Assistant. How can I help you today? "
                 "Feel free to ask about your timetable, courses, faculty, room availability, events, or any campus question."
             ),
         }
@@ -706,6 +706,8 @@ def execute_supervisor(
     conversation_history: Optional[List[Dict[str, Any]]] = None,
     cancel_check: Optional[Callable[[], bool]] = None,
     request_id: Optional[str] = None,
+    progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+    token_callback: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, Any]:
     """
     Main invocation entry point for the Supervisor.
@@ -713,17 +715,37 @@ def execute_supervisor(
     proposal confirmation/cancellation, delegates to real-time LLM reasoning with tool calling.
     Otherwise, executes the compiled deterministic LangGraph workflow.
     """
+    req_tag = request_id or "req"
+
+    def _emit_prog(stage: str, status_val: str, msg_text: str) -> None:
+        if progress_callback:
+            try:
+                progress_callback({
+                    "type": "progress",
+                    "request_id": req_tag,
+                    "stage": stage,
+                    "status": status_val,
+                    "message": msg_text,
+                })
+            except Exception:
+                pass
+
     # 1. Primary Open-Ended LLM Execution when Provider is Available
     from agents.llm.provider_interface import LLMProviderRegistry
+    from agents.llm.nvidia_provider import NvidiaNemotronProvider
     provider = LLMProviderRegistry.get_provider()
 
-    if provider.is_available() and not _is_explicit_proposal_action(message):
+    if isinstance(provider, NvidiaNemotronProvider) and provider.is_available() and not _is_explicit_proposal_action(message):
         try:
             kwargs: Dict[str, Any] = {}
             if cancel_check is not None:
                 kwargs["cancel_check"] = cancel_check
             if request_id is not None:
                 kwargs["request_id"] = request_id
+            if progress_callback is not None:
+                kwargs["progress_callback"] = progress_callback
+            if token_callback is not None:
+                kwargs["token_callback"] = token_callback
             llm_res = provider.generate_chat_response(
                 message=message,
                 user=user,
@@ -742,6 +764,7 @@ def execute_supervisor(
                     "action_type": None,
                     "success": False,
                     "error": "Request cancelled",
+                    "error_type": "CANCELLED",
                 }
             if llm_res.get("success") and llm_res.get("reply"):
                 return {
@@ -754,20 +777,52 @@ def execute_supervisor(
                     "action_type": None,
                     "success": True,
                     "error": None,
+                    "streamed_live": llm_res.get("streamed_live", False),
                     "diagnostics": llm_res.get("diagnostics"),
                 }
             else:
+                # For general/non-campus queries and greetings, do not disguise an actual LLM API timeout/failure as a canned response
+                if classify_intent(message) in ("UNKNOWN", "CAMPUS_GREETING") and llm_res.get("error_type") in ("TIMED_OUT", "FAILED") and llm_res.get("error") != "Not implemented in base provider":
+                    return {
+                        "reply": "",
+                        "intent": "ERROR",
+                        "selected_agent": llm_res.get("selected_agent", "nvidia_nemotron"),
+                        "tool_calls": llm_res.get("tool_calls", []),
+                        "sources": [],
+                        "proposal": None,
+                        "action_type": None,
+                        "success": False,
+                        "error": llm_res.get("error") or "The AI service could not complete your request.",
+                        "error_type": llm_res.get("error_type", "FAILED"),
+                        "diagnostics": llm_res.get("diagnostics"),
+                    }
                 logger.warning(
                     "LLM provider execution returned unsuccessful response: %s. Falling back to deterministic graph.",
                     llm_res.get("error"),
                 )
         except Exception as llm_exc:
+            if classify_intent(message) in ("UNKNOWN", "CAMPUS_GREETING"):
+                return {
+                    "reply": "",
+                    "intent": "ERROR",
+                    "selected_agent": "nvidia_nemotron",
+                    "tool_calls": [],
+                    "sources": [],
+                    "proposal": None,
+                    "action_type": None,
+                    "success": False,
+                    "error": str(llm_exc),
+                    "error_type": "FAILED",
+                }
             logger.warning(
                 "LLM provider execution raised exception: %s. Falling back to deterministic graph.",
                 llm_exc,
             )
 
     # 2. Deterministic LangGraph Execution (Fallback & Proposals)
+    fallback_intent = classify_intent(message)
+    if fallback_intent not in ("UNKNOWN", "CAMPUS_GREETING"):
+        _emit_prog("database_retrieval", "running", "Checking campus records...")
     initial_state: AgentState = {
         "user_id": user.id,
         "role": user.role,

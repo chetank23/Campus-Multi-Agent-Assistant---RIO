@@ -30,7 +30,7 @@ import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from openai import OpenAI
+from openai import APITimeoutError, OpenAI
 from openai.types.chat import (
     ChatCompletionAssistantMessageParam,
     ChatCompletionMessageParam,
@@ -149,12 +149,12 @@ class NvidiaNemotronProvider(BaseLLMProvider):
 
     def build_system_prompt(self, user: User) -> str:
         """
-        Constructs the system prompt for NVIDIA Nemotron.
+        Constructs the system prompt for ATHENA (backed by NVIDIA Nemotron).
         Balances natural general-knowledge conversation with dynamic, tool-grounded
         campus database intelligence and strict role-based security.
         """
         now_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-        return f"""You are RIO, an intelligent, natural, context-aware AI assistant for this university campus.
+        return f"""You are ATHENA, an intelligent, natural, context-aware AI assistant for this university campus.
 
 Caller Context:
 - User ID: {user.id}
@@ -231,6 +231,129 @@ HOW TO THINK AND RESPOND:
 
         return openai_tools
 
+    def _needs_campus_tools(
+        self,
+        message: str,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> bool:
+        """
+        Determines whether a message may require campus database tools.
+        Pure greetings, general-knowledge questions, and coding/conceptual queries
+        skip sending 75+ tool schemas so the model responds in ~2s instead of stalling.
+        """
+        msg_lower = (message or "").lower().strip()
+        campus_keywords = (
+            "timetable", "timetables", "schedule", "schedules", "class", "classes",
+            "lecture", "lectures", "period", "periods", "published", "publish",
+            "unpublished", "draft", "faculty", "professor", "prof", "teacher",
+            "student", "students", "srn", "usn", "roll", "section", "sections",
+            "department", "departments", "dept", "program", "programs", "course",
+            "courses", "subject", "subjects", "semester", "sem", "academic",
+            "calendar", "holiday", "holidays", "exam", "exams", "break", "lunch",
+            "room", "rooms", "lab", "labs", "hall", "auditorium", "building",
+            "facility", "facilities", "resource", "resources", "booking", "bookings",
+            "book ", "reserve ", "event", "events", "club", "clubs", "placement",
+            "placements", "cdc", "drive", "drives", "eligibility", "eligible",
+            "announcement", "announcements", "notice", "notification", "notifications",
+            "request", "requests", "substitution", "substitute", "readiness",
+            "audit", "governance", "overview", "campus", "university", "college",
+            "available", "availability", "free", "generated", "tt",
+            "aids", "cse", "ece", "mech", "eee", "civil", "who teaches", "who is",
+            "my ", "which ", "how many", "when is", "where is", "show me", "list ",
+        )
+        if any(kw in msg_lower for kw in campus_keywords):
+            return True
+
+        # Check short follow-ups ("What about semester 7?", "Which one?", "Show it")
+        if conversation_history:
+            follow_up_cues = ("it", "its", "that", "those", "them", "there", "more", "details", "what about", "how about", "another")
+            if any(cue in msg_lower for cue in follow_up_cues):
+                recent_text = " ".join(str(item.get("content", "")).lower() for item in conversation_history[-4:])
+                if any(kw in recent_text for kw in campus_keywords):
+                    return True
+        return False
+
+    def _select_relevant_tools(
+        self,
+        message: str,
+        conversation_history: Optional[List[Dict[str, Any]]],
+        all_tools: List[ChatCompletionToolParam],
+    ) -> List[ChatCompletionToolParam]:
+        """
+        Reduces the 75+ tool catalog to a focused, high-relevance subset (<= 18 tools)
+        so NVIDIA NIM does not stall parsing 31KB of unused schemas on every call.
+        Always includes execute_semantic_query as the universal fallback.
+        """
+        if len(all_tools) <= 18:
+            return all_tools
+
+        combined = (message or "").lower()
+        if conversation_history:
+            combined += " " + " ".join(str(m.get("content", "")).lower() for m in conversation_history[-4:])
+
+        core_always = {
+            "get_published_timetables",
+            "get_published_timetable_status",
+            "get_my_timetable",
+            "get_department_timetable",
+            "execute_semantic_query",
+        }
+        domain_groups = [
+            (("timetable", "schedule", "class", "lecture", "period", "break", "lunch", "section", "department", "published", "tomorrow", "next"), {
+                "get_student_timetable", "get_faculty_timetable", "get_section_timetable",
+                "get_recent_timetable_changes", "get_class_status", "get_next_class",
+                "get_first_class_tomorrow", "get_break_timings", "analyze_scheduling_readiness",
+            }),
+            (("faculty", "prof", "teacher", "available", "free", "substitut", "teaches"), {
+                "get_available_faculty", "get_faculty_information", "get_faculty_profile",
+                "get_faculty_free_periods", "get_faculty_profile_and_classes", "search_faculty_directory",
+                "get_course_faculty", "list_pending_substitutions", "get_date_substitutions",
+            }),
+            (("room", "lab", "hall", "auditorium", "facility", "resource", "book", "reserve", "building", "inventory"), {
+                "get_room_availability", "get_lab_availability", "get_room_or_lab_details",
+                "get_campus_room_inventory", "get_building_rooms_and_labs_inventory",
+                "discover_resources", "check_resource_availability", "get_user_bookings",
+                "get_resource_booking_status", "get_infrastructure_inventory",
+            }),
+            (("student", "srn", "usn", "enrolled", "roster"), {
+                "get_student_academic_profile", "get_student_enrolled_subjects",
+                "get_my_students", "get_section_students", "search_student_directory",
+            }),
+            (("course", "subject", "credit", "curriculum", "semester", "calendar", "holiday", "exam"), {
+                "get_course_information", "get_course_details", "get_semester_courses",
+                "search_course_directory", "get_academic_calendar", "get_section_overview",
+            }),
+            (("event", "club", "workshop", "hackathon", "fest"), {
+                "list_visible_events", "get_published_event_details", "get_ongoing_events",
+                "get_upcoming_events", "list_my_clubs", "list_club_activities",
+            }),
+            (("placement", "cdc", "drive", "eligib", "hiring", "ctc", "package", "internship"), {
+                "list_published_placement_drives", "list_my_eligible_drives",
+                "get_placement_drive_details", "get_drive_deadlines_and_schedule",
+                "get_student_drive_eligibility",
+            }),
+            (("overview", "institution", "governance", "audit", "notice", "announcement", "notification", "request"), {
+                "get_institutional_overview", "get_academic_structure_overview",
+                "get_operational_overview", "get_governance_system_status",
+                "get_relevant_announcements", "get_user_notifications", "get_user_requests_status",
+            }),
+        ]
+
+        selected_names = set(core_always)
+        for cues, tool_set in domain_groups:
+            if any(c in combined for c in cues):
+                selected_names.update(tool_set)
+
+        filtered = [t for t in all_tools if t["function"]["name"] in selected_names]
+        if len(filtered) <= 5:
+            # Broad fallback: include top read-only overview/discovery tools up to 18
+            for t in all_tools:
+                if t not in filtered and not t["function"]["name"].startswith(("create_", "update_", "approve_", "reject_", "publish_", "cancel_", "submit_", "validate_")):
+                    filtered.append(t)
+                    if len(filtered) >= 18:
+                        break
+        return filtered[:20]
+
     def generate_chat_response(
         self,
         message: str,
@@ -239,6 +362,8 @@ HOW TO THINK AND RESPOND:
         conversation_history: Optional[List[Dict[str, Any]]] = None,
         cancel_check: Optional[Callable[[], bool]] = None,
         request_id: Optional[str] = None,
+        progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        token_callback: Optional[Callable[[str], None]] = None,
     ) -> Dict[str, Any]:
         """
         Executes real-time natural language reasoning using NVIDIA Nemotron.
@@ -247,6 +372,20 @@ HOW TO THINK AND RESPOND:
         """
         req_tag = request_id or "req"
         t_req_start = time.perf_counter()
+
+        def emit_progress(stage: str, status: str, msg_text: str) -> None:
+            if progress_callback:
+                try:
+                    progress_callback({
+                        "type": "progress",
+                        "request_id": req_tag,
+                        "stage": stage,
+                        "status": status,
+                        "message": msg_text,
+                    })
+                except Exception:
+                    pass
+
         client = OpenAI(
             base_url=self.base_url,
             api_key=self.api_key,
@@ -255,7 +394,12 @@ HOW TO THINK AND RESPOND:
         )
 
         system_prompt = self.build_system_prompt(user)
-        tools = self.get_allowed_tools_schema(user.role)
+        needs_tools = self._needs_campus_tools(message, conversation_history)
+        if needs_tools:
+            all_tools = self.get_allowed_tools_schema(user.role)
+            tools = self._select_relevant_tools(message, conversation_history, all_tools)
+        else:
+            tools = []
 
         # Build message history with SDK-supported typed message parameters
         messages: List[ChatCompletionMessageParam] = []
@@ -307,6 +451,166 @@ HOW TO THINK AND RESPOND:
         max_iterations = 5
         max_total_tool_calls = 6
         final_text = ""
+        llm_call_count = 0
+        ttft_ms: Optional[float] = None
+        streamed_any_tokens = False
+
+        def _invoke_completion(
+            active_tools_arg: Optional[List[ChatCompletionToolParam]],
+            enable_thinking: bool,
+            allow_live_stream: bool,
+        ) -> Tuple[str, List[Any], bool]:
+            """
+            Executes chat completion with stream=True (while remaining compatible with
+            mocked non-streaming ChatCompletion objects in tests).
+            Returns (raw_content, tool_calls_list, was_cancelled).
+            """
+            nonlocal llm_call_count, ttft_ms, streamed_any_tokens
+            llm_call_count += 1
+            create_kwargs: Dict[str, Any] = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": self.temperature,
+                "top_p": self.top_p,
+                "max_tokens": self.max_tokens,
+                "stream": True,
+                "extra_body": {
+                    "chat_template_kwargs": {
+                        "enable_thinking": enable_thinking,
+                        "force_nonempty_content": True,
+                    }
+                },
+            }
+            if active_tools_arg:
+                create_kwargs["tools"] = active_tools_arg
+                create_kwargs["tool_choice"] = "auto"
+
+            resp = client.chat.completions.create(**create_kwargs)
+
+            # Mocked unit-test compatibility: non-streaming ChatCompletion object
+            if hasattr(resp, "choices"):
+                choice0 = resp.choices[0]
+                msg0 = choice0.message
+                return (msg0.content or ""), list(msg0.tool_calls or []), False
+
+            # Real streaming response iterator
+            raw_parts: List[str] = []
+            tc_map: Dict[int, Dict[str, Any]] = {}
+            hidden_tag: Optional[str] = None
+            pending = ""
+            started_answer_progress = False
+            saw_tool_calls = False
+
+            def _flush_visible(text: str) -> None:
+                nonlocal ttft_ms, streamed_any_tokens, started_answer_progress
+                if not text or not allow_live_stream or saw_tool_calls:
+                    return
+                if not started_answer_progress:
+                    started_answer_progress = True
+                    emit_progress("answer_generation", "running", "Delivering your answer...")
+                if ttft_ms is None:
+                    ttft_ms = round((time.perf_counter() - t_req_start) * 1000, 2)
+                if token_callback:
+                    streamed_any_tokens = True
+                    token_callback(text)
+
+            def _process_stream_text(delta_txt: str) -> None:
+                nonlocal hidden_tag, pending
+                pending += delta_txt
+                while pending:
+                    if hidden_tag:
+                        close_tag = f"</{hidden_tag}>"
+                        idx = pending.lower().find(close_tag)
+                        if idx != -1:
+                            pending = pending[idx + len(close_tag):]
+                            hidden_tag = None
+                            continue
+                        # Keep only a small tail in case closing tag spans chunks
+                        if len(pending) > len(close_tag):
+                            pending = pending[-(len(close_tag) - 1):]
+                        break
+                    else:
+                        lt_idx = pending.find("<")
+                        if lt_idx == -1:
+                            _flush_visible(pending)
+                            pending = ""
+                            break
+                        if lt_idx > 0:
+                            _flush_visible(pending[:lt_idx])
+                            pending = pending[lt_idx:]
+                        lower_p = pending.lower()
+                        matched_open = None
+                        for tag_name in ("think", "thought", "thinking", "tool_call"):
+                            open_tok = f"<{tag_name}>"
+                            if lower_p.startswith(open_tok):
+                                matched_open = tag_name
+                                pending = pending[len(open_tok):]
+                                break
+                        if matched_open:
+                            hidden_tag = matched_open
+                            continue
+                        # Could be a partial "<thi" or "<tool_call" tag at chunk boundary
+                        if len(pending) < 12 and any(f"<{t}>".startswith(lower_p) for t in ("think", "thought", "thinking", "tool_call")):
+                            break
+                        # Not a hidden tag; emit "<" and continue
+                        _flush_visible(pending[0])
+                        pending = pending[1:]
+
+            try:
+                for chunk in resp:
+                    if cancel_check and cancel_check():
+                        try:
+                            resp.close()
+                        except Exception:
+                            pass
+                        return "".join(raw_parts), [], True
+
+                    choices = getattr(chunk, "choices", None)
+                    if not choices:
+                        continue
+                    delta = getattr(choices[0], "delta", None)
+                    if not delta:
+                        continue
+
+                    tc_deltas = getattr(delta, "tool_calls", None)
+                    if tc_deltas:
+                        saw_tool_calls = True
+                        for tc_d in tc_deltas:
+                            idx = getattr(tc_d, "index", 0) or 0
+                            entry = tc_map.setdefault(idx, {"id": "", "type": "function", "name": "", "arguments": ""})
+                            if getattr(tc_d, "id", None):
+                                entry["id"] = tc_d.id
+                            fn = getattr(tc_d, "function", None)
+                            if fn:
+                                if getattr(fn, "name", None):
+                                    entry["name"] += fn.name
+                                if getattr(fn, "arguments", None):
+                                    entry["arguments"] += fn.arguments
+
+                    c_delta = getattr(delta, "content", None) or ""
+                    if c_delta:
+                        raw_parts.append(c_delta)
+                        _process_stream_text(c_delta)
+            finally:
+                try:
+                    resp.close()
+                except Exception:
+                    pass
+
+            if pending and not hidden_tag and allow_live_stream and not saw_tool_calls:
+                _flush_visible(pending)
+
+            from types import SimpleNamespace
+            assembled_tcs = [
+                SimpleNamespace(
+                    id=tc_map[i]["id"] or f"call_{i}",
+                    type="function",
+                    function=SimpleNamespace(name=tc_map[i]["name"], arguments=tc_map[i]["arguments"]),
+                )
+                for i in sorted(tc_map.keys())
+                if tc_map[i]["name"]
+            ]
+            return "".join(raw_parts), assembled_tcs, False
 
         try:
             for iteration in range(max_iterations):
@@ -320,50 +624,51 @@ HOW TO THINK AND RESPOND:
                         "sources": sources,
                         "success": False,
                         "error": "Request cancelled",
+                        "error_type": "CANCELLED",
                     }
                 # On the final iteration or if tool budget exhausted, force model to synthesize without calling more tools
                 budget_left = len(executed_tool_calls) < max_total_tool_calls
                 active_tools = tools if (tools and budget_left and iteration < max_iterations - 1) else None
-                t_llm0 = time.perf_counter()
-                if active_tools:
-                    response = client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,
-                        tools=active_tools,
-                        tool_choice="auto",
-                        temperature=self.temperature,
-                        top_p=self.top_p,
-                        max_tokens=self.max_tokens,
-                        extra_body={
-                            "chat_template_kwargs": {
-                                "enable_thinking": True,
-                                "force_nonempty_content": True,
-                            }
-                        },
+                if iteration == 0:
+                    emit_progress(
+                        "model_inference",
+                        "running",
+                        "Preparing a response..." if not active_tools else "Understanding your request...",
                     )
                 else:
-                    response = client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,
-                        temperature=self.temperature,
-                        top_p=self.top_p,
-                        max_tokens=self.max_tokens,
-                        extra_body={
-                            "chat_template_kwargs": {
-                                "enable_thinking": True,
-                                "force_nonempty_content": True,
-                            }
-                        },
-                    )
+                    emit_progress("synthesis", "running", "Putting the information together...")
 
-                choice = response.choices[0]
-                msg = choice.message
-                logger.info(f"[chat:{req_tag}] LLM iteration {iteration} completed in {time.perf_counter() - t_llm0:.2f}s (tool_calls={len(msg.tool_calls or [])})")
+                t_llm0 = time.perf_counter()
+                # Use enable_thinking=False for pure conversational turns or final synthesis to avoid multi-second hidden <think> stalls
+                use_thinking = bool(active_tools and iteration == 0)
+                allow_stream = (active_tools is None) or (not needs_tools)
+                raw_content, msg_tool_calls, was_cancelled = _invoke_completion(
+                    active_tools_arg=active_tools,
+                    enable_thinking=use_thinking,
+                    allow_live_stream=allow_stream,
+                )
+                if was_cancelled:
+                    logger.info(f"[chat:{req_tag}] Cancelled during LLM stream iteration {iteration}")
+                    return {
+                        "reply": "",
+                        "intent": "CANCELLED",
+                        "selected_agent": "nvidia_nemotron",
+                        "tool_calls": executed_tool_calls,
+                        "sources": sources,
+                        "success": False,
+                        "error": "Request cancelled",
+                        "error_type": "CANCELLED",
+                    }
+
+                logger.info(
+                    f"[chat:{req_tag}] LLM iteration {iteration} completed in {time.perf_counter() - t_llm0:.2f}s "
+                    f"(tool_calls={len(msg_tool_calls)}, needs_tools={needs_tools})"
+                )
 
                 # If model requested tool calls, execute them
-                if msg.tool_calls and active_tools:
+                if msg_tool_calls and active_tools:
                     tool_calls_param: List[ChatCompletionMessageFunctionToolCallParam] = []
-                    for tc in msg.tool_calls:
+                    for tc in msg_tool_calls:
                         if tc.type == "function":
                             tool_calls_param.append({
                                 "id": tc.id,
@@ -376,13 +681,19 @@ HOW TO THINK AND RESPOND:
 
                     assistant_msg: ChatCompletionAssistantMessageParam = {
                         "role": "assistant",
-                        "content": msg.content or "",
+                        "content": raw_content or "",
                         "tool_calls": tool_calls_param,
                     }
                     messages.append(assistant_msg)
 
+                    emit_progress(
+                        "database_retrieval",
+                        "running",
+                        "Gathering relevant information..." if len(msg_tool_calls) > 1 else "Checking campus records...",
+                    )
+
                     all_cached_in_turn = True
-                    for tc in msg.tool_calls:
+                    for tc in msg_tool_calls:
                         if tc.type != "function":
                             continue
                         tool_name = tc.function.name
@@ -473,30 +784,41 @@ HOW TO THINK AND RESPOND:
                         }
                         messages.append(tool_msg)
 
+                    emit_progress("database_retrieval", "completed", "Reviewing the retrieved information...")
+
                     # If the model only repeated cached calls, force final synthesis on next turn
                     if all_cached_in_turn:
                         messages.append({
                             "role": "user",
                             "content": "You already have the database results above. Provide a clear, direct, natural-language answer to the user's question without calling any more tools.",
                         })
-                        synth_resp = client.chat.completions.create(
-                            model=self.model,
-                            messages=messages,
-                            temperature=self.temperature,
-                            top_p=self.top_p,
-                            max_tokens=self.max_tokens,
-                            extra_body={"chat_template_kwargs": {"enable_thinking": False, "force_nonempty_content": True}},
+                        emit_progress("synthesis", "running", "Putting the information together...")
+                        synth_raw, _, synth_cancelled = _invoke_completion(
+                            active_tools_arg=None,
+                            enable_thinking=False,
+                            allow_live_stream=True,
                         )
-                        final_text = strip_thinking(synth_resp.choices[0].message.content or "")
+                        if synth_cancelled:
+                            return {
+                                "reply": "",
+                                "intent": "CANCELLED",
+                                "selected_agent": "nvidia_nemotron",
+                                "tool_calls": executed_tool_calls,
+                                "sources": sources,
+                                "success": False,
+                                "error": "Request cancelled",
+                                "error_type": "CANCELLED",
+                            }
+                        final_text = strip_thinking(synth_raw)
                         break
 
                     # Continue loop to allow model to synthesize tool results
                     continue
 
                 # Check if model emitted XML-style <tool_call> in text content
-                raw_content = msg.content or ""
                 text_tool_calls = _parse_text_tool_calls(raw_content) if active_tools else []
                 if text_tool_calls:
+                    emit_progress("database_retrieval", "running", "Checking campus records...")
                     observations: List[str] = []
                     for t_name, t_args in text_tool_calls:
                         call_key = f"{t_name}:{json.dumps(t_args, sort_keys=True)}"
@@ -510,6 +832,7 @@ HOW TO THINK AND RESPOND:
                             if isinstance(t_res, dict) and "source" in t_res:
                                 sources.append(t_res["source"])
                         observations.append(f"Database result:\n{json.dumps(t_res, default=str)}")
+                    emit_progress("database_retrieval", "completed", "Reviewing the retrieved information...")
                     messages.append({"role": "user", "content": "\n\n".join(observations) + "\n\nSynthesize a clear, grounded answer from these results without outputting <tool_call> tags or mentioning tool names."})
                     continue
 
@@ -520,19 +843,18 @@ HOW TO THINK AND RESPOND:
             # If final_text is still empty after the loop, force a dedicated non-thinking synthesis or grounded formatter fallback
             if not final_text and executed_tool_results:
                 try:
+                    emit_progress("synthesis", "running", "Putting the information together...")
                     messages.append({
                         "role": "user",
                         "content": "Summarize the retrieved database records above into a direct, natural-language answer to the original question. Do not mention tool names or output raw JSON.",
                     })
-                    synth_resp = client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,
-                        temperature=self.temperature,
-                        top_p=self.top_p,
-                        max_tokens=self.max_tokens,
-                        extra_body={"chat_template_kwargs": {"enable_thinking": False, "force_nonempty_content": True}},
+                    synth_raw, _, synth_cancelled = _invoke_completion(
+                        active_tools_arg=None,
+                        enable_thinking=False,
+                        allow_live_stream=True,
                     )
-                    final_text = strip_thinking(synth_resp.choices[0].message.content or "")
+                    if not synth_cancelled:
+                        final_text = strip_thinking(synth_raw)
                 except Exception as synth_err:
                     logger.warning(f"Final synthesis fallback failed: {synth_err}")
 
@@ -560,9 +882,13 @@ HOW TO THINK AND RESPOND:
 
             trace.mark_nvidia_received()
             diagnostics_summary = trace.finalize(success=True)
+            if isinstance(diagnostics_summary, dict):
+                diagnostics_summary["llm_calls"] = llm_call_count
+                diagnostics_summary["ttft_ms"] = ttft_ms
+                diagnostics_summary["streamed_live"] = streamed_any_tokens
             logger.info(
                 f"[chat:{req_tag}] Completed in {time.perf_counter() - t_req_start:.2f}s "
-                f"(tools={len(executed_tool_calls)}, reply_len={len(final_text)})"
+                f"(llm_calls={llm_call_count}, tools={len(executed_tool_calls)}, ttft_ms={ttft_ms}, reply_len={len(final_text)})"
             )
 
             return {
@@ -576,9 +902,24 @@ HOW TO THINK AND RESPOND:
                 "action_type": None,
                 "success": True,
                 "error": None,
+                "streamed_live": streamed_any_tokens,
                 "diagnostics": diagnostics_summary,
             }
 
+        except APITimeoutError as timeout_exc:
+            logger.error(f"[chat:{req_tag}] NVIDIA Nemotron API timed out: {timeout_exc}")
+            diagnostics_summary = trace.finalize(success=False, error="Request timed out")
+            return {
+                "reply": "",
+                "intent": "ERROR",
+                "selected_agent": "nvidia_nemotron",
+                "tool_calls": executed_tool_calls,
+                "sources": sources,
+                "success": False,
+                "error": "The AI service timed out while generating a response. Please try again.",
+                "error_type": "TIMED_OUT",
+                "diagnostics": diagnostics_summary,
+            }
         except Exception as exc:
             logger.error(f"NVIDIA Nemotron API call failed: {exc}", exc_info=True)
             diagnostics_summary = trace.finalize(success=False, error=str(exc))
@@ -590,6 +931,7 @@ HOW TO THINK AND RESPOND:
                 "sources": sources,
                 "success": False,
                 "error": str(exc),
+                "error_type": "FAILED",
                 "diagnostics": diagnostics_summary,
             }
 
