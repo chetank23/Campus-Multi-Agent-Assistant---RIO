@@ -599,7 +599,7 @@ HOW TO THINK AND RESPOND:
                 except Exception:
                     pass
 
-            if pending and not hidden_tag and allow_live_stream and not saw_tool_calls:
+            if len(pending) > 0 and hidden_tag is None and allow_live_stream and not saw_tool_calls:
                 _flush_visible(pending)
 
             from types import SimpleNamespace
