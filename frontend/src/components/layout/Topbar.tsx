@@ -110,19 +110,15 @@ export const Topbar: React.FC<TopbarProps> = ({ onToggleMobile }) => {
   useEffect(() => {
     const trimmed = searchTerm.trim();
     if (trimmed.length < 2) {
-      setSearchResults([]);
-      setSearchLoading(false);
-      setSearchError(null);
-      setActiveIndex(-1);
       return;
     }
 
     const seq = ++searchSeqRef.current;
     const controller = new AbortController();
-    setSearchLoading(true);
-    setSearchError(null);
 
     const timer = window.setTimeout(async () => {
+      setSearchLoading(true);
+      setSearchError(null);
       try {
         const res = await searchApi.search(trimmed, 20, controller.signal);
         if (seq !== searchSeqRef.current) return;
@@ -223,8 +219,17 @@ export const Topbar: React.FC<TopbarProps> = ({ onToggleMobile }) => {
             type="text"
             value={searchTerm}
             onChange={(e) => {
-              setSearchTerm(e.target.value);
-              if (e.target.value.trim().length >= 2) setSearchOpen(true);
+              const val = e.target.value;
+              setSearchTerm(val);
+              if (val.trim().length < 2) {
+                setSearchResults([]);
+                setSearchOpen(false);
+                setSearchLoading(false);
+                setSearchError(null);
+                setActiveIndex(-1);
+              } else {
+                setSearchOpen(true);
+              }
             }}
             onFocus={() => {
               if (searchTerm.trim().length >= 2) setSearchOpen(true);

@@ -24,7 +24,19 @@ export interface ImportCommitResponse {
   message: string;
 }
 
+export interface ImportSampleResponse {
+  entity_type: ImportEntityType;
+  filename: string;
+  csv: string;
+  has_prerequisites: boolean;
+  message?: string | null;
+}
+
 export const dataImportApi = {
+  getSample: async (entityType: ImportEntityType): Promise<ImportSampleResponse> => {
+    const { data } = await apiClient.get<ImportSampleResponse>(`/admin/import/sample/${entityType}`);
+    return data;
+  },
   preview: async (entityType: ImportEntityType, rows: Record<string, any>[]): Promise<ImportPreviewResponse> => {
     const { data } = await apiClient.post<ImportPreviewResponse>('/admin/import/preview', {
       entity_type: entityType,

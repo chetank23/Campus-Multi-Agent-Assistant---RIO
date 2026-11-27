@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatTimeRange12h } from '@/utils/timeFormatter';
 import { useMutation } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { X, Loader2, Save, Calendar, AlertCircle } from 'lucide-react';
@@ -123,7 +124,7 @@ export const EditEntryModal: React.FC<EditEntryModalProps> = ({
                 <option value="">Unassigned Slot</option>
                 {timeSlots.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.day} • {s.start_time.substring(0, 5)} - {s.end_time.substring(0, 5)}
+                    {s.day} • {formatTimeRange12h(s.start_time, s.end_time)}
                   </option>
                 ))}
               </select>

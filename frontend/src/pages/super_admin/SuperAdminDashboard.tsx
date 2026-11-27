@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { formatTime12h } from '@/utils/timeFormatter';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -241,7 +242,7 @@ export const SuperAdminDashboard: React.FC = () => {
                   <p className="text-slate-500 text-[11px]">By {act.user_name}</p>
                 </div>
                 <span className="text-slate-400 text-[11px] whitespace-nowrap">
-                  {new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {formatTime12h(act.timestamp)}
                 </span>
               </div>
             ))}

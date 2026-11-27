@@ -40,6 +40,7 @@ import {
   type ClassOccurrence,
   type SubstitutionRequest,
 } from '@/api/substitutions';
+import { formatTimeRange12h } from '@/utils/timeFormatter';
 
 const STATUS_VARIANT_MAP: Record<string, StatusVariant> = {
   REQUESTED: 'warning',
@@ -59,6 +60,7 @@ export function FacultySubstitutionPage() {
   const [selectedClass, setSelectedClass] = useState<ClassOccurrence | null>(null);
   const [reason, setReason] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
   // Queries
   const { data: upcomingClasses = [], isLoading: classesLoading } = useQuery({
@@ -94,6 +96,7 @@ export function FacultySubstitutionPage() {
       setSelectedClass(null);
       setReason('');
       setFormError(null);
+      setSuccessBanner('Absence & substitution request submitted. Awaiting coordinator review.');
     },
     onError: (err) => {
       if (isAxiosError(err) && err.response?.data?.detail) {
@@ -173,7 +176,7 @@ export function FacultySubstitutionPage() {
       render: (c) => (
         <div>
           <div className="text-sm font-medium text-gray-800 dark:text-gray-200">
-            {c.start_time} - {c.end_time}
+            {formatTimeRange12h(c.start_time, c.end_time)}
           </div>
           <div className="text-xs text-gray-500">
             {c.room_number ? `Room ${c.room_number}` : 'No room assigned'}
@@ -247,7 +250,7 @@ export function FacultySubstitutionPage() {
         <div>
           <div className="font-semibold text-gray-900 dark:text-gray-100">{r.substitution_date}</div>
           <div className="text-xs text-gray-500">
-            {r.start_time} - {r.end_time} ({r.slot_day})
+            {formatTimeRange12h(r.start_time, r.end_time)} ({r.slot_day})
           </div>
         </div>
       ),
@@ -327,7 +330,7 @@ export function FacultySubstitutionPage() {
         <div>
           <div className="font-semibold text-gray-900 dark:text-gray-100">{d.substitution_date}</div>
           <div className="text-xs text-gray-500">
-            {d.start_time} - {d.end_time} ({d.slot_day})
+            {formatTimeRange12h(d.start_time, d.end_time)} ({d.slot_day})
           </div>
         </div>
       ),
@@ -394,10 +397,45 @@ export function FacultySubstitutionPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Faculty Substitutions & Leave Coverage"
-        subtitle="View your scheduled classes, submit temporary date-specific unavailability requests, and track assigned substitute teaching duties."
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <PageHeader
+          title="Faculty Substitutions & Leave Coverage"
+          subtitle="View your scheduled classes, submit temporary date-specific unavailability requests, and track assigned substitute teaching duties."
+        />
+        <button
+          type="button"
+          onClick={() => {
+            const firstEligible = upcomingClasses.find((c) => !c.has_active_request) || upcomingClasses[0] || null;
+            if (firstEligible) {
+              setSelectedClass(firstEligible);
+              setReason('');
+              setFormError(null);
+            } else {
+              setActiveTab('classes');
+            }
+          }}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors self-start sm:self-auto cursor-pointer shrink-0"
+        >
+          <Calendar className="h-4 w-4" />
+          <span>Report Absence</span>
+        </button>
+      </div>
+
+      {successBanner && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium rounded-xl flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span>{successBanner}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessBanner(null)}
+            className="text-emerald-700 hover:text-emerald-900 font-semibold"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -552,7 +590,7 @@ export function FacultySubstitutionPage() {
                   <div>
                     <div className="text-[11px] text-slate-500 font-medium">Time</div>
                     <div className="text-xs font-bold text-slate-900">
-                      {selectedClass.start_time} – {selectedClass.end_time}
+                      {formatTimeRange12h(selectedClass.start_time, selectedClass.end_time)}
                     </div>
                   </div>
                 </div>

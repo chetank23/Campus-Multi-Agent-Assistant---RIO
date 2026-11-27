@@ -304,6 +304,91 @@ def _validate_import_rows(
     return valid_rows, errors
 
 
+class ImportSampleResponse(BaseModel):
+    entity_type: EntityType
+    filename: str
+    csv: str
+    has_prerequisites: bool = True
+    message: Optional[str] = None
+
+
+@router.get("/sample/{entity_type}", response_model=ImportSampleResponse)
+def get_import_sample(
+    entity_type: EntityType,
+    current_user: User = Depends(require_role("ADMIN")),
+    db: Session = Depends(get_db),
+) -> ImportSampleResponse:
+    """
+    Generates an immediately usable sample CSV using real existing foreign-key
+    references (buildings, departments, sections) from the database.
+    """
+    if entity_type == "rooms":
+        buildings = db.query(Building).order_by(Building.id.asc()).limit(2).all()
+        if not buildings:
+            return ImportSampleResponse(
+                entity_type="rooms",
+                filename="rooms_template.csv",
+                csv="room_number,building_id,capacity,room_type\n",
+                has_prerequisites=False,
+                message="No buildings exist in the database yet. Please create or import buildings before importing rooms.",
+            )
+        b1 = buildings[0].id
+        b2 = buildings[1].id if len(buildings) > 1 else b1
+        csv_text = (
+            "room_number,building_id,capacity,room_type\n"
+            f"MB-201,{b1},60,CLASSROOM\n"
+            f"MB-202,{b1},60,CLASSROOM\n"
+            f"SB-301,{b2},30,LAB"
+        )
+        return ImportSampleResponse(entity_type="rooms", filename="rooms_template.csv", csv=csv_text)
+
+    depts = db.query(Department).order_by(Department.id.asc()).limit(2).all()
+    if not depts:
+        return ImportSampleResponse(
+            entity_type=entity_type,
+            filename=f"{entity_type}_template.csv",
+            csv="",
+            has_prerequisites=False,
+            message="No departments exist in the database yet. Please create departments first.",
+        )
+    d1 = depts[0].id
+    d2 = depts[1].id if len(depts) > 1 else d1
+
+    if entity_type == "courses":
+        csv_text = (
+            "course_code,course_name,department_id,course_type,credits\n"
+            f"CS501,Advanced Algorithms,{d1},THEORY,4\n"
+            f"CS502,Machine Learning Lab,{d1},LAB,2\n"
+            f"EE501,Control Systems,{d2},THEORY,3"
+        )
+        return ImportSampleResponse(entity_type="courses", filename="courses_template.csv", csv=csv_text)
+
+    if entity_type == "faculty":
+        csv_text = (
+            "faculty_id,name,email,department_id,designation\n"
+            f"FAC901,Dr. John Doe,john.doe@campus.edu,{d1},Associate Professor\n"
+            f"FAC902,Dr. Jane Miller,jane.miller@campus.edu,{d1},Professor"
+        )
+        return ImportSampleResponse(entity_type="faculty", filename="faculty_template.csv", csv=csv_text)
+
+    # students
+    sec = db.query(Section).order_by(Section.id.asc()).first()
+    if not sec:
+        return ImportSampleResponse(
+            entity_type="students",
+            filename="students_template.csv",
+            csv="student_id,name,email,department_id,section_id\n",
+            has_prerequisites=False,
+            message="No sections exist in the database yet. Please create sections before importing students.",
+        )
+    csv_text = (
+        "student_id,name,email,department_id,section_id\n"
+        f"STU8001,Alex Johnson,alex.j@campus.edu,{d1},{sec.id}\n"
+        f"STU8002,Beatrix Kiddo,beatrix.k@campus.edu,{d1},{sec.id}"
+    )
+    return ImportSampleResponse(entity_type="students", filename="students_template.csv", csv=csv_text)
+
+
 @router.post("/preview", response_model=ImportPreviewResponse)
 def preview_import(
     body: ImportPreviewRequest,

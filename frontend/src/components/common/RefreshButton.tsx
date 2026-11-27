@@ -16,6 +16,7 @@
 import React from 'react';
 import { RotateCw, Check } from 'lucide-react';
 import { useDataRefresh } from './useDataRefresh';
+import { formatTimestamp12h } from '@/utils/timeFormatter';
 
 export interface RefreshButtonProps {
   onRefresh?: () => Promise<unknown> | void;

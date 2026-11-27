@@ -82,6 +82,7 @@ from .curriculum import (  # noqa: F401
     SectionCourseOffering,
     FacultyCourseOffering,
 )
+from .personal_task import PersonalTask  # noqa: F401
 
 # System Settings
 from .system_setting import SystemSetting  # noqa: F401
@@ -144,4 +145,5 @@ __all__ = [
     "SectionCourseOffering",
     "FacultyCourseOffering",
     "SystemSetting",
+    "PersonalTask",
 ]

@@ -120,7 +120,7 @@ def global_search(
                 GlobalSearchResultItem(
                     id=s.id,
                     entity_type="student",
-                    title=s.user.name if s.user else s.student_id,
+                    title=(s.user.name if s.user else None) or s.student_id or "Student",
                     subtitle=f"Student · {s.student_id} · Section {sec_name}",
                     route=_role_route(role, "student"),
                 )
@@ -152,7 +152,7 @@ def global_search(
                         GlobalSearchResultItem(
                             id=s.id,
                             entity_type="student",
-                            title=s.user.name if s.user else s.student_id,
+                            title=(s.user.name if s.user else None) or s.student_id or "Student",
                             subtitle=f"Assigned Student · {s.student_id} · {sec_name}",
                             route=_role_route(role, "student"),
                         )
@@ -178,7 +178,7 @@ def global_search(
             GlobalSearchResultItem(
                 id=f.id,
                 entity_type="faculty",
-                title=f.user.name if f.user else f.faculty_id,
+                title=(f.user.name if f.user else None) or f.faculty_id or "Faculty",
                 subtitle=f"Faculty · {f.designation or 'Faculty Member'} · {dept_name}",
                 route=_role_route(role, "faculty"),
             )
@@ -223,7 +223,7 @@ def global_search(
     if role in ("ADMIN", "SUPER_ADMIN"):
         progs = (
             db.query(Program)
-            .filter(or_(Program.program_name.ilike(pattern), Program.program_code.ilike(pattern)))
+            .filter(Program.program_name.ilike(pattern))
             .limit(per_cat)
             .all()
         )
@@ -232,8 +232,8 @@ def global_search(
                 GlobalSearchResultItem(
                     id=p.id,
                     entity_type="program",
-                    title=p.program_name,
-                    subtitle=f"Program · {p.program_code}",
+                    title=p.program_name or f"Program #{p.id}",
+                    subtitle="Academic Program",
                     route=_role_route(role, "program"),
                 )
             )
@@ -259,7 +259,7 @@ def global_search(
 
     labs = (
         db.query(Lab)
-        .filter(or_(Lab.lab_name.ilike(pattern), Lab.lab_code.ilike(pattern)))
+        .filter(Lab.lab_name.ilike(pattern))
         .limit(per_cat)
         .all()
     )
@@ -268,8 +268,8 @@ def global_search(
             GlobalSearchResultItem(
                 id=lb.id,
                 entity_type="lab",
-                title=f"{lb.lab_name} ({lb.lab_code})",
-                subtitle=f"Lab · Cap {lb.capacity or 'N/A'}",
+                title=lb.lab_name or f"Lab #{lb.id}",
+                subtitle="Laboratory",
                 route=_role_route(role, "lab"),
             )
         )

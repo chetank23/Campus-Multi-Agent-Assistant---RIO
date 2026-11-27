@@ -102,12 +102,19 @@ export const AdminCurriculumReadinessPage: React.FC = () => {
           <label className="text-xs font-semibold text-slate-700 block mb-1">Published Curriculum *</label>
           <select
             value={effectiveVersionId}
-            onChange={(e) => setVersionId(Number(e.target.value))}
-            className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white font-mono"
+            onChange={(e) => setVersionId(e.target.value ? Number(e.target.value) : '')}
+            disabled={!publishedVersions || publishedVersions.length === 0}
+            className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white font-mono disabled:bg-slate-50 disabled:text-slate-500"
           >
-            {(publishedVersions || []).map((v) => (
-              <option key={v.id} value={v.id}>{v.version_code} ({v.program_name})</option>
-            ))}
+            {(!publishedVersions || publishedVersions.length === 0) ? (
+              <option value="">No published curriculum versions found</option>
+            ) : (
+              publishedVersions.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.version_code} — {v.program_name || v.department_name || 'Curriculum'}
+                </option>
+              ))
+            )}
           </select>
         </div>
 
@@ -131,7 +138,7 @@ export const AdminCurriculumReadinessPage: React.FC = () => {
             className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white"
           >
             {(academicYears || []).map((ay: any) => (
-              <option key={ay.id} value={ay.id}>{ay.name}</option>
+              <option key={ay.id} value={ay.id}>{ay.year_name || ay.name}</option>
             ))}
           </select>
         </div>
@@ -149,6 +156,19 @@ export const AdminCurriculumReadinessPage: React.FC = () => {
           </select>
         </div>
       </div>
+
+      {/* Empty Published Curriculum Notice */}
+      {publishedVersions && publishedVersions.length === 0 && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 flex items-start gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold">No Published Curriculum Versions Available</p>
+            <p className="mt-0.5 text-amber-800">
+              A Super Admin must publish a curriculum version before preflight verification can be run.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Preflight Evaluation Card ─────────────────────────────────── */}
       {isLoading ? (

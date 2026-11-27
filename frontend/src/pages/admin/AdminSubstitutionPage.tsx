@@ -27,6 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { isAxiosError } from 'axios';
+import { formatTimeRange12h } from '@/utils/timeFormatter';
 
 import {
   PageHeader,
@@ -206,7 +207,7 @@ export function AdminSubstitutionPage() {
         <div>
           <div className="font-semibold text-gray-900 dark:text-gray-100">{r.substitution_date}</div>
           <div className="text-xs text-gray-500">
-            {r.start_time} - {r.end_time} ({r.slot_day})
+            {formatTimeRange12h(r.start_time, r.end_time)} ({r.slot_day})
           </div>
         </div>
       ),
@@ -370,8 +371,8 @@ export function AdminSubstitutionPage() {
         />
       )}
 
-      {/* Candidate Inspector & Review Modal */}
-      {inspectingRequest && (
+      {/* Candidate Inspector & Review Modal (hidden while Rejection Modal is open to avoid nested stacking) */}
+      {inspectingRequest && !rejectModalOpen && (
         <FormModal
           isOpen={true}
           title="Review Substitution & Assign Faculty"
@@ -411,7 +412,7 @@ export function AdminSubstitutionPage() {
                   <span>
                     Time:{' '}
                     <strong className="font-semibold text-white">
-                      {inspectingRequest.start_time} – {inspectingRequest.end_time}
+                      {formatTimeRange12h(inspectingRequest.start_time, inspectingRequest.end_time)}
                     </strong>
                   </span>
                 </div>
@@ -653,45 +654,71 @@ export function AdminSubstitutionPage() {
         <FormModal
           isOpen={true}
           title="Reject Substitution Request"
-          onClose={() => setRejectModalOpen(false)}
+          onClose={() => {
+            setRejectModalOpen(false);
+            setReviewError(null);
+          }}
         >
           <form onSubmit={handleReject} className="space-y-4">
-            <div className="text-sm text-gray-700 dark:text-gray-300">
-              Are you sure you want to reject the substitution request for{' '}
-              <span className="font-semibold text-gray-900 dark:text-gray-100">
-                {inspectingRequest.course_code}
-              </span>{' '}
-              on <span className="font-semibold">{inspectingRequest.substitution_date}</span>?
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Reason for Rejection <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                rows={3}
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                placeholder="Explain why this request is being declined..."
-                className="w-full text-sm p-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                The requesting faculty member will be notified of this reason.
+            <div className="rounded-xl bg-blue-50/70 border border-blue-100 p-3.5 text-xs text-slate-700 space-y-1">
+              <p className="font-bold text-slate-900">
+                {inspectingRequest.course_code} – {inspectingRequest.course_name}
+              </p>
+              <p>
+                Faculty: <span className="font-semibold">{inspectingRequest.original_faculty_name}</span> ·{' '}
+                Date: <span className="font-semibold">{inspectingRequest.substitution_date}</span> ·{' '}
+                Time: <span className="font-semibold">{formatTimeRange12h(inspectingRequest.start_time, inspectingRequest.end_time)}</span>
               </p>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-gray-200 dark:border-gray-800">
+            {reviewError && (
+              <div className="p-3 bg-rose-50 text-rose-700 text-xs rounded-xl border border-rose-200 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{reviewError}</span>
+              </div>
+            )}
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-800">
+                  Reason for Rejection <span className="text-rose-600">*</span>
+                </label>
+                <span className="text-[11px] font-medium text-slate-500">
+                  {rejectionReason.trim().length}/500
+                </span>
+              </div>
+              <textarea
+                rows={4}
+                maxLength={500}
+                value={rejectionReason}
+                onChange={(e) => {
+                  setRejectionReason(e.target.value);
+                  if (reviewError) setReviewError(null);
+                }}
+                placeholder="Explain clearly why this substitution request is being declined..."
+                className="w-full text-sm p-3 bg-white text-slate-900 placeholder-slate-400 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                required
+              />
+              <p className="text-[11px] text-slate-500 mt-1.5">
+                Minimum 3 characters required. The requesting faculty member will be notified with this reason.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setRejectModalOpen(false)}
-                className="px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                onClick={() => {
+                  setRejectModalOpen(false);
+                  setReviewError(null);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={reviewMutation.isPending}
-                className="px-4 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors disabled:opacity-50"
+                disabled={reviewMutation.isPending || rejectionReason.trim().length < 3}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {reviewMutation.isPending ? 'Rejecting...' : 'Confirm Rejection'}
               </button>

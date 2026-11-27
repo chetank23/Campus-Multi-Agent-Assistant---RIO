@@ -94,6 +94,7 @@ const FacultyEventsPage = lazyPage(() => import('@/pages/faculty/FacultyEventsPa
 const FacultySubstitutionPage = lazyPage(() => import('@/pages/faculty/FacultySubstitutionPage'), 'FacultySubstitutionPage');
 const FacultyChangeRequestsPage = lazyPage(() => import('@/pages/faculty/FacultyChangeRequestsPage'), 'FacultyChangeRequestsPage');
 const FacultyNotificationsPage = lazyPage(() => import('@/pages/faculty/FacultyNotificationsPage'), 'FacultyNotificationsPage');
+const MyTasksPage = lazyPage(() => import('@/pages/common/MyTasksPage'), 'MyTasksPage');
 
 // ── Student Pages (Lazy) ─────────────────────────────────────────────────────
 const StudentDashboard = lazyPage(() => import('@/pages/student/StudentDashboard'), 'StudentDashboard');
@@ -263,6 +264,7 @@ export function AppRoutes() {
             <Route path="/faculty/substitutions" element={<FacultySubstitutionPage />} />
             <Route path="/faculty/requests" element={<FacultyChangeRequestsPage />} />
             <Route path="/faculty/notifications" element={<FacultyNotificationsPage />} />
+            <Route path="/faculty/tasks" element={<MyTasksPage />} />
           </Route>
         </Route>
       </Route>
@@ -284,6 +286,7 @@ export function AppRoutes() {
             <Route path="/student/placements" element={<StudentPlacementsPage />} />
             <Route path="/student/announcements" element={<StudentAnnouncementsPage />} />
             <Route path="/student/notifications" element={<StudentNotificationsPage />} />
+            <Route path="/student/tasks" element={<MyTasksPage />} />
           </Route>
         </Route>
       </Route>
