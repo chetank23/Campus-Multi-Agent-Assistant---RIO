@@ -15,6 +15,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { formatTime12h, formatTimeRange12h } from '@/utils/timeFormatter';
 import {
   Bot,
   Sparkles,
@@ -765,7 +766,7 @@ export const CampusAssistantDrawer: React.FC = () => {
               {history.map((msg) => {
                 const isUser = msg.sender === 'user';
                 const isErr = isErrorMessage(msg);
-                const timeStr = msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const timeStr = formatTime12h(msg.timestamp);
                 const navLinks = !isUser && msg.nav_links && msg.nav_links.length > 0 ? msg.nav_links : [];
 
                 if (isUser) {
@@ -842,7 +843,7 @@ export const CampusAssistantDrawer: React.FC = () => {
                             {msg.proposal.resource_id ? (
                               <div className="space-y-1.5 text-slate-700">
                                 <p><strong className="text-slate-900">Facility:</strong> {msg.proposal.resource_name} ({msg.proposal.resource_type})</p>
-                                <p><strong className="text-slate-900">Interval:</strong> {msg.proposal.date} {msg.proposal.start_time} - {msg.proposal.end_time}</p>
+                                <p><strong className="text-slate-900">Interval:</strong> {msg.proposal.date} {formatTimeRange12h(msg.proposal.start_time, msg.proposal.end_time)}</p>
                                 <p><strong className="text-slate-900">Purpose:</strong> {msg.proposal.purpose || 'Standard booking'}</p>
                               </div>
                             ) : (

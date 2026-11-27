@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   UploadCloud,
   FileCheck,
@@ -37,15 +37,23 @@ const SAMPLE_TEMPLATES: Record<ImportEntityType, { csv: string; filename: string
 
 export function ImportValidationPage() {
   const [entityType, setEntityType] = useState<ImportEntityType>('rooms');
-  const [rawText, setRawText] = useState(SAMPLE_TEMPLATES.rooms.csv);
+  const [customRawText, setCustomRawText] = useState<string | null>(null);
   const [previewResult, setPreviewResult] = useState<ImportPreviewResponse | null>(null);
   const [commitResult, setCommitResult] = useState<ImportCommitResponse | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
 
+  const { data: liveSample } = useQuery({
+    queryKey: ['admin-import-sample', entityType],
+    queryFn: () => dataImportApi.getSample(entityType),
+  });
+
+  const rawText = customRawText ?? liveSample?.csv ?? '';
+  const setRawText = (val: string) => setCustomRawText(val);
+
   const handleEntityChange = (type: ImportEntityType) => {
     setEntityType(type);
-    setRawText(SAMPLE_TEMPLATES[type].csv);
+    setCustomRawText(null);
     setPreviewResult(null);
     setCommitResult(null);
     setParseError(null);
@@ -133,19 +141,40 @@ export function ImportValidationPage() {
     reader.readAsText(file);
   };
 
-  const handleDownloadTemplate = () => {
-    const template = SAMPLE_TEMPLATES[entityType];
-    const blob = new Blob([template.csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = template.filename;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleDownloadTemplate = async () => {
+    try {
+      const sample = await dataImportApi.getSample(entityType);
+      if (!sample.has_prerequisites) {
+        setParseError(sample.message || 'Prerequisites missing for this entity type.');
+        return;
+      }
+      const blob = new Blob([sample.csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = sample.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      const template = SAMPLE_TEMPLATES[entityType];
+      const blob = new Blob([template.csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = template.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   };
 
   return (
     <div className="space-y-6">
+      {liveSample && !liveSample.has_prerequisites && liveSample.message && (
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium flex items-center gap-2">
+          <AlertTriangle size={15} className="shrink-0 text-amber-600" />
+          <span>{liveSample.message}</span>
+        </div>
+      )}
       <PageHeader
         title="Import & Validation"
         subtitle="Staged ingestion workflow: upload CSV/JSON, preview foreign-key checks, review row-level errors, and commit."

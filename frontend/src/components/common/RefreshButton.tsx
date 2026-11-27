@@ -16,6 +16,7 @@
 import React from 'react';
 import { RotateCw, Check } from 'lucide-react';
 import { useDataRefresh } from './useDataRefresh';
+import { formatTimestamp12h } from '@/utils/timeFormatter';
 
 export interface RefreshButtonProps {
   onRefresh?: () => Promise<unknown> | void;
@@ -63,9 +64,7 @@ export const RefreshButton: React.FC<RefreshButtonProps> = ({
       ? 'bg-slate-100 text-slate-800 hover:bg-slate-200'
       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900';
 
-  const formatTimestamp = (d: Date) => {
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  };
+  const formatTimestamp = (d: Date) => formatTimestamp12h(d);
 
   return (
     <div className="inline-flex items-center gap-2">

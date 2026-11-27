@@ -245,6 +245,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
             { label: 'Campus Resources', icon: <Boxes size={18} />, to: '/faculty/resources', implemented: true },
             { label: 'Clubs & Events', icon: <Sparkles size={18} />, to: '/faculty/events', implemented: true },
             { label: 'Change Requests', icon: <ClipboardList size={18} />, to: '/faculty/requests', implemented: true },
+            { label: 'My Tasks', icon: <ClipboardList size={18} />, to: '/faculty/tasks', implemented: true },
             { label: 'Notifications', icon: <Bell size={18} />, to: '/faculty/notifications', implemented: true },
           ],
         },
@@ -272,6 +273,7 @@ function getNavGroups(role: UserRole): NavGroup[] {
           groupTitle: 'COMMUNICATION & ALERTS',
           items: [
             { label: 'Announcements', icon: <ClipboardList size={18} />, to: '/student/announcements', implemented: true },
+            { label: 'My Tasks', icon: <ClipboardList size={18} />, to: '/student/tasks', implemented: true },
             { label: 'Notifications', icon: <Bell size={18} />, to: '/student/notifications', implemented: true },
           ],
         },

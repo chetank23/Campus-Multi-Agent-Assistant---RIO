@@ -86,7 +86,7 @@ def test_intent_distinction_across_domains(admin_token, student_token):
     r4 = client.post("/agents/chat", headers={"Authorization": f"Bearer {student_token}"}, json={"message": "Good morning"})
     assert r4.status_code == 200
     assert r4.json()["selected_agent"] is None
-    assert "Hello. I am the RIO Campus Assistant" in r4.json()["reply"]
+    assert "Hello! I am ATHENA" in r4.json()["reply"]
     assert_plain_english(r4.json()["reply"])
 
     # Out of scope / Unknown -> Supervisor directly
