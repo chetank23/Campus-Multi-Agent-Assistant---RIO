@@ -911,9 +911,24 @@ QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     },
     {
         "name": "get_next_class",
-        "description": "Retrieves the single next scheduled upcoming class or academic timetable event for the authenticated user (Faculty or Student) based on current institutional date and time. Returns subject, date, weekday, start and end time, room, section, and faculty.",
-        "parameters": {"type": "object", "properties": {}},
-        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+        "description": (
+            "Retrieves the single next upcoming class ONLY for the authenticated user's own personal "
+            "Student enrollment or Faculty teaching assignment. For Admin/Super Admin accounts, checks if a "
+            "personal Faculty or Student profile is legitimately linked and returns a no-personal-schedule "
+            "clarification if none exists. NEVER use this for section-level ('When is AIDS-A's next class?'), "
+            "faculty-specific ('What class is Prof. X taking next?'), or campus-wide ('Which class is happening next on campus?') queries."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "profile_preference": {
+                    "type": "string",
+                    "enum": ["faculty", "student"],
+                    "description": "Optional clarification when an account has both Faculty and Student profiles linked.",
+                }
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN", "SUPER_ADMIN"],
     },
     {
         "name": "get_my_students",
@@ -1701,7 +1716,11 @@ def execute_tool(
             return get_faculty_profile_and_classes_data(db=db, user=user)
 
         elif tool_name == "get_next_class":
-            return get_next_class_data(db=db, user=user)
+            return get_next_class_data(
+                db=db,
+                user=user,
+                profile_preference=tool_args.get("profile_preference"),
+            )
 
         elif tool_name in ("get_my_students", "get_faculty_assigned_students"):
             return get_my_students_data(

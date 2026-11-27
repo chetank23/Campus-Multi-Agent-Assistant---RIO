@@ -680,69 +680,183 @@ def get_next_class_data(
     db: Session,
     user: User,
     ref_datetime: Optional[datetime.datetime] = None,
+    profile_preference: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Evaluates and retrieves the single next applicable published timetable event
-    for the authenticated user (Faculty or Student) using the current institutional date and time.
-    Scans today's remaining slots, or the upcoming days in chronological order.
-    Returns:
-    - Subject (code & title)
-    - Date and weekday
-    - Start and end time
-    - Room
-    - Section
-    - Faculty
+    exclusively for the authenticated user's verified personal schedule:
+    - STUDENT: resolved via Student.user_id -> active section, batch, semester, and program.
+    - FACULTY: resolved via Faculty.user_id -> TimetableEntry.faculty_id teaching assignments.
+    - ADMIN / SUPER_ADMIN: only resolves if the account has a verified linked Faculty or Student
+      profile; never falls back to arbitrary or campus-wide timetable entries.
+    Accounts for campus timezone, active published canonical timetables (excluding recalled/archived),
+    and AcademicCalendar holidays/vacations.
     """
-    now_dt = ref_datetime or datetime.datetime.now()
+    import os
+    from zoneinfo import ZoneInfo
+    from backend.models import AcademicCalendar, Student, Timetable
+
+    if ref_datetime is not None:
+        now_dt = ref_datetime
+    else:
+        tz_name = os.environ.get("RIO_CAMPUS_TIMEZONE", "Asia/Kolkata")
+        try:
+            now_dt = datetime.datetime.now(ZoneInfo(tz_name)).replace(tzinfo=None)
+        except Exception:
+            now_dt = datetime.datetime.now()
+
     now_date = now_dt.date()
     now_time = now_dt.time()
 
-    published_version = (
-        db.query(TimetableVersion)
-        .filter(TimetableVersion.status == "PUBLISHED")
-        .order_by(TimetableVersion.published_at.desc())
-        .first()
-    )
-    if not published_version:
-        return {
-            "found": False,
-            "message": "No published timetable is currently active in the database.",
-        }
-
-    # Build base entry query for caller's role
-    query = (
-        db.query(TimetableEntry)
-        .join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id)
-        .filter(
-            TimetableEntry.version_id == published_version.id,
-            TimetableEntry.status == "ACTIVE",
-        )
-    )
+    # 1. Resolve authenticated personal profile strictly from user.id & user.role
+    resolved_profile_type: Optional[str] = None
+    stu: Optional[Student] = None
+    fac: Optional[Faculty] = None
 
     if user.role == "FACULTY":
         fac = db.query(Faculty).filter(Faculty.user_id == user.id).first()
         if not fac:
-            return {"found": False, "message": "Faculty profile not found."}
-        query = query.filter(TimetableEntry.faculty_id == fac.id)
+            return {
+                "found": False,
+                "has_personal_schedule": False,
+                "role": user.role,
+                "message": "No faculty profile is linked to your account.",
+            }
+        resolved_profile_type = "faculty"
+
     elif user.role == "STUDENT":
-        from backend.models.academic import Student
         stu = db.query(Student).filter(Student.user_id == user.id).first()
         if not stu or not stu.section_id:
-            return {"found": False, "message": "Student profile or section not found."}
+            return {
+                "found": False,
+                "has_personal_schedule": False,
+                "role": user.role,
+                "message": "No student profile or active section is linked to your account.",
+            }
+        resolved_profile_type = "student"
+
+    elif user.role in ("ADMIN", "SUPER_ADMIN"):
+        fac = db.query(Faculty).filter(Faculty.user_id == user.id).first()
+        stu = db.query(Student).filter(Student.user_id == user.id).first()
+        has_fac = fac is not None
+        has_stu = stu is not None and stu.section_id is not None
+
+        pref = (profile_preference or "").strip().lower()
+        if has_fac and has_stu:
+            if pref in ("faculty", "teaching"):
+                resolved_profile_type = "faculty"
+            elif pref == "student":
+                resolved_profile_type = "student"
+            else:
+                return {
+                    "found": False,
+                    "has_personal_schedule": True,
+                    "needs_clarification": True,
+                    "role": user.role,
+                    "message": (
+                        "Your account is linked to both a Faculty teaching profile and a Student profile. "
+                        "Would you like me to check your teaching schedule or your student class schedule?"
+                    ),
+                }
+        elif has_fac:
+            if pref == "student":
+                return {
+                    "found": False,
+                    "has_personal_schedule": False,
+                    "needs_clarification": True,
+                    "role": user.role,
+                    "message": "Your account does not have a linked student enrollment; it only has a faculty teaching profile.",
+                }
+            resolved_profile_type = "faculty"
+        elif has_stu:
+            if pref in ("faculty", "teaching"):
+                return {
+                    "found": False,
+                    "has_personal_schedule": False,
+                    "needs_clarification": True,
+                    "role": user.role,
+                    "message": "Your account does not have a linked faculty teaching profile; it only has a student profile.",
+                }
+            resolved_profile_type = "student"
+        else:
+            role_label = "Super Admin" if user.role == "SUPER_ADMIN" else "Admin"
+            return {
+                "found": False,
+                "has_personal_schedule": False,
+                "needs_clarification": True,
+                "role": user.role,
+                "message": (
+                    f"I don't have a personal class schedule linked to your {role_label} account. "
+                    "Are you asking about a class you're teaching, or the next class for a particular section or faculty member?"
+                ),
+            }
+    else:
+        return {
+            "found": False,
+            "has_personal_schedule": False,
+            "role": user.role,
+            "message": "No personal class schedule is available for your role.",
+        }
+
+    # 2. Collect ALL active PUBLISHED TimetableVersion IDs (never a blind .first() across unrelated depts)
+    published_version_ids = [
+        v.id
+        for v in db.query(TimetableVersion.id)
+        .filter(TimetableVersion.status == "PUBLISHED")
+        .all()
+    ]
+    if not published_version_ids:
+        return {
+            "found": False,
+            "has_personal_schedule": True,
+            "role": user.role,
+            "resolved_profile_type": resolved_profile_type,
+            "message": "No published timetable is currently active in the database.",
+        }
+
+    # 3. Build strictly scoped TimetableEntry query for the resolved personal profile
+    query = (
+        db.query(TimetableEntry)
+        .join(TimeSlot, TimetableEntry.slot_id == TimeSlot.id)
+        .outerjoin(Timetable, TimetableEntry.timetable_id == Timetable.id)
+        .filter(
+            TimetableEntry.version_id.in_(published_version_ids),
+            TimetableEntry.status == "ACTIVE",
+            or_(TimetableEntry.timetable_id.is_(None), Timetable.status == "PUBLISHED"),
+        )
+    )
+
+    if resolved_profile_type == "faculty" and fac is not None:
+        query = query.filter(TimetableEntry.faculty_id == fac.id)
+    elif resolved_profile_type == "student" and stu is not None and stu.section_id is not None:
         query = query.filter(TimetableEntry.section_id == stu.section_id)
+        if stu.program_id is not None:
+            query = query.filter(or_(TimetableEntry.program_id.is_(None), TimetableEntry.program_id == stu.program_id))
+        if stu.semester_id is not None:
+            query = query.filter(or_(TimetableEntry.semester_id.is_(None), TimetableEntry.semester_id == stu.semester_id))
         if stu.batch_id:
             query = query.filter(or_(TimetableEntry.batch_id.is_(None), TimetableEntry.batch_id == stu.batch_id))
         else:
             query = query.filter(TimetableEntry.batch_id.is_(None))
+    else:
+        return {
+            "found": False,
+            "has_personal_schedule": False,
+            "role": user.role,
+            "message": "Unable to resolve a personal schedule scope for your account.",
+        }
 
     all_entries = query.all()
     if not all_entries:
         return {
             "found": False,
-            "message": "No scheduled classes found in the published timetable for your profile.",
+            "has_personal_schedule": True,
+            "role": user.role,
+            "resolved_profile_type": resolved_profile_type,
+            "message": "No scheduled classes were found in the active published timetable for your profile.",
         }
 
-    # Group entries by day code
+    # 4. Group entries by day code & sort chronologically
     day_entries_map: Dict[str, List[TimetableEntry]] = {}
     for entry in all_entries:
         slot = entry.slot
@@ -751,64 +865,73 @@ def get_next_class_data(
         code = DAY_NAME_TO_CODE.get(slot.day.upper(), slot.day.upper()[:3])
         day_entries_map.setdefault(code, []).append(entry)
 
-    # Sort each day's entries by start time
     for code in day_entries_map:
-        day_entries_map[code].sort(key=lambda e: e.slot.start_time if (e.slot and e.slot.start_time) else datetime.time.min)
+        day_entries_map[code].sort(
+            key=lambda e: e.slot.start_time if (e.slot and e.slot.start_time) else datetime.time.min
+        )
 
-    # 1. Check today's remaining classes (start_time > now_time)
-    today_code = now_dt.strftime("%a").upper()[:3]
-    if today_code in day_entries_map:
-        for entry in day_entries_map[today_code]:
-            slot = entry.slot
-            if slot and slot.start_time and slot.start_time > now_time:
-                c = entry.course
-                r = entry.room
-                sec = entry.section
-                fac_name = entry.faculty.user.name if (entry.faculty and entry.faculty.user) else "Faculty"
-                return {
-                    "found": True,
-                    "subject_code": c.course_code if c else "N/A",
-                    "subject_name": c.course_name if c else "N/A",
-                    "date": now_date.isoformat(),
-                    "weekday": now_dt.strftime("%A"),
-                    "start_time": slot.start_time.strftime("%H:%M"),
-                    "end_time": slot.end_time.strftime("%H:%M") if slot.end_time else "",
-                    "room": r.room_number if r else "N/A",
-                    "section": sec.section_name if sec else "N/A",
-                    "faculty": fac_name,
-                    "is_today": True,
-                    "source": "Official Published Timetable",
-                }
+    # 5. Load non-instructional dates (HOLIDAY / VACATION) over the next 7 days
+    end_scan_date = now_date + datetime.timedelta(days=7)
+    holiday_dates = {
+        cal.date
+        for cal in db.query(AcademicCalendar)
+        .filter(
+            AcademicCalendar.date >= now_date,
+            AcademicCalendar.date <= end_scan_date,
+            AcademicCalendar.event_type.in_(["HOLIDAY", "VACATION"]),
+        )
+        .all()
+        if cal.date is not None
+    }
 
-    # 2. Check subsequent days in chronological order (+1 to +7 days)
+    def _format_entry(entry: TimetableEntry, target_dt: datetime.datetime, is_today_flag: bool) -> Dict[str, Any]:
+        slot = entry.slot
+        c = entry.course
+        r = entry.room
+        sec = entry.section
+        fac_name = entry.faculty.user.name if (entry.faculty and entry.faculty.user) else "Faculty"
+        return {
+            "found": True,
+            "has_personal_schedule": True,
+            "role": user.role,
+            "resolved_profile_type": resolved_profile_type,
+            "subject_code": c.course_code if c else "N/A",
+            "subject_name": c.course_name if c else "N/A",
+            "date": target_dt.date().isoformat(),
+            "weekday": target_dt.strftime("%A"),
+            "start_time": slot.start_time.strftime("%H:%M") if (slot and slot.start_time) else "",
+            "end_time": slot.end_time.strftime("%H:%M") if (slot and slot.end_time) else "",
+            "room": r.room_number if r else "N/A",
+            "section": sec.section_name if sec else "N/A",
+            "faculty": fac_name,
+            "is_today": is_today_flag,
+            "source": "Official Published Timetable",
+        }
+
+    # 6. Check today's remaining classes (unless today is a holiday/vacation)
+    if now_date not in holiday_dates:
+        today_code = now_dt.strftime("%a").upper()[:3]
+        if today_code in day_entries_map:
+            for entry in day_entries_map[today_code]:
+                slot = entry.slot
+                if slot and slot.start_time and slot.start_time > now_time:
+                    return _format_entry(entry, now_dt, True)
+
+    # 7. Check subsequent days in chronological order (+1 to +7 days), skipping holidays
     for offset in range(1, 8):
         next_dt = now_dt + datetime.timedelta(days=offset)
+        if next_dt.date() in holiday_dates:
+            continue
         next_code = next_dt.strftime("%a").upper()[:3]
         if next_code in day_entries_map and day_entries_map[next_code]:
-            entry = day_entries_map[next_code][0]
-            slot = entry.slot
-            c = entry.course
-            r = entry.room
-            sec = entry.section
-            fac_name = entry.faculty.user.name if (entry.faculty and entry.faculty.user) else "Faculty"
-            return {
-                "found": True,
-                "subject_code": c.course_code if c else "N/A",
-                "subject_name": c.course_name if c else "N/A",
-                "date": next_dt.date().isoformat(),
-                "weekday": next_dt.strftime("%A"),
-                "start_time": slot.start_time.strftime("%H:%M") if (slot and slot.start_time) else "",
-                "end_time": slot.end_time.strftime("%H:%M") if (slot and slot.end_time) else "",
-                "room": r.room_number if r else "N/A",
-                "section": sec.section_name if sec else "N/A",
-                "faculty": fac_name,
-                "is_today": False,
-                "source": "Official Published Timetable",
-            }
+            return _format_entry(day_entries_map[next_code][0], next_dt, False)
 
     return {
         "found": False,
-        "message": "No upcoming classes found in the active published schedule.",
+        "has_personal_schedule": True,
+        "role": user.role,
+        "resolved_profile_type": resolved_profile_type,
+        "message": "No upcoming classes found in the active published schedule for the next 7 days.",
     }
 
 

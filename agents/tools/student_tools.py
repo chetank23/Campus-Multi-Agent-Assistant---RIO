@@ -204,11 +204,21 @@ def get_my_timetable_data(
     elif user.role == "FACULTY":
         from agents.tools.faculty_tools import get_faculty_schedule_data
         return get_faculty_schedule_data(db=db, user=user, day=day)
-    else:  # ADMIN
+    else:  # ADMIN / SUPER_ADMIN
+        from backend.models.academic import Faculty
+        fac = db.query(Faculty).filter(Faculty.user_id == user.id).first()
+        if fac:
+            from agents.tools.faculty_tools import get_faculty_schedule_data
+            return get_faculty_schedule_data(db=db, user=user, day=day)
+        stu = db.query(Student).filter(Student.user_id == user.id).first()
+        if stu and stu.section_id:
+            return get_student_timetable_data(db=db, user=user, day=day)
         return {
+            "has_personal_schedule": False,
+            "needs_clarification": True,
             "message": (
-                "As an Administrator, you do not have personal class enrollments or teaching assignments. "
-                "You can query timetables by department ('get_department_timetable') or by faculty member ('get_faculty_timetable')."
+                f"I don't have a personal class schedule linked to your {user.role.replace('_', ' ').title()} account. "
+                "Are you asking about a class you're teaching, or a specific department, section, or faculty timetable?"
             ),
             "entries": [],
         }
@@ -594,14 +604,22 @@ def get_first_class_tomorrow_data(
     user: User,
 ) -> Dict[str, Any]:
     """
-    Returns the first scheduled class tomorrow for the student or faculty.
+    Returns the first scheduled class tomorrow for the authenticated user's verified personal schedule.
     """
     tomorrow_day = (datetime.date.today() + datetime.timedelta(days=1)).strftime("%A").upper()
-    tt = get_student_timetable_data(db=db, user=user, day="TOMORROW")
+    tt = get_my_timetable_data(db=db, user=user, day="TOMORROW")
+    if tt.get("has_personal_schedule") is False:
+        return {
+            "day": tomorrow_day,
+            "has_class": False,
+            "has_personal_schedule": False,
+            "needs_clarification": tt.get("needs_clarification", False),
+            "message": tt.get("message", "No personal class schedule is linked to your account."),
+        }
     entries = tt.get("entries", [])
     if not entries:
         # Fallback to Monday if tomorrow has no class (e.g. weekend)
-        tt_mon = get_student_timetable_data(db=db, user=user, day="MONDAY")
+        tt_mon = get_my_timetable_data(db=db, user=user, day="MONDAY")
         entries_mon = tt_mon.get("entries", [])
         if entries_mon:
             return {

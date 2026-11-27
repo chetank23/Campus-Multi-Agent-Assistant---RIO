@@ -34,6 +34,7 @@ from backend.routes import (
     program,
     resources,
     rooms,
+    search,
     section,
     semester,
     settings,
@@ -124,6 +125,7 @@ app.include_router(curriculum.super_admin_router)
 app.include_router(curriculum.admin_curriculum_router)
 app.include_router(settings.router)
 app.include_router(tasks.router)
+app.include_router(search.router)
 
 from backend.realtime import timetable_sync
 app.include_router(timetable_sync.router)
