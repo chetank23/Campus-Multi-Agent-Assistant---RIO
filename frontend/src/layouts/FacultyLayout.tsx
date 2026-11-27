@@ -23,6 +23,7 @@ import {
   Boxes,
   ClipboardList,
   Bell,
+  CheckSquare,
   Sparkles,
   UserCheck,
   Search,
@@ -142,6 +143,12 @@ export const FacultyLayout: React.FC = () => {
       to: '/faculty/requests',
       label: 'Change Requests',
       icon: <ClipboardList size={18} />,
+      end: false,
+    },
+    {
+      to: '/faculty/tasks',
+      label: 'My Tasks',
+      icon: <CheckSquare size={18} />,
       end: false,
     },
     {

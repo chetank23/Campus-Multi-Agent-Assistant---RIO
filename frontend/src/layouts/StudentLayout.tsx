@@ -21,6 +21,7 @@ import {
   Briefcase,
   Megaphone,
   Bell,
+  CheckSquare,
   Search,
   Menu,
   X,
@@ -122,6 +123,12 @@ export const StudentLayout: React.FC = () => {
       to: '/student/announcements',
       label: 'Announcements',
       icon: <Megaphone size={18} />,
+      end: false,
+    },
+    {
+      to: '/student/tasks',
+      label: 'My Tasks',
+      icon: <CheckSquare size={18} />,
       end: false,
     },
     {
