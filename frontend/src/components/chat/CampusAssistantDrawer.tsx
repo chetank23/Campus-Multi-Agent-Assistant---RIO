@@ -67,6 +67,7 @@ export const CampusAssistantDrawer: React.FC = () => {
   const [showConvDropdown, setShowConvDropdown] = useState(false);
   const [streamingStatus, setStreamingStatus] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const activeRequestIdRef = useRef<string | null>(null);
 
   const [history, setHistory] = useState<ChatHistoryMessage[]>(() => [
     {
@@ -152,6 +153,9 @@ export const CampusAssistantDrawer: React.FC = () => {
     const textToSend = (msgText ?? inputMessage).trim();
     if (!textToSend || isLoading) return;
 
+    const requestId = nextMsgId('req');
+    activeRequestIdRef.current = requestId;
+
     const userMsg: ChatHistoryMessage = {
       id: nextMsgId('user'),
       sender: 'user',
@@ -161,23 +165,35 @@ export const CampusAssistantDrawer: React.FC = () => {
     };
 
     const assistantMsgId = nextMsgId('assistant');
-    const placeholderAssistantMsg: ChatHistoryMessage = {
-      id: assistantMsgId,
-      sender: 'assistant',
-      content: '',
-      timestamp: new Date(),
-      conversation_id: activeConversationId ?? undefined,
-      provider_badge: 'Deterministic Engine',
-    };
 
-    setHistory((prev) => [...prev, userMsg, placeholderAssistantMsg]);
+    setHistory((prev) => [...prev, userMsg]);
     setInputMessage('');
     setIsLoading(true);
-    setStreamingStatus('Consulting campus records...');
+    setStreamingStatus('Understanding your question...');
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
     let accumulatedText = '';
+    let hasReceivedTokens = false;
+
+    const upsertAssistantMessage = (patch: Partial<ChatHistoryMessage> & { content: string }) => {
+      setHistory((prev) => {
+        const exists = prev.some((m) => m.id === assistantMsgId);
+        if (exists) {
+          return prev.map((m) => (m.id === assistantMsgId ? { ...m, ...patch } : m));
+        }
+        return [
+          ...prev,
+          {
+            id: assistantMsgId,
+            sender: 'assistant',
+            timestamp: new Date(),
+            conversation_id: activeConversationId ?? undefined,
+            ...patch,
+          },
+        ];
+      });
+    };
 
     try {
       await streamChatMessage(
@@ -185,118 +201,96 @@ export const CampusAssistantDrawer: React.FC = () => {
         activeConversationId ?? undefined,
         {
           onStatus: (st) => {
+            if (activeRequestIdRef.current !== requestId || hasReceivedTokens) return;
             setStreamingStatus(st);
           },
           onToken: (tok) => {
+            if (activeRequestIdRef.current !== requestId) return;
+            if (!hasReceivedTokens) {
+              hasReceivedTokens = true;
+              setIsLoading(false);
+              setStreamingStatus(null);
+            }
             accumulatedText += tok;
-            setHistory((prev) =>
-              prev.map((m) =>
-                m.id === assistantMsgId
-                  ? { ...m, content: accumulatedText }
-                  : m
-              )
-            );
+            upsertAssistantMessage({ content: accumulatedText });
           },
           onDone: (data) => {
+            if (activeRequestIdRef.current !== requestId) return;
+            setIsLoading(false);
+            setStreamingStatus(null);
             if (data.conversation_id && data.conversation_id !== activeConversationId) {
               setActiveConversationId(data.conversation_id);
               const snippet = textToSend.slice(0, 30) + (textToSend.length > 30 ? '...' : '');
               setActiveTitle(snippet);
               loadConversations();
             }
-            setHistory((prev) =>
-              prev.map((m) =>
-                m.id === assistantMsgId
-                  ? {
-                      ...m,
-                      content: data.reply || accumulatedText || 'Query processed.',
-                      intent: data.intent,
-                      sources: data.sources,
-                      error: data.error,
-                      proposal: data.proposal,
-                      action_type: data.action_type,
-                      conversation_id: data.conversation_id,
-                      nav_links: data.nav_links,
-                      provider_badge: data.provider_badge,
-                      outcome_state: data.outcome_state,
-                    }
-                  : m
-              )
-            );
+            upsertAssistantMessage({
+              content: data.reply || accumulatedText || 'Query processed.',
+              intent: data.intent,
+              sources: data.sources,
+              error: data.error,
+              proposal: data.proposal,
+              action_type: data.action_type,
+              conversation_id: data.conversation_id,
+              nav_links: data.nav_links,
+              provider_badge: data.provider_badge,
+              outcome_state: data.outcome_state,
+            });
           },
           onError: (errMsg) => {
-            setHistory((prev) =>
-              prev.map((m) =>
-                m.id === assistantMsgId
-                  ? {
-                      ...m,
-                      content: accumulatedText ? accumulatedText + `\n\n[Error: ${errMsg}]` : `Error: ${errMsg}`,
-                      error: errMsg,
-                      provider_badge: 'System Notice',
-                    }
-                  : m
-              )
-            );
+            if (activeRequestIdRef.current !== requestId) return;
+            setIsLoading(false);
+            setStreamingStatus(null);
+            upsertAssistantMessage({
+              content: accumulatedText ? accumulatedText + `\n\n[Error: ${errMsg}]` : `Error: ${errMsg}`,
+              error: errMsg,
+              provider_badge: 'System Notice',
+            });
           },
         },
         controller.signal
       );
     } catch {
+      if (activeRequestIdRef.current !== requestId) return;
       if (controller.signal.aborted) {
-        setHistory((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsgId
-              ? {
-                  ...m,
-                  content: accumulatedText ? accumulatedText + ' (Cancelled by user)' : 'Request cancelled by user.',
-                  provider_badge: 'System Notice',
-                }
-              : m
-          )
-        );
+        upsertAssistantMessage({
+          content: accumulatedText ? accumulatedText + ' (Cancelled by user)' : 'Request cancelled by user.',
+          provider_badge: 'System Notice',
+        });
       } else {
         // Fallback to synchronous sendChatMessage
         try {
           const res = await sendChatMessage(textToSend, activeConversationId ?? undefined);
-          setHistory((prev) =>
-            prev.map((m) =>
-              m.id === assistantMsgId
-                ? {
-                    ...m,
-                    content: res.reply,
-                    intent: res.intent,
-                    sources: res.sources,
-                    error: res.error,
-                    proposal: res.proposal,
-                    action_type: res.action_type,
-                    conversation_id: res.conversation_id,
-                    nav_links: res.nav_links,
-                    provider_badge: res.provider_badge,
-                    outcome_state: res.outcome_state,
-                  }
-                : m
-            )
-          );
+          if (activeRequestIdRef.current !== requestId) return;
+          upsertAssistantMessage({
+            content: res.reply,
+            intent: res.intent,
+            sources: res.sources,
+            error: res.error,
+            proposal: res.proposal,
+            action_type: res.action_type,
+            conversation_id: res.conversation_id,
+            nav_links: res.nav_links,
+            provider_badge: res.provider_badge,
+            outcome_state: res.outcome_state,
+          });
         } catch (syncErr: unknown) {
+          if (activeRequestIdRef.current !== requestId) return;
           const cleanErr = syncErr instanceof Error ? syncErr.message : String(syncErr);
-          setHistory((prev) =>
-            prev.map((m) =>
-              m.id === assistantMsgId
-                ? {
-                    ...m,
-                    content: `Error: ${cleanErr}`,
-                    error: cleanErr,
-                    provider_badge: 'System Notice',
-                  }
-                : m
-            )
-          );
+          upsertAssistantMessage({
+            content: `Error: ${cleanErr}`,
+            error: cleanErr,
+            provider_badge: 'System Notice',
+          });
         }
       }
     } finally {
-      setIsLoading(false);
-      setStreamingStatus(null);
-      abortControllerRef.current = null;
+      if (activeRequestIdRef.current === requestId) {
+        setIsLoading(false);
+        setStreamingStatus(null);
+        abortControllerRef.current = null;
+        activeRequestIdRef.current = null;
+      }
     }
   };
 
@@ -402,26 +396,225 @@ export const CampusAssistantDrawer: React.FC = () => {
     return <ArrowRight size={12} />;
   };
 
-  // Safe formatting without raw markdown asterisks or headings
-  const renderCleanContent = (text: string) => {
-    let clean = text.replace(/^\s*#{1,6}\s+/gm, '');
-    clean = clean.replace(/^\s*\*\s+/gm, '• ');
+  // Render inline markdown (**bold**, *italic*, and `code`)
+  const renderInlineMarkdown = (line: string, keyPrefix: string) => {
+    const parts = line.split(/(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`]+`)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+        return (
+          <strong key={`${keyPrefix}-b-${i}`} className="font-semibold text-slate-900">
+            {part.slice(2, -2)}
+          </strong>
+        );
+      }
+      if (part.startsWith('*') && part.endsWith('*') && part.length > 2 && !part.startsWith('**')) {
+        return (
+          <em key={`${keyPrefix}-i-${i}`} className="italic text-slate-800">
+            {part.slice(1, -1)}
+          </em>
+        );
+      }
+      if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
+        return (
+          <code
+            key={`${keyPrefix}-c-${i}`}
+            className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 font-mono text-[12px]"
+          >
+            {part.slice(1, -1)}
+          </code>
+        );
+      }
+      return <React.Fragment key={`${keyPrefix}-t-${i}`}>{part}</React.Fragment>;
+    });
+  };
 
-    const parts = clean.split(/(\*\*[^*]+\*\*)/g);
-    return (
-      <>
-        {parts.map((part, i) => {
-          if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
-            return (
-              <strong key={i} className="font-semibold text-slate-900">
-                {part.slice(2, -2)}
-              </strong>
-            );
-          }
-          return <span key={i}>{part}</span>;
-        })}
-      </>
-    );
+  // Rich Markdown rendering supporting headings, paragraphs, bullet/numbered lists, blockquotes, code blocks, and tables
+  const renderCleanContent = (text: string) => {
+    const lines = text.split('\n');
+    const blocks: React.ReactNode[] = [];
+    let idx = 0;
+
+    while (idx < lines.length) {
+      const line = lines[idx];
+      const trimmed = line.trim();
+
+      // Fenced code blocks (```lang ... ```)
+      if (trimmed.startsWith('```')) {
+        const lang = trimmed.slice(3).trim();
+        idx += 1;
+        const codeLines: string[] = [];
+        while (idx < lines.length && !lines[idx].trim().startsWith('```')) {
+          codeLines.push(lines[idx]);
+          idx += 1;
+        }
+        if (idx < lines.length && lines[idx].trim().startsWith('```')) {
+          idx += 1;
+        }
+        blocks.push(
+          <div key={`code-${idx}`} className="my-2 rounded-lg overflow-hidden border border-slate-200 bg-slate-900 text-slate-100">
+            {lang && (
+              <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400 bg-slate-800 border-b border-slate-700">
+                {lang}
+              </div>
+            )}
+            <pre className="p-3 text-xs font-mono overflow-x-auto leading-relaxed">
+              <code>{codeLines.join('\n')}</code>
+            </pre>
+          </div>
+        );
+        continue;
+      }
+
+      // Markdown headings (#, ##, ###, etc.)
+      const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const headingText = headingMatch[2];
+        const headingClass =
+          level === 1
+            ? 'text-[15px] font-bold text-slate-900 mt-2.5 mb-1'
+            : level === 2
+              ? 'text-[14px] font-bold text-slate-900 mt-2 mb-1'
+              : 'text-[13.5px] font-semibold text-slate-800 mt-1.5 mb-0.5';
+        blocks.push(
+          <div key={`h-${idx}`} className={headingClass}>
+            {renderInlineMarkdown(headingText, `h-${idx}`)}
+          </div>
+        );
+        idx += 1;
+        continue;
+      }
+
+      // Blockquotes (> ...)
+      if (trimmed.startsWith('>')) {
+        const quoteLines: string[] = [];
+        while (idx < lines.length && lines[idx].trim().startsWith('>')) {
+          quoteLines.push(lines[idx].trim().replace(/^>\s?/, ''));
+          idx += 1;
+        }
+        blocks.push(
+          <blockquote
+            key={`bq-${idx}`}
+            className="border-l-3 border-blue-400 bg-blue-50/50 pl-3 py-1.5 my-1.5 text-slate-700 rounded-r-md space-y-1"
+          >
+            {quoteLines.map((ql, qIdx) => (
+              <p key={qIdx} className="leading-relaxed">
+                {renderInlineMarkdown(ql, `bq-${idx}-${qIdx}`)}
+              </p>
+            ))}
+          </blockquote>
+        );
+        continue;
+      }
+
+      // Horizontal rule (--- or ***)
+      if (/^(?:---+|\*\*\*+)$/.test(trimmed)) {
+        blocks.push(<hr key={`hr-${idx}`} className="border-slate-200 my-2" />);
+        idx += 1;
+        continue;
+      }
+
+      // Detect valid Markdown table: header row + separator row (| --- | --- |)
+      if (
+        trimmed.startsWith('|') &&
+        trimmed.endsWith('|') &&
+        idx + 1 < lines.length &&
+        /^\|[\s:|-]+\|$/.test(lines[idx + 1].trim())
+      ) {
+        const parseCells = (row: string) =>
+          row
+            .trim()
+            .slice(1, -1)
+            .split('|')
+            .map((c) => c.trim());
+
+        const headers = parseCells(trimmed);
+        idx += 2; // skip header and separator
+        const rows: string[][] = [];
+        while (idx < lines.length && lines[idx].trim().startsWith('|') && lines[idx].trim().endsWith('|')) {
+          rows.push(parseCells(lines[idx].trim()));
+          idx += 1;
+        }
+
+        blocks.push(
+          <div key={`tbl-${idx}`} className="overflow-x-auto my-2 rounded-lg border border-slate-200">
+            <table className="min-w-full text-left text-xs border-collapse">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  {headers.map((h, hIdx) => (
+                    <th key={hIdx} className="px-2.5 py-1.5 font-semibold text-slate-700 whitespace-nowrap">
+                      {renderInlineMarkdown(h, `th-${idx}-${hIdx}`)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((r, rIdx) => (
+                  <tr key={rIdx} className="hover:bg-slate-50/70">
+                    {headers.map((_, cIdx) => (
+                      <td key={cIdx} className="px-2.5 py-1.5 text-slate-700">
+                        {renderInlineMarkdown(r[cIdx] ?? '', `td-${idx}-${rIdx}-${cIdx}`)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+        continue;
+      }
+
+      // Bullet list items (- or * or •)
+      if (/^\s*[-*•]\s+/.test(line)) {
+        const listItems: string[] = [];
+        while (idx < lines.length && /^\s*[-*•]\s+/.test(lines[idx])) {
+          listItems.push(lines[idx].replace(/^\s*[-*•]\s+/, ''));
+          idx += 1;
+        }
+        blocks.push(
+          <ul key={`ul-${idx}`} className="list-disc pl-5 space-y-1 my-1.5">
+            {listItems.map((item, liIdx) => (
+              <li key={liIdx}>{renderInlineMarkdown(item, `li-${idx}-${liIdx}`)}</li>
+            ))}
+          </ul>
+        );
+        continue;
+      }
+
+      // Numbered list items (1. , 2. , etc.)
+      if (/^\s*\d+\.\s+/.test(line)) {
+        const numItems: string[] = [];
+        while (idx < lines.length && /^\s*\d+\.\s+/.test(lines[idx])) {
+          numItems.push(lines[idx].replace(/^\s*\d+\.\s+/, ''));
+          idx += 1;
+        }
+        blocks.push(
+          <ol key={`ol-${idx}`} className="list-decimal pl-5 space-y-1 my-1.5">
+            {numItems.map((item, niIdx) => (
+              <li key={niIdx}>{renderInlineMarkdown(item, `oli-${idx}-${niIdx}`)}</li>
+            ))}
+          </ol>
+        );
+        continue;
+      }
+
+      // Empty line -> spacing
+      if (!trimmed) {
+        idx += 1;
+        continue;
+      }
+
+      // Regular paragraph line
+      blocks.push(
+        <p key={`p-${idx}`} className="leading-relaxed">
+          {renderInlineMarkdown(line, `p-${idx}`)}
+        </p>
+      );
+      idx += 1;
+    }
+
+    return <div className="space-y-2">{blocks}</div>;
   };
 
   const isErrorMessage = (msg: ChatHistoryMessage) => {
@@ -624,11 +817,6 @@ export const CampusAssistantDrawer: React.FC = () => {
                               </span>
                             )}
                           </div>
-                          {msg.outcome_state && (
-                            <span className="text-[10px] font-mono text-slate-400">
-                              {msg.outcome_state}
-                            </span>
-                          )}
                         </div>
 
                         {isErr && (
@@ -757,24 +945,30 @@ export const CampusAssistantDrawer: React.FC = () => {
               })}
 
               {isLoading && (
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+                <div
+                  className="flex items-start gap-3"
+                  role="status"
+                  aria-live="polite"
+                  aria-label="RIO Assistant is thinking"
+                >
+                  <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
                     <Bot size={18} />
                   </div>
-                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs flex-1 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                      <span className="flex gap-1">
+                  <div className="bg-white border border-blue-200/80 rounded-2xl px-4 py-3 shadow-2xs flex-1 max-w-[85%] flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 text-[13px] font-medium text-slate-700 min-w-0">
+                      <span className="flex gap-1 shrink-0" aria-hidden="true">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '0ms' }} />
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '150ms' }} />
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '300ms' }} />
                       </span>
-                      <span>{streamingStatus || 'Consulting verified campus records...'}</span>
+                      <span className="truncate">{streamingStatus || 'Understanding your question...'}</span>
                     </div>
                     <button
                       type="button"
                       onClick={handleCancelStreaming}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 border border-slate-200 transition-colors cursor-pointer"
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 border border-slate-200 transition-colors cursor-pointer shrink-0"
                       title="Cancel streaming request"
+                      aria-label="Cancel request"
                     >
                       <X size={12} />
                       <span>Cancel</span>

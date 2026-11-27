@@ -12,12 +12,20 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from backend.models.academic import Department, Faculty
+from backend.models.academic import (
+    AcademicYear,
+    Department,
+    Faculty,
+    Program,
+    Section,
+    Semester,
+    Student,
+)
 from backend.models.courses import Course, CourseAssignment
 from backend.models.identity import User
 from backend.models.resources import Resource, ResourceBooking
 from backend.models.space_time import AcademicCalendar, Building, Room, TimeSlot
-from backend.models.timetable import TimetableEntry, TimetableVersion
+from backend.models.timetable import Timetable, TimetableEntry, TimetableVersion
 from backend.models.workflow import AuditLog, Notification
 
 
@@ -408,24 +416,427 @@ def get_campus_room_inventory_data(
     }
 
 
+def _norm_token(value: Optional[str]) -> str:
+    """Normalize text for flexible matching without hardcoding entity names."""
+    if not value:
+        return ""
+    s = value.lower().strip()
+    s = s.replace("&", " and ")
+    return "".join(ch for ch in s if ch.isalnum())
+
+
+def _dept_matches(filter_name: str, dept_name: Optional[str], dept_code: Optional[str]) -> bool:
+    """Match a requested department string against real DB department name or code."""
+    q_norm = _norm_token(filter_name)
+    if not q_norm:
+        return True
+    name_norm = _norm_token(dept_name)
+    code_norm = _norm_token(dept_code)
+    # Also handle acronym / 'and' stripped variants (e.g. 'aiandds' vs 'aids')
+    q_compact = q_norm.replace("and", "")
+    name_compact = name_norm.replace("and", "")
+    return (
+        q_norm in name_norm
+        or name_norm in q_norm
+        or q_norm in code_norm
+        or code_norm in q_norm
+        or (bool(q_compact) and (q_compact in name_compact or name_compact in q_compact))
+    )
+
+
+def _get_authorized_section_ids_for_user(db: Session, user: User) -> Optional[set[int]]:
+    """
+    Returns the set of section IDs a user is authorized to inspect, or None for campus-wide access.
+    """
+    role = (user.role or "").upper()
+    if role == "SUPER_ADMIN":
+        return None
+    if role == "ADMIN":
+        if user.department_id is not None:
+            return {
+                s_id
+                for (s_id,) in db.query(Section.id).filter(Section.department_id == user.department_id).all()
+            }
+        return None
+    if role == "STUDENT":
+        stu = db.query(Student).filter(Student.user_id == user.id).first()
+        return {stu.section_id} if (stu and stu.section_id) else set()
+    if role == "FACULTY":
+        fac = db.query(Faculty).filter(Faculty.user_id == user.id).first()
+        sec_ids: set[int] = set()
+        if user.department_id is not None:
+            sec_ids.update(
+                s_id
+                for (s_id,) in db.query(Section.id).filter(Section.department_id == user.department_id).all()
+            )
+        if fac:
+            sec_ids.update(
+                s_id
+                for (s_id,) in db.query(Section.id).filter(Section.class_teacher_id == fac.id).all()
+            )
+            sec_ids.update(
+                s_id
+                for (s_id,) in db.query(CourseAssignment.section_id)
+                .filter(CourseAssignment.faculty_id == fac.id, CourseAssignment.section_id.isnot(None))
+                .all()
+            )
+            sec_ids.update(
+                s_id
+                for (s_id,) in db.query(TimetableEntry.section_id)
+                .filter(
+                    TimetableEntry.faculty_id == fac.id,
+                    TimetableEntry.section_id.isnot(None),
+                    TimetableEntry.status == "ACTIVE",
+                )
+                .all()
+            )
+        return sec_ids
+    return set()
+
+
+def _classify_unpublished_state(latest_version: Optional[TimetableVersion], is_admin: bool) -> Dict[str, str]:
+    """
+    Maps the latest non-published TimetableVersion to a canonical unpublished lifecycle state.
+    Non-admins never see internal pre-publication draft states.
+    """
+    if not is_admin:
+        return {
+            "publication_state": "UNPUBLISHED",
+            "state_label": "No published timetable is currently active",
+        }
+    if latest_version is None:
+        return {
+            "publication_state": "NO_TIMETABLE_GENERATED",
+            "state_label": "No timetable generated",
+        }
+    st = (latest_version.status or "DRAFT").upper()
+    if st in ("DRAFT", "GENERATED", "REVIEWED"):
+        return {
+            "publication_state": "GENERATED_NOT_VALIDATED",
+            "state_label": "Timetable generated but not validated",
+        }
+    if st == "VALIDATED":
+        return {
+            "publication_state": "VALIDATED_NOT_APPROVED",
+            "state_label": "Timetable validated but not approved",
+        }
+    if st in ("APPROVED", "FINALIZED"):
+        return {
+            "publication_state": "APPROVED_NOT_PUBLISHED",
+            "state_label": "Timetable approved but not published",
+        }
+    if st == "RECALLED":
+        return {
+            "publication_state": "RECALLED",
+            "state_label": "Timetable recalled",
+        }
+    return {
+        "publication_state": st,
+        "state_label": f"Timetable in '{st}' state (not published)",
+    }
+
+
+def get_published_timetables_data(
+    db: Session,
+    user: User,
+    department_name: Optional[str] = None,
+    section_name: Optional[str] = None,
+    semester_number: Optional[int] = None,
+    include_unpublished: bool = False,
+) -> Dict[str, Any]:
+    """
+    Authoritative, read-only retrieval of currently active canonical PUBLISHED timetables
+    and (optionally) expected academic scopes that are not yet published.
+    Strictly enforces role-based visibility and excludes recalled, archived, and draft records
+    from the published list.
+    """
+    role = (user.role or "").upper()
+    is_admin = role in ("ADMIN", "SUPER_ADMIN")
+    auth_section_ids = _get_authorized_section_ids_for_user(db, user)
+
+    # Preload lookup maps for fast, accurate relational resolution
+    depts_by_id = {d.id: d for d in db.query(Department).all()}
+    progs_by_id = {p.id: p for p in db.query(Program).all()}
+    sems_by_id = {s.id: s for s in db.query(Semester).all()}
+    ays_by_id = {a.id: a for a in db.query(AcademicYear).all()}
+    secs_by_id = {s.id: s for s in db.query(Section).all()}
+    users_by_id = {u.id: u for u in db.query(User).all()}
+
+    pub_versions = (
+        db.query(TimetableVersion)
+        .filter(TimetableVersion.status == "PUBLISHED")
+        .order_by(TimetableVersion.published_at.desc(), TimetableVersion.id.desc())
+        .all()
+    )
+
+    timetables_out: List[Dict[str, Any]] = []
+    published_scope_keys: set[tuple] = set()
+    published_section_ids: set[int] = set()
+
+    for v in pub_versions:
+        active_entries = (
+            db.query(TimetableEntry)
+            .filter(
+                TimetableEntry.version_id == v.id,
+                TimetableEntry.status == "ACTIVE",
+            )
+            .all()
+        )
+        # Filter entries to authorized sections when user is scoped
+        if auth_section_ids is not None:
+            visible_entries = [e for e in active_entries if e.section_id in auth_section_ids]
+            # Also allow admin/faculty if version's department_id matches their department_id
+            if not visible_entries and role in ("ADMIN", "FACULTY") and user.department_id is not None:
+                if v.department_id != user.department_id:
+                    continue
+            elif not visible_entries and role == "STUDENT":
+                continue
+            elif not visible_entries and auth_section_ids is not None:
+                # Check if version itself belongs to an authorized department
+                if not (v.department_id is not None and user.department_id == v.department_id):
+                    continue
+        else:
+            visible_entries = active_entries
+
+        entry_sec_ids = sorted({e.section_id for e in visible_entries if e.section_id is not None})
+        entry_sec_objs = [secs_by_id[sid] for sid in entry_sec_ids if sid in secs_by_id]
+
+        # Resolve department & program from version or its sections/entries
+        dept_id = v.department_id
+        if dept_id is None and entry_sec_objs:
+            dept_id = entry_sec_objs[0].department_id
+        if dept_id is None and visible_entries:
+            dept_id = visible_entries[0].department_id
+        dept = depts_by_id.get(dept_id) if dept_id is not None else None
+
+        prog_id = v.program_id
+        if prog_id is None and entry_sec_objs:
+            prog_id = entry_sec_objs[0].program_id
+        if prog_id is None and visible_entries:
+            prog_id = visible_entries[0].program_id
+        prog = progs_by_id.get(prog_id) if prog_id is not None else None
+
+        sem_id = v.semester_id
+        if sem_id is None and entry_sec_objs:
+            sem_id = entry_sec_objs[0].semester_id
+        if sem_id is None and visible_entries:
+            sem_id = visible_entries[0].semester_id
+        sem = sems_by_id.get(sem_id) if sem_id is not None else None
+
+        ay = ays_by_id.get(v.academic_year_id) if v.academic_year_id is not None else None
+        if not ay and sem and sem.academic_year_id in ays_by_id:
+            ay = ays_by_id.get(sem.academic_year_id)
+
+        sec_names = [s.section_name for s in entry_sec_objs if s.section_name]
+
+        # Apply optional filters
+        if department_name:
+            if not dept or not _dept_matches(department_name, dept.name, dept.department_code):
+                continue
+        if section_name:
+            sec_q = _norm_token(section_name)
+            if not any(_norm_token(sn) == sec_q or sec_q in _norm_token(sn) for sn in sec_names):
+                continue
+        if semester_number is not None:
+            if not sem or sem.semester_number != semester_number:
+                continue
+
+        pub_user_id = v.last_saved_by or v.approved_by or v.created_by
+        pub_user = users_by_id.get(pub_user_id) if pub_user_id else None
+
+        published_section_ids.update(entry_sec_ids)
+        published_scope_keys.add((v.academic_year_id, dept_id, prog_id, sem_id))
+
+        timetables_out.append({
+            "timetable_version_id": v.id,
+            "version_number": v.version_number,
+            "status": "PUBLISHED",
+            "department_id": dept_id,
+            "department_name": dept.name if dept else None,
+            "department_code": dept.department_code if dept else None,
+            "program_id": prog_id,
+            "program_name": prog.program_name if prog else None,
+            "semester": sem.semester_number if sem else None,
+            "semester_id": sem_id,
+            "section_ids": entry_sec_ids,
+            "section_names": sec_names,
+            "academic_year": ay.name if ay else None,
+            "academic_term": f"Semester {sem.semester_number}" if (sem and sem.semester_number) else None,
+            "total_entries": len(visible_entries),
+            "published_at": v.published_at.strftime("%Y-%m-%d %H:%M") if v.published_at else None,
+            "published_by": pub_user.name if pub_user else None,
+        })
+
+    # Fallback: check canonical Timetable rows with status == 'PUBLISHED' that might not have TimetableVersion linked
+    # (e.g. legacy canonical records)
+    canonical_pubs = db.query(Timetable).filter(Timetable.status == "PUBLISHED").all()
+    for c_tt in canonical_pubs:
+        if auth_section_ids is not None and c_tt.section_id not in auth_section_ids:
+            continue
+        if c_tt.section_id in published_section_ids:
+            continue
+        sec = secs_by_id.get(c_tt.section_id)
+        if not sec:
+            continue
+        dept = depts_by_id.get(sec.department_id) if sec.department_id else None
+        prog = progs_by_id.get(sec.program_id) if sec.program_id else None
+        sem = sems_by_id.get(c_tt.semester_id) if c_tt.semester_id else None
+        ay = ays_by_id.get(c_tt.academic_year_id) if c_tt.academic_year_id else None
+
+        if department_name and (not dept or not _dept_matches(department_name, dept.name, dept.department_code)):
+            continue
+        if section_name and _norm_token(section_name) not in _norm_token(sec.section_name):
+            continue
+        if semester_number is not None and (not sem or sem.semester_number != semester_number):
+            continue
+
+        entries_cnt = (
+            db.query(TimetableEntry)
+            .filter(TimetableEntry.timetable_id == c_tt.id, TimetableEntry.status == "ACTIVE")
+            .count()
+        )
+        pub_user = users_by_id.get(c_tt.created_by) if c_tt.created_by else None
+        published_section_ids.add(sec.id)
+        published_scope_keys.add((c_tt.academic_year_id, sec.department_id, sec.program_id, c_tt.semester_id))
+
+        timetables_out.append({
+            "timetable_version_id": None,
+            "canonical_timetable_id": c_tt.id,
+            "version_number": None,
+            "status": "PUBLISHED",
+            "department_id": sec.department_id,
+            "department_name": dept.name if dept else None,
+            "department_code": dept.department_code if dept else None,
+            "program_id": sec.program_id,
+            "program_name": prog.program_name if prog else None,
+            "semester": sem.semester_number if sem else None,
+            "semester_id": c_tt.semester_id,
+            "section_ids": [sec.id],
+            "section_names": [sec.section_name] if sec.section_name else [],
+            "academic_year": ay.name if ay else None,
+            "academic_term": f"Semester {sem.semester_number}" if (sem and sem.semester_number) else None,
+            "total_entries": entries_cnt,
+            "published_at": c_tt.published_at.strftime("%Y-%m-%d %H:%M") if c_tt.published_at else None,
+            "published_by": pub_user.name if pub_user else None,
+        })
+
+    published_departments = sorted({t["department_name"] for t in timetables_out if t.get("department_name")})
+    published_sections = sorted({sn for t in timetables_out for sn in (t.get("section_names") or [])})
+
+    result: Dict[str, Any] = {
+        "success": True,
+        "total": len(timetables_out),
+        "timetables": timetables_out,
+        "published_departments": published_departments,
+        "published_sections": published_sections,
+        "source": "Canonical Timetable Publication Registry",
+    }
+
+    if include_unpublished:
+        # Inspect expected academic scopes from configured Sections
+        expected_sections = db.query(Section).all()
+        non_pub_versions = (
+            db.query(TimetableVersion)
+            .filter(TimetableVersion.status != "PUBLISHED")
+            .order_by(TimetableVersion.id.desc())
+            .all()
+        )
+
+        # Group expected sections by (department_id, program_id, semester_id)
+        scopes_map: Dict[tuple, List[Section]] = {}
+        for sec in expected_sections:
+            if auth_section_ids is not None and sec.id not in auth_section_ids:
+                continue
+            dept = depts_by_id.get(sec.department_id) if sec.department_id else None
+            sem = sems_by_id.get(sec.semester_id) if sec.semester_id else None
+            if department_name and (not dept or not _dept_matches(department_name, dept.name, dept.department_code)):
+                continue
+            if section_name and _norm_token(section_name) not in _norm_token(sec.section_name):
+                continue
+            if semester_number is not None and (not sem or sem.semester_number != semester_number):
+                continue
+            key = (sec.department_id, sec.program_id, sec.semester_id)
+            scopes_map.setdefault(key, []).append(sec)
+
+        unpublished_scopes: List[Dict[str, Any]] = []
+        for (d_id, p_id, sm_id), sec_list in scopes_map.items():
+            unpub_secs = [s for s in sec_list if s.id not in published_section_ids]
+            if not unpub_secs:
+                continue
+
+            dept = depts_by_id.get(d_id) if d_id else None
+            prog = progs_by_id.get(p_id) if p_id else None
+            sem = sems_by_id.get(sm_id) if sm_id else None
+            ay = ays_by_id.get(sem.academic_year_id) if (sem and sem.academic_year_id) else None
+
+            # Find latest non-published version matching this scope
+            matching_v: Optional[TimetableVersion] = None
+            for nv in non_pub_versions:
+                if nv.status == "ARCHIVED":
+                    continue
+                if nv.department_id == d_id and (nv.semester_id == sm_id or nv.semester_id is None):
+                    if nv.program_id is None or nv.program_id == p_id:
+                        matching_v = nv
+                        break
+
+            state_info = _classify_unpublished_state(matching_v, is_admin=is_admin)
+            unpublished_scopes.append({
+                "department_id": d_id,
+                "department_name": dept.name if dept else None,
+                "department_code": dept.department_code if dept else None,
+                "program_id": p_id,
+                "program_name": prog.program_name if prog else None,
+                "semester": sem.semester_number if sem else None,
+                "academic_year": ay.name if ay else None,
+                "section_ids": [s.id for s in unpub_secs],
+                "section_names": [s.section_name for s in unpub_secs if s.section_name],
+                "publication_state": state_info["publication_state"],
+                "state_label": state_info["state_label"],
+                "latest_version_id": matching_v.id if (is_admin and matching_v) else None,
+                "latest_version_status": matching_v.status if (is_admin and matching_v) else None,
+            })
+
+        result["unpublished_scopes"] = unpublished_scopes
+        result["total_unpublished"] = len(unpublished_scopes)
+
+    return result
+
+
 def get_published_timetable_status_data(
     db: Session,
     user: User,
+    version_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
-    Retrieves the status of published timetable versions.
-    - Admin: can see all versions, draft/published statuses, total entries.
-    - Faculty/Student: only sees the active PUBLISHED timetable version. Draft versions remain confidential.
+    Retrieves the governance/lifecycle status of timetable versions (or a specific version_id).
+    - Admin: can see all versions (or the requested version_id), draft/published statuses, total entries, and resolved department/section info.
+    - Faculty/Student: only sees active PUBLISHED timetable versions in their authorized scope.
     """
+    pub_summary = get_published_timetables_data(db=db, user=user, include_unpublished=False)
     if user.role in ("ADMIN", "SUPER_ADMIN"):
-        versions = db.query(TimetableVersion).order_by(TimetableVersion.id.desc()).all()
+        q = db.query(TimetableVersion)
+        if version_id is not None:
+            q = q.filter(TimetableVersion.id == version_id)
+        versions = q.order_by(TimetableVersion.id.desc()).all()
+        if version_id is not None and not versions:
+            return {
+                "role": user.role,
+                "is_admin": True,
+                "found": False,
+                "version_id": version_id,
+                "message": f"Timetable version #{version_id} was not found.",
+            }
+        depts_by_id = {d.id: d for d in db.query(Department).all()}
         version_list = []
         for v in versions:
             entries_count = db.query(TimetableEntry).filter(TimetableEntry.version_id == v.id).count()
+            dept = depts_by_id.get(v.department_id) if v.department_id else None
             version_list.append({
                 "version_id": v.id,
                 "version_number": v.version_number,
                 "status": v.status,
+                "department_id": v.department_id,
+                "department_name": dept.name if dept else None,
                 "academic_year": v.academic_year.name if v.academic_year else "N/A",
                 "reason": v.reason,
                 "created_at": v.created_at.strftime("%Y-%m-%d %H:%M") if v.created_at else None,
@@ -436,34 +847,40 @@ def get_published_timetable_status_data(
         return {
             "role": user.role,
             "is_admin": True,
+            "requested_version_id": version_id,
             "active_published_version": active_pub,
+            "published_timetables": pub_summary["timetables"],
+            "published_departments": pub_summary["published_departments"],
+            "published_sections": pub_summary["published_sections"],
             "total_versions": len(version_list),
             "versions": version_list,
         }
     else:
-        # Non-admin: strictly published version only
-        pub_v = (
-            db.query(TimetableVersion)
-            .filter(TimetableVersion.status == "PUBLISHED")
-            .order_by(TimetableVersion.published_at.desc(), TimetableVersion.id.desc())
-            .first()
-        )
-        if not pub_v:
+        timetables = pub_summary["timetables"]
+        if version_id is not None:
+            timetables = [t for t in timetables if t.get("timetable_version_id") == version_id]
+        if not timetables:
             return {
                 "role": user.role,
                 "has_published_timetable": False,
-                "message": "No published timetable is currently active for this semester.",
+                "timetables": [],
+                "message": "No published timetable is currently active for your scope.",
             }
 
-        entries_count = db.query(TimetableEntry).filter(TimetableEntry.version_id == pub_v.id).count()
+        first_tt = timetables[0]
         return {
             "role": user.role,
             "has_published_timetable": True,
-            "version_number": pub_v.version_number,
-            "academic_year": pub_v.academic_year.name if pub_v.academic_year else "N/A",
-            "published_at": pub_v.published_at.strftime("%Y-%m-%d") if pub_v.published_at else None,
+            "version_number": first_tt.get("version_number"),
+            "department_name": first_tt.get("department_name"),
+            "section_names": first_tt.get("section_names"),
+            "academic_year": first_tt.get("academic_year"),
+            "published_at": first_tt.get("published_at"),
             "status": "PUBLISHED",
-            "total_active_entries": entries_count,
+            "total_active_entries": first_tt.get("total_entries", 0),
+            "timetables": timetables,
+            "published_departments": pub_summary["published_departments"],
+            "published_sections": pub_summary["published_sections"],
         }
 
 

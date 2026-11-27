@@ -101,6 +101,27 @@ def extract_contextual_follow_up(
                     "prompt": f"For which date should I check faculty availability from {merged_args['start_time']} to {merged_args['end_time']}?"
                 }
 
+    # ── 0b. Published Timetable Multi-Turn Follow-up ────────────────────────
+    is_prev_pub_tt = (
+        last_tool_name == "get_published_timetables"
+        or "published timetable" in last_content.lower()
+        or "currently published" in last_content.lower()
+    )
+    if is_prev_pub_tt:
+        from agents.intent.intent_catalog import extract_entities
+        ents = extract_entities(message)
+        if ents.get("semester_number") is not None or ents.get("department_name") or ents.get("section_name"):
+            merged = dict(last_tool_args)
+            if ents.get("semester_number") is not None:
+                merged["semester_number"] = ents["semester_number"]
+            if ents.get("department_name"):
+                merged["department_name"] = ents["department_name"]
+            if ents.get("section_name"):
+                merged["section_name"] = ents["section_name"]
+            return "get_published_timetables", merged
+        if any(k in msg for k in ["which department has the most", "how many are there", "which one has the most"]):
+            return "get_published_timetables", dict(last_tool_args)
+
     # ── 1. Temporal Follow-Up: "what about tomorrow?", "how about friday?", "on wednesday?"
     day_match = None
     if "today" in msg:

@@ -140,8 +140,8 @@ def test_system_prompt_direct_answers_mandate():
 
     assert "User ID: 42" in prompt
     assert "Role: FACULTY" in prompt
-    assert "DIRECT FACTUAL ANSWERS ONLY" in prompt
-    assert "NEVER say \"You can view your timetable by navigating to the timetable page\"" in prompt
+    assert "NATURAL RESPONSE STYLE" in prompt
+    assert "Never redirect the user to UI pages or settings menus instead of answering." in prompt
     assert "execute_semantic_query" in prompt
 
 

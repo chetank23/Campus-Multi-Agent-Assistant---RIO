@@ -187,3 +187,18 @@ def sanitize_plain_english(text: str) -> str:
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
 
     return cleaned.strip()
+
+
+def sanitize_conversational_markdown(text: str) -> str:
+    """
+    Sanitizes conversational LLM output for safe DB persistence and UI rendering
+    while preserving Markdown tables, code blocks, bold text, and lists.
+    Strips emojis and any leaked internal reasoning/tool tags.
+    """
+    if not text:
+        return ""
+    cleaned = EMOJI_PATTERN.sub("", text)
+    cleaned = re.sub(r"<(?:think|thought|thinking|tool_call)>[\s\S]*?</(?:think|thought|thinking|tool_call)>", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"<(?:think|thought|thinking|tool_call)>[\s\S]*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()

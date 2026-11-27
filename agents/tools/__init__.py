@@ -38,6 +38,7 @@ from agents.tools.campus_tools import (
     get_lab_availability_data,
     get_academic_calendar_data,
     get_campus_room_inventory_data,
+    get_published_timetables_data,
     get_published_timetable_status_data,
     get_recent_timetable_changes_data,
     get_relevant_announcements_data,
@@ -296,15 +297,46 @@ QUERY_TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         },
         "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
     },
-    # 10. get_published_timetable_status
+    # 10. get_published_timetables (Authoritative published/unpublished scope retrieval)
     {
-        "name": "get_published_timetable_status",
-        "description": "Checks the active published timetable version, publication date, and class count. Hides draft versions from non-admins.",
+        "name": "get_published_timetables",
+        "description": (
+            "Primary tool to list, count, or inspect currently active canonical PUBLISHED timetables with resolved "
+            "department names, program names, semester, academic year, section names, total entries, and publication timestamps. "
+            "Also identifies which expected academic scopes/departments do NOT yet have a published timetable when "
+            "include_unpublished=True. Use this tool whenever the user asks to see 'published timetables', "
+            "which department/section has a published timetable, whether a timetable is published, when it was published, "
+            "how many timetables are published, or which departments are not yet published."
+        ),
         "parameters": {
             "type": "object",
-            "properties": {},
+            "properties": {
+                "department_name": {"type": "string", "description": "Optional department name or code filter (e.g. 'AI & DS', 'CSE')."},
+                "section_name": {"type": "string", "description": "Optional section name filter (e.g. 'AIDS-A')."},
+                "semester_number": {"type": "integer", "description": "Optional semester number filter (e.g. 7)."},
+                "include_unpublished": {
+                    "type": "boolean",
+                    "description": "Set true when checking which departments, programs, or sections do NOT yet have a published timetable.",
+                },
+            },
         },
-        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN"],
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN", "SUPER_ADMIN"],
+    },
+    # 10b. get_published_timetable_status
+    {
+        "name": "get_published_timetable_status",
+        "description": (
+            "Checks the explicit governance/lifecycle status of a specific timetable version ID (e.g. 'status of timetable version 48') "
+            "or administrative version summary across draft/validated/approved/published states. "
+            "For listing or counting published timetables or asking which department has a published timetable, prefer 'get_published_timetables'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "version_id": {"type": "integer", "description": "Optional specific TimetableVersion ID to inspect (e.g. 48)."},
+            },
+        },
+        "allowed_roles": ["STUDENT", "FACULTY", "ADMIN", "SUPER_ADMIN"],
     },
     # 11. get_recent_timetable_changes
     {
@@ -1272,9 +1304,24 @@ def execute_tool(
                 status_filter=tool_args.get("status_filter"),
             )
 
-        # Tool 10: get_published_timetable_status
+        # Tool 10: get_published_timetables
+        elif tool_name == "get_published_timetables":
+            return get_published_timetables_data(
+                db=db,
+                user=user,
+                department_name=tool_args.get("department_name"),
+                section_name=tool_args.get("section_name"),
+                semester_number=tool_args.get("semester_number"),
+                include_unpublished=bool(tool_args.get("include_unpublished", False)),
+            )
+
+        # Tool 10b: get_published_timetable_status
         elif tool_name == "get_published_timetable_status":
-            return get_published_timetable_status_data(db=db, user=user)
+            return get_published_timetable_status_data(
+                db=db,
+                user=user,
+                version_id=tool_args.get("version_id"),
+            )
 
         # Tool 11: get_recent_timetable_changes
         elif tool_name == "get_recent_timetable_changes":

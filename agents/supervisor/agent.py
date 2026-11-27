@@ -12,7 +12,7 @@ import datetime
 import logging
 import os
 import re
-from typing import Any, Dict, List, Literal, Optional, Tuple, cast
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, cast
 
 logger = logging.getLogger(__name__)
 from backend.config import SessionLocal
@@ -29,7 +29,11 @@ from agents.scheduling_agent.proposal_store import proposal_store
 from agents.resource_agent.proposal_store import resource_proposal_store
 from agents.common.operation_proposal_store import operation_proposal_store
 from agents.action_registry import action_registry
-from agents.common.formatter import sanitize_plain_english, normalize_query_typos
+from agents.common.formatter import (
+    sanitize_plain_english,
+    sanitize_conversational_markdown,
+    normalize_query_typos,
+)
 from agents.resource_agent.parser import (
     parse_date,
     parse_time_interval,
@@ -467,14 +471,8 @@ def supervisor_node(state: AgentState) -> AgentState:
             "intent": intent,
             "selected_agent": None,
             "final_response": (
-                "Hello. I am the RIO Campus Assistant.\n\n"
-                "I can help you with:\n"
-                "- Your published class timetable and real-time class status.\n"
-                "- Campus facility availability, resource discovery, and booking requests.\n"
-                "- Faculty directory profiles, course catalog details, and room locations.\n"
-                "- University academic calendar events and examination schedules.\n"
-                "- Academic timetable generation and optimization (Administrators only).\n\n"
-                "How may I assist you today?"
+                "Hello. I am the RIO Campus Assistant. How can I help you today? "
+                "Feel free to ask about your timetable, courses, faculty, room availability, events, or any campus question."
             ),
         }
 
@@ -489,9 +487,8 @@ def supervisor_node(state: AgentState) -> AgentState:
             "intent": "UNKNOWN",
             "selected_agent": None,
             "final_response": (
-                "I could not find a matching campus service for your request.\n\n"
-                "You can ask about your published timetable, faculty profiles, room locations, course details, "
-                "resource bookings, facility availability, calendar events, or timetable generation (Admin only)."
+                "I could not find a matching campus service for your request in offline mode (live AI reasoning is currently disabled). "
+                "However, I can still look up timetables, faculty, courses, rooms, bookings, placements, and events for you—just ask!"
             ),
         }
 
@@ -707,6 +704,8 @@ def execute_supervisor(
     db: Session,
     conversation_id: Optional[int] = None,
     conversation_history: Optional[List[Dict[str, Any]]] = None,
+    cancel_check: Optional[Callable[[], bool]] = None,
+    request_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Main invocation entry point for the Supervisor.
@@ -720,15 +719,33 @@ def execute_supervisor(
 
     if provider.is_available() and not _is_explicit_proposal_action(message):
         try:
+            kwargs: Dict[str, Any] = {}
+            if cancel_check is not None:
+                kwargs["cancel_check"] = cancel_check
+            if request_id is not None:
+                kwargs["request_id"] = request_id
             llm_res = provider.generate_chat_response(
                 message=message,
                 user=user,
                 db=db,
                 conversation_history=conversation_history,
+                **kwargs,
             )
+            if cancel_check and cancel_check():
+                return {
+                    "reply": "",
+                    "intent": "CANCELLED",
+                    "selected_agent": None,
+                    "tool_calls": llm_res.get("tool_calls", []),
+                    "sources": [],
+                    "proposal": None,
+                    "action_type": None,
+                    "success": False,
+                    "error": "Request cancelled",
+                }
             if llm_res.get("success") and llm_res.get("reply"):
                 return {
-                    "reply": sanitize_plain_english(llm_res["reply"]),
+                    "reply": sanitize_conversational_markdown(llm_res["reply"]),
                     "intent": llm_res.get("intent", "OPEN_ENDED_LLM_QUERY"),
                     "selected_agent": llm_res.get("selected_agent", "nvidia_nemotron"),
                     "tool_calls": llm_res.get("tool_calls", []),

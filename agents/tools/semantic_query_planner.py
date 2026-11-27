@@ -43,6 +43,7 @@ ENTITY_MODELS: Dict[str, Any] = {
     "time_slots": TimeSlot,
     "faculty_availability": FacultyAvailability,
     "timetables": Timetable,
+    "timetable_versions": TimetableVersion,
     "timetable_entries": TimetableEntry,
     "academic_years": AcademicYear,
     "semesters": Semester,
@@ -173,6 +174,17 @@ ENTITY_FIELDS: Dict[str, Dict[str, Any]] = {
         "created_at": Timetable.created_at,
         "published_at": Timetable.published_at,
     },
+    "timetable_versions": {
+        "id": TimetableVersion.id,
+        "academic_year_id": TimetableVersion.academic_year_id,
+        "department_id": TimetableVersion.department_id,
+        "program_id": TimetableVersion.program_id,
+        "semester_id": TimetableVersion.semester_id,
+        "version_number": TimetableVersion.version_number,
+        "status": TimetableVersion.status,
+        "published_at": TimetableVersion.published_at,
+        "created_at": TimetableVersion.created_at,
+    },
     "timetable_entries": {
         "id": TimetableEntry.id,
         "timetable_id": TimetableEntry.timetable_id,
@@ -224,25 +236,25 @@ ENTITY_FIELDS: Dict[str, Dict[str, Any]] = {
 ROLE_ALLOWED_ENTITIES: Dict[str, set[str]] = {
     "STUDENT": {
         "students", "faculty", "departments", "programs", "sections", "batches",
-        "courses", "buildings", "rooms", "time_slots", "timetables", "timetable_entries",
+        "courses", "buildings", "rooms", "time_slots", "timetables", "timetable_versions", "timetable_entries",
         "academic_years", "semesters", "notifications",
     },
     "FACULTY": {
         "students", "faculty", "departments", "programs", "sections", "batches",
         "courses", "course_assignments", "buildings", "rooms", "time_slots",
-        "faculty_availability", "timetables", "timetable_entries", "academic_years",
+        "faculty_availability", "timetables", "timetable_versions", "timetable_entries", "academic_years",
         "semesters", "notifications",
     },
     "ADMIN": {
         "users", "students", "faculty", "departments", "programs", "sections", "batches",
         "courses", "course_assignments", "buildings", "rooms", "time_slots",
-        "faculty_availability", "timetables", "timetable_entries", "academic_years",
+        "faculty_availability", "timetables", "timetable_versions", "timetable_entries", "academic_years",
         "semesters", "notifications", "audit_logs",
     },
     "SUPER_ADMIN": {
         "users", "students", "faculty", "departments", "programs", "sections", "batches",
         "courses", "course_assignments", "buildings", "rooms", "time_slots",
-        "faculty_availability", "timetables", "timetable_entries", "academic_years",
+        "faculty_availability", "timetables", "timetable_versions", "timetable_entries", "academic_years",
         "semesters", "notifications", "audit_logs",
     },
 }
@@ -267,6 +279,10 @@ APPROVED_JOIN_PATHS: Dict[Tuple[str, str], Any] = {
     ("timetables", "sections"): (Timetable.section_id == Section.id),
     ("timetables", "academic_years"): (Timetable.academic_year_id == AcademicYear.id),
     ("timetables", "semesters"): (Timetable.semester_id == Semester.id),
+    ("timetable_versions", "departments"): (TimetableVersion.department_id == Department.id),
+    ("timetable_versions", "programs"): (TimetableVersion.program_id == Program.id),
+    ("timetable_versions", "semesters"): (TimetableVersion.semester_id == Semester.id),
+    ("timetable_versions", "academic_years"): (TimetableVersion.academic_year_id == AcademicYear.id),
     ("timetable_entries", "timetables"): (TimetableEntry.timetable_id == Timetable.id),
     ("timetable_entries", "courses"): (TimetableEntry.course_id == Course.id),
     ("timetable_entries", "faculty"): (TimetableEntry.faculty_id == Faculty.id),
@@ -353,11 +369,20 @@ def execute_semantic_query_plan(
             where_clauses.append(Notification.user_id == user.id)
         elif clean_entity == "timetables":
             where_clauses.append(Timetable.status == "PUBLISHED")
+        elif clean_entity == "timetable_versions":
+            where_clauses.append(TimetableVersion.status == "PUBLISHED")
             stu = db.query(Student).filter(Student.user_id == user.id).first()
             if stu and stu.section_id:
                 where_clauses.append(Timetable.section_id == stu.section_id)
             else:
                 where_clauses.append(Timetable.id == -1)
+        elif clean_entity == "timetable_versions":
+            where_clauses.append(TimetableVersion.status == "PUBLISHED")
+            stu = db.query(Student).filter(Student.user_id == user.id).first()
+            if stu and stu.department_id:
+                where_clauses.append(TimetableVersion.department_id == stu.department_id)
+            else:
+                where_clauses.append(TimetableVersion.id == -1)
         elif clean_entity == "timetable_entries":
             stu = db.query(Student).filter(Student.user_id == user.id).first()
             if stu and stu.section_id:
@@ -370,6 +395,8 @@ def execute_semantic_query_plan(
             where_clauses.append(Notification.user_id == user.id)
         elif clean_entity == "timetables":
             where_clauses.append(Timetable.status == "PUBLISHED")
+        elif clean_entity == "timetable_versions":
+            where_clauses.append(TimetableVersion.status == "PUBLISHED")
         elif clean_entity == "timetable_entries":
             fac = db.query(Faculty).filter(Faculty.user_id == user.id).first()
             if fac:

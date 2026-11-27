@@ -105,7 +105,7 @@ def extract_entities(text: str) -> Dict[str, Any]:
         entities["faculty_name"] = fac_m.group(1).title()
 
     # 8. Department
-    if any(k in norm for k in ["ai & ds", "ai and ds", "aids", "artificial intelligence and data science"]):
+    if any(k in norm for k in ["ai & ds", "ai and ds", "ai ds", "aids", "artificial intelligence and data science"]):
         entities["department_name"] = "AI & DS"
     elif re.search(r"\b(cse|computer science)\b", norm):
         entities["department_name"] = "CSE"
@@ -129,7 +129,7 @@ def match_intent(
 
     # ── Ambiguity Check ────────────────────────────────────────────────────────
     # e.g., Bare query "Show the timetable."
-    if msg in ["show the timetable", "show timetable", "view timetable", "timetable"]:
+    if msg.rstrip(".") in ["show the timetable", "show timetable", "view timetable", "timetable"]:
         if role in ("ADMIN", "SUPER_ADMIN"):
             return IntentMatch(
                 intent_name="AMBIGUOUS_TIMETABLE_REQUEST",
@@ -158,6 +158,38 @@ def match_intent(
                 tool_name="get_my_timetable",
                 tool_args={},
             )
+
+    # ── Published / Unpublished Timetable Status Queries (All Roles) ───────────
+    # Must be evaluated before generic "which department" / "which section" checks.
+    is_pub_tt_query = (
+        ("timetable" in msg or "timetables" in msg)
+        and any(k in msg for k in [
+            "published", "publish", "unpublished", "not yet published",
+            "not published", "publication status", "publication date",
+            "when was the timetable", "how many published",
+        ])
+        and not any(k in msg for k in ["generate", "create", "build", "approve", "recall", "operational overview", "unpublished timetable previews"])
+    )
+    if is_pub_tt_query:
+        include_unpub = any(k in msg for k in [
+            "not yet published", "not published", "unpublished",
+            "without published", "missing", "pending publication", "haven't", "have not",
+        ])
+        pub_args: Dict[str, Any] = {}
+        if entities.get("department_name"):
+            pub_args["department_name"] = entities["department_name"]
+        if entities.get("section_name"):
+            pub_args["section_name"] = entities["section_name"]
+        if entities.get("semester_number") is not None:
+            pub_args["semester_number"] = entities["semester_number"]
+        if include_unpub:
+            pub_args["include_unpublished"] = True
+        return IntentMatch(
+            intent_name="PUBLISHED_TIMETABLE_INQUIRY",
+            tool_name="get_published_timetables",
+            tool_args=pub_args,
+            extracted_entities=entities,
+        )
 
     # ── Super Admin Intents ────────────────────────────────────────────────────
     if role == "SUPER_ADMIN":

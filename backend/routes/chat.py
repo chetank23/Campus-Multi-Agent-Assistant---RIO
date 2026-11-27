@@ -10,16 +10,22 @@ Enforces strict JWT identity verification, role boundaries, and conversation own
 
 from __future__ import annotations
 
+import asyncio
 import datetime
 import json
 import logging
 import os
+import re
+import threading
+import time
+import uuid
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from backend.config import SessionLocal
 from backend.database import get_db
 from backend.dependencies import get_current_user
 from backend.models.chat import ChatConversation, ChatMessage
@@ -132,6 +138,8 @@ def determine_outcome_state(result: Dict[str, Any]) -> str:
         "no scheduled academic holidays",
         "no upcoming classes",
         "no free periods found",
+        "couldn't find any currently published timetable",
+        "no published timetable is currently active",
     ]
     if any(phrase in reply_lower for phrase in empty_phrases) or (
         len(reply_lower) < 200 and "no classes scheduled" in reply_lower
@@ -467,15 +475,16 @@ def chat_with_campus_assistant(
     "/agents/chat/stream",
     summary="Submit query to RIO Campus Assistant with real-time SSE streaming",
 )
-def stream_chat_with_campus_assistant(
+async def stream_chat_with_campus_assistant(
+    request: Request,
     payload: ChatMessageRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Real-time Server-Sent Events (SSE) token and status streaming for the Campus Assistant.
-    Maintains full backward compatibility with synchronous /agents/chat endpoint while providing
-    progressive response rendering, client cancel handling, and verified metadata.
+    Runs supervisor execution in an isolated thread with keepalive heartbeats, disconnect
+    cancellation, correlation IDs, bounded timeout, and guaranteed terminal SSE events.
     """
     clean_message = payload.message.strip()
     if not clean_message:
@@ -510,6 +519,9 @@ def stream_chat_with_campus_assistant(
         db.flush()
 
     conv_id = conv.id
+    user_id = current_user.id
+    user_role = current_user.role
+    request_id = uuid.uuid4().hex[:12]
 
     recent_msgs = (
         db.query(ChatMessage)
@@ -540,32 +552,88 @@ def stream_chat_with_campus_assistant(
     try:
         db.commit()
     except Exception as e:
-        logger.warning("Failed to commit user message in stream: %s", e)
+        logger.warning("[chat:%s] Failed to commit user message in stream: %s", request_id, e)
         db.rollback()
 
-    def event_generator():
-        try:
-            # 1. Send status event
-            yield f"data: {json.dumps({'event': 'status', 'status': 'Analyzing campus records...'})}\n\n"
+    cancel_event = threading.Event()
 
-            # 2. Execute supervisor
-            result = execute_supervisor(
+    def _run_supervisor_in_thread() -> Dict[str, Any]:
+        with SessionLocal() as worker_db:
+            worker_user = worker_db.query(User).filter(User.id == user_id).first()
+            if not worker_user:
+                return {
+                    "reply": "",
+                    "intent": "ERROR",
+                    "success": False,
+                    "error": "Authenticated user record not found.",
+                }
+            return execute_supervisor(
                 message=clean_message,
-                user=current_user,
-                db=db,
+                user=worker_user,
+                db=worker_db,
                 conversation_id=conv_id,
                 conversation_history=conversation_history,
+                cancel_check=cancel_event.is_set,
+                request_id=request_id,
             )
 
-            # 3. Stream tokens
-            reply_text = result["reply"]
-            words = reply_text.split(" ")
-            for idx, word in enumerate(words):
-                token_chunk = word if idx == len(words) - 1 else word + " "
+    async def event_generator():
+        t_start = time.perf_counter()
+        logger.info("[chat:%s] Stream started (conv=%s, role=%s)", request_id, conv_id, user_role)
+        try:
+            # 1. Send initial status event
+            yield f"data: {json.dumps({'event': 'status', 'status': 'Understanding your question...', 'request_id': request_id})}\n\n"
+
+            # 2. Run supervisor in worker thread with keepalive heartbeats & disconnect check
+            task = asyncio.create_task(asyncio.to_thread(_run_supervisor_in_thread))
+            last_heartbeat = time.perf_counter()
+            max_wait_seconds = 150.0
+
+            while not task.done():
+                if await request.is_disconnected():
+                    cancel_event.set()
+                    logger.info("[chat:%s] Client disconnected; cancelling worker", request_id)
+                    return
+
+                elapsed = time.perf_counter() - t_start
+                if elapsed > max_wait_seconds:
+                    cancel_event.set()
+                    logger.warning("[chat:%s] Stream execution exceeded %.1fs timeout", request_id, max_wait_seconds)
+                    yield f"data: {json.dumps({'event': 'error', 'error': 'The assistant took too long to respond. Please try again.', 'request_id': request_id})}\n\n"
+                    return
+
+                if time.perf_counter() - last_heartbeat >= 4.0:
+                    yield ": keepalive\n\n"
+                    last_heartbeat = time.perf_counter()
+
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=0.5)
+                except asyncio.TimeoutError:
+                    continue
+
+            result = await task
+            if cancel_event.is_set() or result.get("intent") == "CANCELLED":
+                logger.info("[chat:%s] Worker cancelled", request_id)
+                return
+
+            if not result.get("success", True) and not result.get("reply"):
+                err_msg = result.get("error") or "The assistant could not complete your request."
+                yield f"data: {json.dumps({'event': 'error', 'error': err_msg, 'request_id': request_id})}\n\n"
+                return
+
+            yield f"data: {json.dumps({'event': 'status', 'status': 'Preparing your answer...', 'request_id': request_id})}\n\n"
+
+            # 3. Stream tokens while preserving exact whitespace, indentation, and newlines for Markdown
+            reply_text = result.get("reply") or ""
+            chunks = re.findall(r"\S+[ \t]*|\n+|[ \t]+", reply_text) or [reply_text]
+            for token_chunk in chunks:
+                if await request.is_disconnected():
+                    cancel_event.set()
+                    return
                 yield f"data: {json.dumps({'event': 'token', 'token': token_chunk})}\n\n"
 
             # 4. Save assistant response to DB
-            metadata_payload = {}
+            metadata_payload: Dict[str, Any] = {}
             if result.get("proposal"):
                 metadata_payload["proposal"] = result["proposal"]
             if result.get("action_type"):
@@ -587,11 +655,11 @@ def stream_chat_with_campus_assistant(
                     c.updated_at = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                 db.commit()
             except Exception as e:
-                logger.warning("Failed to commit assistant stream message: %s", e)
+                logger.warning("[chat:%s] Failed to commit assistant stream message: %s", request_id, e)
                 db.rollback()
 
             nav_links = get_nav_links_for_response(
-                current_user.role,
+                user_role,
                 result.get("intent"),
                 result.get("tool_calls", []),
                 reply_text,
@@ -602,9 +670,10 @@ def stream_chat_with_campus_assistant(
             )
             outcome_state = determine_outcome_state(result)
 
-            # 5. Send done event
+            # 5. Send terminal done event
             done_payload = {
                 "event": "done",
+                "request_id": request_id,
                 "reply": reply_text,
                 "intent": result.get("intent"),
                 "selected_agent": result.get("selected_agent"),
@@ -620,11 +689,13 @@ def stream_chat_with_campus_assistant(
                 "provider_badge": provider_badge,
                 "outcome_state": outcome_state,
             }
+            logger.info("[chat:%s] Stream completed in %.2fs", request_id, time.perf_counter() - t_start)
             yield f"data: {json.dumps(done_payload)}\n\n"
 
         except Exception as exc:
-            logger.error("SSE stream error: %s", exc, exc_info=True)
-            yield f"data: {json.dumps({'event': 'error', 'error': str(exc)})}\n\n"
+            cancel_event.set()
+            logger.error("[chat:%s] SSE stream error: %s", request_id, exc, exc_info=True)
+            yield f"data: {json.dumps({'event': 'error', 'error': str(exc), 'request_id': request_id})}\n\n"
 
     return StreamingResponse(
         event_generator(),

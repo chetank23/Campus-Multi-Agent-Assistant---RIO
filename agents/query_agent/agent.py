@@ -573,7 +573,87 @@ def format_grounded_response(
                 lines.append(f"  Purpose: {b['purpose']}")
         return sanitize_plain_english("\n".join(lines)), sources
 
-    # 10. Published Timetable Status
+    # 10. Published Timetables (Canonical Department / Section / Unpublished Coverage)
+    elif tool_name == "get_published_timetables":
+        sources.append("Canonical Timetable Publication Registry")
+        timetables = tool_result.get("timetables", [])
+        unpublished_scopes = tool_result.get("unpublished_scopes")
+        include_unpub = unpublished_scopes is not None
+
+        if include_unpub:
+            lines: List[str] = []
+            if unpublished_scopes:
+                lines.append(f"There are {len(unpublished_scopes)} academic scope(s) without an active published timetable:")
+                for u in unpublished_scopes:
+                    dept = u.get("department_name") or "Unknown Department"
+                    prog = u.get("program_name")
+                    sem = u.get("semester")
+                    secs = ", ".join(u.get("section_names") or []) or "N/A"
+                    state_label = u.get("state_label") or u.get("publication_state") or "Unpublished"
+                    scope_parts = [dept]
+                    if prog:
+                        scope_parts.append(prog)
+                    if sem is not None:
+                        scope_parts.append(f"Semester {sem}")
+                    lines.append(f"- **{' — '.join(scope_parts)}** (Sections: {secs}): {state_label}")
+            else:
+                lines.append("All configured academic scopes in your authorized view currently have published timetables.")
+
+            if timetables:
+                lines.append(f"\nCurrently published timetables ({len(timetables)}):")
+                for t in timetables:
+                    dept = t.get("department_name") or "Department"
+                    secs = ", ".join(t.get("section_names") or []) or "N/A"
+                    pub_at = t.get("published_at") or "N/A"
+                    lines.append(f"- **{dept}** (Sections: {secs}, Semester {t.get('semester') or 'N/A'}) — Published on {pub_at}")
+            return sanitize_plain_english("\n".join(lines)), sources
+
+        if not timetables:
+            return sanitize_plain_english("I couldn't find any currently published timetable matching that query."), sources
+
+        if len(timetables) == 1:
+            t = timetables[0]
+            dept = t.get("department_name") or "the department"
+            prog = t.get("program_name")
+            sem = t.get("semester")
+            ay = t.get("academic_year")
+            secs = ", ".join(t.get("section_names") or [])
+            pub_at = t.get("published_at")
+            total_entries = t.get("total_entries", 0)
+            details = [f"The timetable is currently **PUBLISHED** for the **{dept}** department"]
+            if prog:
+                details.append(f"({prog})")
+            if sem is not None:
+                details.append(f"for **Semester {sem}**")
+            if ay:
+                details.append(f"in academic year **{ay}**")
+            sentence = " ".join(details) + "."
+            extra = []
+            if secs:
+                extra.append(f"Covered section(s): **{secs}**")
+            if total_entries:
+                extra.append(f"Total scheduled entries: **{total_entries}**")
+            if pub_at:
+                extra.append(f"Published on **{pub_at}**")
+            if extra:
+                sentence += " " + "; ".join(extra) + "."
+            return sanitize_plain_english(sentence), sources
+
+        lines = [f"There are **{len(timetables)}** currently published timetables:\n"]
+        lines.append("| Department | Program | Semester | Sections | Academic Year | Published At | Entries |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+        for t in timetables:
+            dept = t.get("department_name") or "N/A"
+            prog = t.get("program_name") or "N/A"
+            sem = str(t.get("semester")) if t.get("semester") is not None else "N/A"
+            secs = ", ".join(t.get("section_names") or []) or "N/A"
+            ay = t.get("academic_year") or "N/A"
+            pub_at = t.get("published_at") or "N/A"
+            cnt = str(t.get("total_entries", 0))
+            lines.append(f"| {dept} | {prog} | {sem} | {secs} | {ay} | {pub_at} | {cnt} |")
+        return sanitize_plain_english("\n".join(lines)), sources
+
+    # 10b. Published Timetable Status
     elif tool_name == "get_published_timetable_status":
         sources.append("Timetable Publishing Governance")
         if user.role == "ADMIN":
@@ -1146,7 +1226,7 @@ def run_query_agent(
                 return {
                     "final_response": llm_result["reply"],
                     "tool_calls": state.get("tool_calls", []) + llm_result.get("tool_calls", []),
-                    "tool_results": state.get("tool_results", []),
+                    "tool_results": state.get("tool_results", []) + llm_result.get("tool_results", []),
                     "sources": llm_result.get("sources", ["NVIDIA Nemotron", "RIO Grounded Database"]),
                 }
         except Exception:

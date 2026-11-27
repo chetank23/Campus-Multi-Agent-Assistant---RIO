@@ -5,7 +5,7 @@
  * Provides conversation persistence, history listing, session creation, and message exchange.
  */
 
-import { apiClient, getAccessToken, getApiBaseUrl } from './client';
+import { apiClient, getAccessToken, getApiBaseUrl, setAccessToken } from './client';
 
 export interface ChatMessageRequest {
   message: string;
@@ -140,6 +140,8 @@ export interface StreamEventData {
 
 /**
  * Sends a message and streams SSE token chunks and events from the backend.
+ * Includes automatic 401 token refresh, CRLF/LF frame parsing, EOF buffer flush,
+ * and guaranteed terminal-event handling.
  */
 export async function streamChatMessage(
   message: string,
@@ -152,24 +154,51 @@ export async function streamChatMessage(
   },
   signal?: AbortSignal
 ): Promise<void> {
-  const token = getAccessToken();
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}/agents/chat/stream`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({
-      message: message.trim(),
-      ...(conversationId ? { conversation_id: conversationId } : {}),
-    }),
-    signal,
-  });
+
+  const doStreamFetch = (accessToken: string | null) =>
+    fetch(`${baseUrl}/agents/chat/stream`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      body: JSON.stringify({
+        message: message.trim(),
+        ...(conversationId ? { conversation_id: conversationId } : {}),
+      }),
+      signal,
+    });
+
+  let response = await doStreamFetch(getAccessToken());
+
+  // Attempt silent token refresh once on 401 Unauthorized
+  if (response.status === 401 && !signal?.aborted) {
+    try {
+      const refreshResp = await fetch(`${baseUrl}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        signal,
+      });
+      if (refreshResp.ok) {
+        const refreshData = await refreshResp.json();
+        const newToken = refreshData?.access_token as string | undefined;
+        if (newToken) {
+          setAccessToken(newToken);
+          response = await doStreamFetch(newToken);
+        }
+      }
+    } catch {
+      // Fall through to error handling below
+    }
+  }
 
   if (!response.ok) {
-    let errDetail = 'Failed to stream message';
+    let errDetail = response.status === 401
+      ? 'Your session has expired. Please sign in again.'
+      : 'Failed to stream message';
     try {
       const errJson = await response.json();
       errDetail = errJson.detail || errDetail;
@@ -188,34 +217,58 @@ export async function streamChatMessage(
 
   const decoder = new TextDecoder();
   let buffer = '';
+  let receivedTerminalEvent = false;
+
+  const processFrame = (frame: string) => {
+    const trimmed = frame.trim();
+    if (!trimmed || trimmed.startsWith(':')) return;
+    // Handle multi-line SSE data frames cleanly
+    const dataLines = trimmed
+      .split(/\r?\n/)
+      .filter((l) => l.startsWith('data:'))
+      .map((l) => l.slice(5).trim());
+    if (dataLines.length === 0) return;
+    const dataStr = dataLines.join('\n');
+    try {
+      const payload: StreamEventData = JSON.parse(dataStr);
+      if (payload.event === 'status' && payload.status) {
+        callbacks.onStatus?.(payload.status);
+      } else if (payload.event === 'token' && payload.token) {
+        callbacks.onToken?.(payload.token);
+      } else if (payload.event === 'done') {
+        receivedTerminalEvent = true;
+        callbacks.onDone?.(payload);
+      } else if (payload.event === 'error') {
+        receivedTerminalEvent = true;
+        callbacks.onError?.(payload.error || 'Stream error occurred');
+      }
+    } catch {
+      // Skip unparseable block
+    }
+  };
 
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        for (const rem of buffer.split(/\r?\n\r?\n/)) {
+          processFrame(rem);
+        }
+      }
+      break;
+    }
 
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n\n');
-    buffer = lines.pop() || '';
-
-    for (const block of lines) {
-      const trimmed = block.trim();
-      if (!trimmed.startsWith('data:')) continue;
-      const dataStr = trimmed.slice(5).trim();
-      try {
-        const payload: StreamEventData = JSON.parse(dataStr);
-        if (payload.event === 'status' && payload.status) {
-          callbacks.onStatus?.(payload.status);
-        } else if (payload.event === 'token' && payload.token) {
-          callbacks.onToken?.(payload.token);
-        } else if (payload.event === 'done') {
-          callbacks.onDone?.(payload);
-        } else if (payload.event === 'error') {
-          callbacks.onError?.(payload.error || 'Stream error occurred');
-        }
-      } catch {
-        // Skip unparseable block
-      }
+    const frames = buffer.split(/\r?\n\r?\n/);
+    buffer = frames.pop() || '';
+    for (const frame of frames) {
+      processFrame(frame);
     }
+  }
+
+  if (!receivedTerminalEvent && !signal?.aborted) {
+    callbacks.onError?.('The assistant stream closed unexpectedly before completing. Please try again.');
   }
 }
 
